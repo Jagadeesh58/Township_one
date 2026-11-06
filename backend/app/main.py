@@ -8,7 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.core.config import settings
 from backend.app.core.database import Base, engine
-from backend.app.api import health, auth
+from backend.app.api import health, auth, billing
 
 # Create DB tables
 Base.metadata.create_all(bind=engine)
@@ -80,6 +80,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(health.router, prefix=settings.API_PREFIX)
 app.include_router(health.router)
 app.include_router(auth.router, prefix=settings.API_PREFIX)
+app.include_router(billing.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/")
