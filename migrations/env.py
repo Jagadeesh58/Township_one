@@ -1,14 +1,11 @@
 """
-Day 1 · D1-S1 — Foundation and Environment: Alembic Database Migrations Configuration.
+Township One - Alembic Database Migrations Configuration.
 
 Responsibility:
 - Obtain effective migration URL strictly from validated settings or environment.
 - Prevent hard-coded default URLs in alembic.ini from silently overriding DATABASE_URL.
 - Support both SQLite (local development/testing) and PostgreSQL (production).
 - Mask credentials to prevent leaking database passwords in logs.
-
-Related documentation:
-docs/day-1/D1-S1-foundation-and-environment.md
 """
 
 import os
@@ -57,15 +54,15 @@ def get_effective_migration_url() -> str:
     if not selected_url and os.getenv("DATABASE_URL") and os.getenv("DATABASE_URL").strip():
         selected_url = os.getenv("DATABASE_URL").strip()
 
-    # 3. Check application validated settings
-    if not selected_url and hasattr(settings, "DATABASE_URL") and settings.DATABASE_URL and settings.DATABASE_URL.strip():
-        selected_url = settings.DATABASE_URL.strip()
-
-    # 4. Fall back to config if available
+    # 3. Check programmatic config if explicitly set and not placeholder
     if not selected_url and config is not None:
         cfg_url = config.get_main_option("sqlalchemy.url")
         if cfg_url and not cfg_url.startswith("driver://") and cfg_url.strip():
             selected_url = cfg_url.strip()
+
+    # 4. Check application validated settings
+    if not selected_url and hasattr(settings, "DATABASE_URL") and settings.DATABASE_URL and settings.DATABASE_URL.strip():
+        selected_url = settings.DATABASE_URL.strip()
 
     if not selected_url:
         raise ValueError(

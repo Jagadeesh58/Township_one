@@ -1,17 +1,20 @@
 """
-Day 1 · D1-S3 — Authentication and Permissions: Core Security Primitives.
+Township One — Authentication and Role-Based Access Control Core.
 
 Responsibility:
-- OTP generation, expiry, rate limiting, and single-use verification.
+- Cryptographic OTP generation, salt-hashed storage, rate limiting, and single-use verification.
 - Cryptographic JWT access token issuance (PyJWT HS256) with unique JTI identifiers.
 - Persistent session revocation backed by database table `revoked_tokens` and in-memory cache.
 - Resource-scoped authorization: flat membership, family permissions, committee aggregate boundary, staff boundaries.
 
-Related documentation:
-docs/day-1/D1-S3-authentication-and-permissions.md
+Documentation:
+docs/authentication-and-access-control.md
 """
 
 import uuid
+import secrets
+import hashlib
+import hmac
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 import jwt
@@ -25,15 +28,15 @@ from backend.app.models.entities import User, UserRoleAssignment, FlatMembership
 
 security = HTTPBearer(auto_error=False)
 
-# In-memory OTP Store: {phone: {"otp": str, "expires_at": datetime, "attempts": int, "used": bool, "request_timestamps": List[datetime]}}
+# In-memory OTP Store: {phone: {"otp_hash": str, "salt": str, "expires_at": datetime, "attempts": int, "used": bool, "request_timestamps": List[datetime]}}
 OTP_STORE: Dict[str, Dict[str, Any]] = {}
 REVOKED_TOKENS: set = set()
 
 
 def create_otp_challenge(phone: str) -> str:
     """
-    Creates an OTP challenge with rate-limiting and configurable expiration.
-    In production mode, OTP is never returned to the caller.
+    Creates an OTP challenge with rate-limiting, salt-hashed in-memory storage, and configurable expiration.
+    In production mode, a cryptographically secure random 6-digit OTP is generated.
     """
     now = datetime.now(timezone.utc)
     record = OTP_STORE.get(phone, {"request_timestamps": []})
@@ -48,10 +51,18 @@ def create_otp_challenge(phone: str) -> str:
         )
 
     recent_requests.append(now)
-    otp_code = settings.DEMO_OTP_CODE  # Deterministic demo code 123456
+
+    if settings.APP_ENV.lower() == "production":
+        otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
+    else:
+        otp_code = settings.DEMO_OTP_CODE  # Deterministic demo code 123456
+
+    salt = secrets.token_hex(16)
+    otp_hash = hashlib.sha256(f"{salt}:{otp_code}".encode("utf-8")).hexdigest()
 
     OTP_STORE[phone] = {
-        "otp": otp_code,
+        "otp_hash": otp_hash,
+        "salt": salt,
         "expires_at": now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS),
         "attempts": 0,
         "used": False,
@@ -62,7 +73,7 @@ def create_otp_challenge(phone: str) -> str:
 
 def verify_otp_challenge(phone: str, otp: str) -> bool:
     """
-    Verifies OTP challenge enforcing expiration, single-use, and max 3 invalid attempts.
+    Verifies OTP challenge enforcing salt-hash validation, expiration, single-use, and max 3 invalid attempts.
     """
     record = OTP_STORE.get(phone)
     if not record:
@@ -92,7 +103,8 @@ def verify_otp_challenge(phone: str, otp: str) -> bool:
             detail="Too many invalid attempts. OTP invalidated."
         )
 
-    if record["otp"] != otp:
+    attempt_hash = hashlib.sha256(f"{record['salt']}:{otp}".encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(record["otp_hash"], attempt_hash):
         return False
 
     # Mark as used (one-time consumption)

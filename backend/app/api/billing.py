@@ -1,5 +1,5 @@
 """
-Day 1 · D1-S4 — Maintenance billing and ledger
+Township One - Maintenance billing and ledger endpoints.
 Endpoints for:
 - Flat billing summaries with multi-bill unpaid aggregation (total_outstanding_due, unpaid_bills)
 - Strict server-side RBAC denying Committee and Security Guard access to individual flat records
@@ -33,7 +33,7 @@ def to_bill_response(bill: Bill) -> BillResponse:
             "id": line.id,
             "line_type": line.line_type,
             "description": line.description,
-            "amount": float(line.amount),
+            "amount": Decimal(str(line.amount)),
             "amount_inr": f"{Decimal(str(line.amount)):.2f}"
         }
         for line in bill.lines
@@ -52,16 +52,16 @@ def to_bill_response(bill: Bill) -> BillResponse:
         billing_rule_version=getattr(bill, "billing_rule_version", "v1.0-demo"),
         issue_date=bill.issue_date,
         due_date=bill.due_date,
-        area_sqft=float(bill.area_sqft),
-        rate_per_sqft=float(bill.rate_per_sqft),
-        principal_amount=float(p_dec),
+        area_sqft=Decimal(str(bill.area_sqft)),
+        rate_per_sqft=Decimal(str(bill.rate_per_sqft)),
+        principal_amount=p_dec,
         principal_amount_inr=f"{p_dec:.2f}",
-        late_fee_amount=float(lf_dec),
-        total_amount=float(t_dec),
+        late_fee_amount=lf_dec,
+        total_amount=t_dec,
         total_amount_inr=f"{t_dec:.2f}",
-        paid_amount=float(pd_dec),
+        paid_amount=pd_dec,
         paid_amount_inr=f"{pd_dec:.2f}",
-        balance_amount=float(b_dec),
+        balance_amount=b_dec,
         balance_amount_inr=f"{b_dec:.2f}",
         status=bill.status,
         lines=lines
@@ -75,9 +75,9 @@ def to_ledger_response(entry: FlatLedgerEntry) -> LedgerEntryResponse:
         id=entry.id,
         flat_id=entry.flat_id,
         entry_type=entry.entry_type,
-        amount=float(amt_dec),
+        amount=amt_dec,
         amount_inr=f"{amt_dec:.2f}",
-        balance_after=float(bal_dec),
+        balance_after=bal_dec,
         balance_after_inr=f"{bal_dec:.2f}",
         description=entry.description,
         reference_id=entry.reference_id,
@@ -133,15 +133,15 @@ def get_flat_billing_summary(
     return FlatBillingSummaryResponse(
         flat_id=flat.id,
         flat_number=flat.flat_number,
-        area_sqft=float(flat.area_sqft),
-        current_due=float(total_outstanding),
+        area_sqft=Decimal(str(flat.area_sqft)),
+        current_due=total_outstanding,
         current_due_inr=f"{total_outstanding:.2f}",
-        total_outstanding_due=float(total_outstanding),
+        total_outstanding_due=total_outstanding,
         total_outstanding_due_inr=f"{total_outstanding:.2f}",
         overdue_days=max_overdue_days,
-        estimated_late_fee=float(total_estimated_late_fee),
+        estimated_late_fee=total_estimated_late_fee,
         estimated_late_fee_inr=f"{total_estimated_late_fee:.2f}",
-        late_fee_notice="Demo Rule (18% p.a. simple interest after 5-day grace period) - pending society federation approval",
+        late_fee_notice="Illustrative demo calculation (18% p.a. simple interest after 5-day grace period) pending society federation approval (not an approved legal rate)",
         unpaid_bills=[to_bill_response(b) for b in unpaid_bills],
         latest_bill=to_bill_response(latest_bill) if latest_bill else None,
         recent_ledger=[to_ledger_response(e) for e in ledger_entries]

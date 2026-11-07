@@ -1,6 +1,7 @@
 """
-Day 1 · D1-S7 — Integration and Day 1 verification
-End-to-end integration test suite verifying the complete Day 1 resident journey:
+Township One - Full Integration Verification Test Suite.
+
+End-to-end integration test suite verifying the complete resident journey:
 - Resident OTP authentication and profile retrieval
 - Billing summary retrieval with area/rate calculations and overdue tracking
 - Simulated payment checkout (FAILED outcome preserves dues, SUCCESS outcome reduces dues and creates receipt)
@@ -28,7 +29,7 @@ def clear_otp_store():
     OTP_STORE.clear()
 
 
-def test_full_day1_resident_billing_and_payment_journey():
+def test_full_resident_billing_and_payment_journey():
     # -------------------------------------------------------------
     # Step 1: Resident OTP Login (Swati Joshi, Tenant in T12-0408)
     # -------------------------------------------------------------
@@ -55,8 +56,8 @@ def test_full_day1_resident_billing_and_payment_journey():
     assert summary_resp.status_code == 200
     summary = summary_resp.json()
     assert summary["flat_number"] == "T12-0408"
-    assert summary["area_sqft"] == 980.0
-    assert summary["current_due"] == 6370.0  # 980 * 6.50
+    assert float(summary["area_sqft"]) == 980.0
+    assert float(summary["current_due"]) == 6370.0  # 980 * 6.50
     assert summary["overdue_days"] >= 40
     bill_id = summary["latest_bill"]["id"]
 
@@ -70,7 +71,8 @@ def test_full_day1_resident_billing_and_payment_journey():
             "flat_id": flat_id,
             "bill_id": bill_id,
             "amount": 6370.0,
-            "test_outcome": "FAILED"
+            "test_outcome": "FAILED",
+            "idempotency_key": "IDEM-E2E-FAILED-001"
         }
     )
     assert failed_pay.status_code == 200
@@ -79,7 +81,7 @@ def test_full_day1_resident_billing_and_payment_journey():
 
     # Check dues still intact
     summary_check1 = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
-    assert summary_check1["current_due"] == 6370.0
+    assert float(summary_check1["current_due"]) == 6370.0
 
     # -------------------------------------------------------------
     # Step 4: Test Payment - SUCCESS state reduces dues & issues receipt
@@ -99,7 +101,7 @@ def test_full_day1_resident_billing_and_payment_journey():
     assert success_pay.status_code == 200
     pay_data = success_pay.json()
     assert pay_data["status"] == "SUCCESS"
-    assert pay_data["amount"] == 6370.0
+    assert float(pay_data["amount"]) == 6370.0
     assert pay_data["receipt"] is not None
     receipt_no = pay_data["receipt"]["receipt_number"]
     assert receipt_no.startswith("REC-")
@@ -108,7 +110,7 @@ def test_full_day1_resident_billing_and_payment_journey():
 
     # Dues must now be exactly 0
     summary_check2 = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
-    assert summary_check2["current_due"] == 0.0
+    assert float(summary_check2["current_due"]) == 0.0
 
     # -------------------------------------------------------------
     # Step 5: Check Running Flat Ledger Reconciliation
@@ -117,11 +119,10 @@ def test_full_day1_resident_billing_and_payment_journey():
     assert ledger_resp.status_code == 200
     ledger_entries = ledger_resp.json()
     assert len(ledger_entries) >= 2
-    # First entry debit (Bill 6370), Second entry credit (Payment 6370 -> Balance 0)
     latest_entry = ledger_entries[-1]
     assert latest_entry["entry_type"] == "CREDIT"
-    assert latest_entry["amount"] == 6370.0
-    assert latest_entry["balance_after"] == 0.0
+    assert float(latest_entry["amount"]) == 6370.0
+    assert float(latest_entry["balance_after"]) == 0.0
 
     # -------------------------------------------------------------
     # Step 6: Paying already-paid bill is blocked
@@ -133,7 +134,8 @@ def test_full_day1_resident_billing_and_payment_journey():
             "flat_id": flat_id,
             "bill_id": bill_id,
             "amount": 1000.0,
-            "test_outcome": "SUCCESS"
+            "test_outcome": "SUCCESS",
+            "idempotency_key": "IDEM-E2E-DUP-BLOCKED"
         }
     )
     assert duplicate_pay.status_code == 400
@@ -149,10 +151,10 @@ def test_full_day1_resident_billing_and_payment_journey():
 
     neeraj_summary = client.get(f"/api/v1/billing/flats/{neeraj_flat_id}/summary", headers=neeraj_headers).json()
     assert neeraj_summary["flat_number"] == "T07-1203"
-    assert neeraj_summary["area_sqft"] == 1150.0
-    assert neeraj_summary["current_due"] == 0.0
-    assert neeraj_summary["latest_bill"]["principal_amount"] == 7475.0
-    assert neeraj_summary["latest_bill"]["paid_amount"] == 7475.0
+    assert float(neeraj_summary["area_sqft"]) == 1150.0
+    assert float(neeraj_summary["current_due"]) == 0.0
+    assert float(neeraj_summary["latest_bill"]["principal_amount"]) == 7475.0
+    assert float(neeraj_summary["latest_bill"]["paid_amount"]) == 7475.0
     assert neeraj_summary["latest_bill"]["status"] == "PAID"
 
     # -------------------------------------------------------------
@@ -165,10 +167,10 @@ def test_full_day1_resident_billing_and_payment_journey():
 
     aamir_summary = client.get(f"/api/v1/billing/flats/{aamir_flat_id}/summary", headers=aamir_headers).json()
     assert aamir_summary["flat_number"] == "T21-1601"
-    assert aamir_summary["area_sqft"] == 1640.0
-    assert aamir_summary["latest_bill"]["principal_amount"] == 10660.0
-    assert aamir_summary["latest_bill"]["paid_amount"] == 5000.0
-    assert aamir_summary["current_due"] == 5660.0
+    assert float(aamir_summary["area_sqft"]) == 1640.0
+    assert float(aamir_summary["latest_bill"]["principal_amount"]) == 10660.0
+    assert float(aamir_summary["latest_bill"]["paid_amount"]) == 5000.0
+    assert float(aamir_summary["current_due"]) == 5660.0
     assert aamir_summary["overdue_days"] >= 15
     assert aamir_summary["latest_bill"]["status"] == "PARTIALLY_PAID"
 
@@ -179,7 +181,6 @@ def test_full_day1_resident_billing_and_payment_journey():
     comm_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"}).json()
     comm_headers = {"Authorization": f"Bearer {comm_login['access_token']}"}
 
-    # Committee can view aggregate billing metrics
     comm_agg = client.get("/api/v1/billing/committee/aggregate", headers=comm_headers)
     assert comm_agg.status_code == 200
     agg_data = comm_agg.json()
@@ -187,7 +188,6 @@ def test_full_day1_resident_billing_and_payment_journey():
     assert "total_collected_inr" in agg_data
     assert "collection_efficiency_pct" in agg_data
 
-    # Committee is strictly blocked (403) from individual flat billing summaries
     comm_flat_drilldown = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=comm_headers)
     assert comm_flat_drilldown.status_code == 403
 
@@ -199,11 +199,9 @@ def test_full_day1_resident_billing_and_payment_journey():
     ananya_headers = {"Authorization": f"Bearer {ananya_login['access_token']}"}
     ananya_flat_id = ananya_login["user"]["flats"][0]["flat_id"]
 
-    # Ananya can view billing summary for T07-1203
     ananya_summary = client.get(f"/api/v1/billing/flats/{ananya_flat_id}/summary", headers=ananya_headers)
     assert ananya_summary.status_code == 200
 
-    # But Ananya cannot pay bills (can_pay_bills=False)
     ananya_pay = client.post(
         "/api/v1/payments/checkout",
         headers=ananya_headers,
@@ -211,7 +209,8 @@ def test_full_day1_resident_billing_and_payment_journey():
             "flat_id": ananya_flat_id,
             "bill_id": neeraj_summary["latest_bill"]["id"],
             "amount": 100.0,
-            "test_outcome": "SUCCESS"
+            "test_outcome": "SUCCESS",
+            "idempotency_key": "IDEM-E2E-FAMILY-BLOCK"
         }
     )
     assert ananya_pay.status_code == 403

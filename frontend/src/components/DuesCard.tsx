@@ -1,5 +1,5 @@
-// Day 1 · D1-S6 — Resident interface and PWA
-// DuesCard component: 2-tap direct payment CTA from resident home screen,
+// Township One - Resident Dues Card Component
+// 2-tap direct payment CTA from resident home screen,
 // displaying total outstanding dues, multi-bill notices, area-rate calculations, and late fees.
 
 import React from 'react';

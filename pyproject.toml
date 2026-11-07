@@ -1,4 +1,4 @@
-# Day 1 · D1-S1 — Foundation and Environment: Python Project Configuration
+# Township One - Python Project Configuration
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"

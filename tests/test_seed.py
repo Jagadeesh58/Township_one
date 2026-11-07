@@ -1,19 +1,20 @@
 """
-Day 1 · D1-S2 — Database and Township Seed: Seed & Dataset Tests.
+Township One - Database and Township Seed Verification Tests.
 
 Responsibility:
 - Verify exact township entity counts: 28 towers, 2,400 flats, 180 staff, 4 gates.
 - Verify exact sample flats: T07-1203 (paid), T12-0408 (unpaid, 47 days overdue), T21-1601 (partial, 18 days overdue).
+- Verify exact due dates and overdue math against DEMO_AS_OF_DATE (2026-11-06).
 - Verify 10 distinct synthetic residents for 10 Tower 7 lift complaints linked to CMP-2026-1002.
 - Verify fail-closed seed reset safety policy (refusing unconfirmed or remote database resets).
-
-Related documentation:
-docs/day-1/D1-S2-database-and-township-seed.md
+- Verify safe mode idempotency and partial seed protection.
 """
 
+from datetime import datetime, timezone
 from decimal import Decimal
+import os
 import pytest
-from backend.app.core.database import SessionLocal
+from backend.app.core.database import SessionLocal, engine, Base
 from backend.app.models.entities import (
     Tower, Flat, StaffMember, Gate, Bill, Complaint, User, UserRoleAssignment, FlatMembership
 )
@@ -63,7 +64,7 @@ def test_sample_flat_t07_1203_exact_values():
         db.close()
 
 
-def test_sample_flat_t12_0408_exact_values():
+def test_sample_flat_t12_0408_exact_values_and_overdue_days():
     db = SessionLocal()
     try:
         flat = db.query(Flat).filter(Flat.flat_number == "T12-0408").first()
@@ -76,13 +77,19 @@ def test_sample_flat_t12_0408_exact_values():
         assert membership.member_type == "TENANT"
         assert membership.user.name == "Swati Joshi"
 
-        # Check bill: Must be unpaid and 47 days overdue as per Brief 2!
+        # Check bill: Must be unpaid and exactly 47 days overdue as of 2026-11-06 (due date: 2026-09-20)
         bill = db.query(Bill).filter(Bill.flat_id == flat.id).first()
         assert bill is not None
         assert bill.principal_amount == Decimal("6370.00")  # 980 * 6.50
         assert bill.paid_amount == Decimal("0.00")
         assert bill.balance_amount == Decimal("6370.00")
         assert bill.status == "OVERDUE"
+        assert bill.due_date.strftime("%Y-%m-%d") == "2026-09-20"
+
+        # Overdue math check
+        ref_date = datetime(2026, 11, 6)
+        due_d = bill.due_date.replace(tzinfo=None)
+        assert (ref_date - due_d).days == 47
 
         # Check open complaint (1 water leak)
         complaint = db.query(Complaint).filter(Complaint.flat_id == flat.id).first()
@@ -94,20 +101,26 @@ def test_sample_flat_t12_0408_exact_values():
         db.close()
 
 
-def test_sample_flat_t21_1601_exact_values():
+def test_sample_flat_t21_1601_exact_values_and_overdue_days():
     db = SessionLocal()
     try:
         flat = db.query(Flat).filter(Flat.flat_number == "T21-1601").first()
         assert flat is not None
         assert flat.area_sqft == Decimal("1640.00")
 
-        # Check bill: Partially paid ₹5,000, balance ₹5,660, 18 days overdue
+        # Check bill: Partially paid ₹5,000, balance ₹5,660, exactly 18 days overdue as of 2026-11-06 (due date: 2026-10-19)
         bill = db.query(Bill).filter(Bill.flat_id == flat.id).first()
         assert bill is not None
         assert bill.principal_amount == Decimal("10660.00")  # 1640 * 6.50
         assert bill.paid_amount == Decimal("5000.00")
         assert bill.balance_amount == Decimal("5660.00")
         assert bill.status == "PARTIALLY_PAID"
+        assert bill.due_date.strftime("%Y-%m-%d") == "2026-10-19"
+
+        # Overdue math check
+        ref_date = datetime(2026, 11, 6)
+        due_d = bill.due_date.replace(tzinfo=None)
+        assert (ref_date - due_d).days == 18
     finally:
         db.close()
 
@@ -137,22 +150,16 @@ def test_ten_linked_lift_complaints_with_distinct_reporters():
         assert primary is not None
         assert primary.category == "LIFT"
 
-        # Count complaints linked to this primary lift incident group
         linked_complaints = db.query(Complaint).filter(Complaint.duplicate_of_id == primary.id).all()
-        # 9 duplicates + 1 primary = 10 total lift reports from 10 distinct flats
         assert len(linked_complaints) == 9
 
         all_lift_complaints = [primary] + linked_complaints
-
-        # 1. Verify 10 distinct reporter user IDs
         reporter_ids = {c.user_id for c in all_lift_complaints}
         assert len(reporter_ids) == 10, f"Expected 10 distinct reporters, got {len(reporter_ids)}"
 
-        # 2. Verify 10 distinct flats across Tower 7
         flat_ids = {c.flat_id for c in all_lift_complaints}
         assert len(flat_ids) == 10, f"Expected 10 distinct flats, got {len(flat_ids)}"
 
-        # 3. Verify all linked complaints remain open and SLA tracked (NEVER auto-closed!)
         for c in linked_complaints:
             assert c.status in ["ASSIGNED", "IN_PROGRESS", "SUBMITTED"]
             assert c.resolved_at is None
@@ -170,6 +177,13 @@ def test_reviewer_role_assignments():
             assert assignment.is_active is True
     finally:
         db.close()
+
+
+def test_seed_safe_mode_idempotent_on_seeded_db():
+    """Verify running safe seed on an already complete database safely succeeds without duplicate insertion."""
+    res = seed_database(mode="safe")
+    assert res["status"] in ["already_seeded", "seeded"]
+    assert res["flats_count"] == 2400
 
 
 def test_seed_safety_rejects_unconfirmed_destructive_reset():

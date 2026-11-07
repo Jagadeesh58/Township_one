@@ -1,15 +1,15 @@
 """
-Day 1 · D1-S2 — Database and Township Seed: Synthetic Dataset Generator.
+Township One — Synthetic Dataset Generator and Database Seeder.
 
 Responsibility:
-- Deterministically seed 28 towers, 2,400 flats, 180 staff members, and 4 gates.
-- Restore exact reviewer sample data for T07-1203, T12-0408, and T21-1601.
-- Provide ten distinct synthetic residents for ten open lift complaints linked to CMP-2026-1002.
-- Enforce strict fail-closed safety policy protecting remote/production databases against destructive reset.
+- Deterministically provision 28 towers, 2,400 flats, 180 staff members, and 4 access gates.
+- Seed exact reference personas and sample billing data for T07-1203, T12-0408, and T21-1601.
+- Provide ten distinct synthetic resident accounts linked to lift incident CMP-2026-1002.
+- Enforce strict fail-closed safety policy protecting remote and production databases.
 - Support non-destructive idempotent seeding (--mode safe) and guarded demo reset (--mode reset-demo --confirm-local-demo).
 
-Related documentation:
-docs/day-1/D1-S2-database-and-township-seed.md
+Documentation:
+docs/database-and-seed-data.md
 """
 
 import os
@@ -87,9 +87,22 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         check_db = SessionCheck()
         try:
             existing_flats = check_db.query(Flat).count()
-            if existing_flats >= 2400:
-                print(f"Safe seed: Database already fully seeded ({existing_flats} flats present). Preserving existing records.")
-                return
+            existing_users = check_db.query(User).count()
+            existing_bills = check_db.query(Bill).count()
+
+            if existing_flats == 2400 and existing_users >= 15 and existing_bills >= 3:
+                # Validate sample consistency
+                f1_bill = check_db.query(Bill).join(Flat).filter(Flat.flat_number == "T07-1203").first()
+                if f1_bill and f1_bill.status == "PAID":
+                    print(f"Safe seed: Database is fully seeded ({existing_flats} flats, {existing_users} users) and verified consistent. Preserving records.")
+                    return {"status": "already_seeded", "flats_count": existing_flats, "users_count": existing_users}
+            elif existing_flats > 0 or existing_users > 0 or existing_bills > 0:
+                raise RuntimeError(
+                    f"Safe seed aborted: Database is in a partially seeded or inconsistent state "
+                    f"({existing_flats}/2400 flats, {existing_users} users, {existing_bills} bills). "
+                    "Refusing to mutate partially seeded database in safe mode. "
+                    "Run with --mode reset-demo --confirm-local-demo to cleanly reseed."
+                )
         finally:
             check_db.close()
 
@@ -340,7 +353,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         db.add(FlatLedgerEntry(flat_id=f1.id, entry_type="CREDIT", amount=Decimal("7475.00"), balance_after=Decimal("0.00"), description="Payment received - UPI (Full)", reference_id=p1.transaction_reference, created_at=p1.paid_at))
 
         # 2) T12-0408: 980 sqft, Monthly Bill ₹6,370, Unpaid (₹0 paid), 47 days overdue as of 2026-11-06
-        # Issue date: 2026-09-01, Due date: 2026-09-15. Overdue days = 47 days.
+        # Issue date: 2026-09-01, Due date: 2026-09-20. (2026-11-06 - 2026-09-20 = 47 overdue days).
         f2 = flats_dict["T12-0408"]
         bill2 = Bill(
             flat_id=f2.id,
@@ -349,7 +362,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             period_month=9,
             period_year=2026,
             issue_date=datetime(2026, 9, 1, 0, 0, tzinfo=timezone.utc),
-            due_date=datetime(2026, 9, 15, 0, 0, tzinfo=timezone.utc),
+            due_date=datetime(2026, 9, 20, 0, 0, tzinfo=timezone.utc),
             area_sqft=Decimal("980.00"),
             rate_per_sqft=Decimal("6.50"),
             principal_amount=Decimal("6370.00"),
@@ -365,7 +378,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         db.add(FlatLedgerEntry(flat_id=f2.id, entry_type="DEBIT", amount=Decimal("6370.00"), balance_after=Decimal("6370.00"), description="Maintenance Bill - Sep 2026", reference_id=bill2.id, created_at=bill2.issue_date))
 
         # 3) T21-1601: 1,640 sqft, Bill ₹10,660, Partially Paid ₹5,000, Outstanding ₹5,660, 18 days overdue
-        # Issue date: 2026-10-01, Due date: 2026-10-15. Overdue days = 18 days.
+        # Issue date: 2026-10-01, Due date: 2026-10-19. (2026-11-06 - 2026-10-19 = 18 overdue days).
         f3 = flats_dict["T21-1601"]
         bill3 = Bill(
             flat_id=f3.id,
@@ -374,7 +387,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             period_month=10,
             period_year=2026,
             issue_date=datetime(2026, 10, 1, 0, 0, tzinfo=timezone.utc),
-            due_date=datetime(2026, 10, 15, 0, 0, tzinfo=timezone.utc),
+            due_date=datetime(2026, 10, 19, 0, 0, tzinfo=timezone.utc),
             area_sqft=Decimal("1640.00"),
             rate_per_sqft=Decimal("6.50"),
             principal_amount=Decimal("10660.00"),
@@ -455,7 +468,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         db.add(c_lift_primary)
         db.flush()
 
-        # 10 Distinct synthetic residents for 10 separate lift complaints across 10 flats in Tower 7 (D1-S2.4)
+        # 10 Distinct synthetic residents for 10 separate lift complaints across 10 flats in Tower 7
         lift_reporter_names = [
             ("Kavita Rao", "9876543301"),
             ("Rajesh Nair", "9876543302"),
@@ -575,6 +588,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
 
         db.commit()
         print("Township One seed completed successfully!")
+        return {"status": "seeded", "flats_count": 2400, "staff_count": 180, "towers_count": 28, "gates_count": 4}
 
     except Exception as e:
         db.rollback()

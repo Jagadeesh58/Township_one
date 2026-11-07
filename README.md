@@ -1,229 +1,139 @@
 # TOWNSHIP ONE — Gated Township Resident & Operations Platform
 
 **Client:** Company A, Pune  
-**Township Context:** 2,400 apartments across 28 towers, 180 on-site staff, 4 access gates, managing ₹22–26 crore annual maintenance budget.  
-**Scope Authority:** Challenge Brief Part C: Brief 2 (Gated township's resident app for maintenance, complaints, and visitors).  
-**Execution Standard:** Day 1 · D1-S1 through D1-S7 Verified and Locked.
+**Township Context:** 2,400 residential flats across 28 towers, 180 on-site staff, 4 multi-lane access gates, managing ₹22–26 crore annual maintenance budget.  
+**Scope Authority:** Challenge Brief Part C: Brief 2 (Gated township resident app for maintenance, complaints, and visitors).  
 
 ---
 
-## 1. Day 1 Session Architecture & Verification Roadmap
+## 1. System Overview
 
-Township One is structured and documented strictly by Day and Session:
+Township One is an enterprise-grade resident experience and community operations platform engineered for large-scale gated communities. The platform provides secure resident authentication, spatial township modeling, maintenance dues calculation with transparent breakdown, simulated test payment processing with cryptographic idempotency, dual-entry accounting ledgers, and a mobile-first Progressive Web App (PWA).
 
-| Session ID | Session Name | Core Scope | Status | Documentation & Reports |
-|---|---|---|---|---|
-| **D1-S1** | Foundation and environment | Config isolation, production guards, dynamic migration URL, connection pooling | **VERIFIED** (6/6 tests pass) | [Session Doc](docs/day-1/D1-S1-foundation-and-environment.md) • [Report](docs/reports/day1/D1-S1-test-report.md) |
-| **D1-S2** | Database and township seed | 28 towers, 2,400 flats, 180 staff, 4 gates, sample personas, lift complaint | **VERIFIED** (9/9 tests pass) | [Session Doc](docs/day-1/D1-S2-database-and-township-seed.md) • [Report](docs/reports/day1/D1-S2-seed-validation-report.md) |
-| **D1-S3** | Authentication and permissions | OTP challenges, replay block, rate limits, JWT with JTI, persistent revocation, RBAC | **VERIFIED** (14/14 tests pass) | [Session Doc](docs/day-1/D1-S3-authentication-and-permissions.md) • [Report](docs/reports/day1/D1-S3-security-test-report.md) |
-| **D1-S4** | Maintenance billing and ledger | Area-rate billing (₹6.50/sqft), 5-day grace period, 18% p.a. demo late fee, ledger | **VERIFIED** (6/6 tests pass) | [Session Doc](docs/day-1/D1-S4-maintenance-billing-and-ledger.md) • [Report](docs/reports/day1/D1-S4-financial-test-report.md) |
-| **D1-S5** | Test payments and receipts | Cryptographic idempotency, cross-flat leak prevention, strict outcomes, receipts | **VERIFIED** (8/8 tests pass) | [Session Doc](docs/day-1/D1-S5-test-payments-and-receipts.md) • [Report](docs/reports/day1/D1-S5-payment-test-report.md) |
-| **D1-S6** | Resident interface and PWA | 2-tap payment CTA, multi-bill selector, bilingual EN/MR, PWA caching with `/api/*` bypass | **VERIFIED** (Vite build 0 errors) | [Session Doc](docs/day-1/D1-S6-resident-interface-and-pwa.md) • [Report](docs/reports/day1/D1-S6-frontend-pwa-test-report.md) |
-| **D1-S7** | Integration and Day 1 verification | End-to-end resident journey, reviewer flats validation, test state isolation | **VERIFIED** (44/44 tests pass) | [Session Doc](docs/day-1/D1-S7-integration-and-day1-verification.md) • [Report](docs/reports/day1/D1-S7-end-to-end-test-report.md) |
-
-- **Comprehensive Reports:**
-  - Master Day 1 Sign-off: [`docs/day-1/D1-DAY1-COMPLETION-REPORT.md`](docs/day-1/D1-DAY1-COMPLETION-REPORT.md)
-  - Full Session Traceability: [`docs/SESSION-TRACEABILITY.md`](docs/SESSION-TRACEABILITY.md)
-  - Current Implementation Status: [`docs/IMPLEMENTATION-STATUS.md`](docs/IMPLEMENTATION-STATUS.md)
-  - Master Test Report: [`docs/test-report.md`](docs/test-report.md)
-  - Reviewer Walkthrough: [`docs/reviewer-walkthrough.md`](docs/reviewer-walkthrough.md)
-  - Architectural Decisions: [`docs/design-decisions.md`](docs/design-decisions.md)
-  - Assumptions & Limitations: [`docs/assumptions.md`](docs/assumptions.md)
-  - Deployment Guide: [`docs/deployment.md`](docs/deployment.md)
+### Architecture Highlights
+- **Backend API:** FastAPI (Python 3.11), SQLAlchemy 2.0 ORM, Pydantic v2, and Alembic schema migrations.
+- **Frontend PWA:** React 19, TypeScript, Vite 6, Service Worker offline caching (with strict `/api/*` network-only bypass), trilingual native localization (English, Marathi, Hindi).
+- **Financial Precision:** Strict decimal arithmetic using Python `Decimal` (`ROUND_HALF_UP`) ensuring zero binary floating-point drift across all billing and ledger calculations.
+- **Payment Idempotency:** Cryptographic request fingerprinting, mandatory client idempotency keys (minimum 8 chars), dialect-aware row-level locking (`with_for_update`), and generic conflict responses preventing cross-resident data leakage.
+- **Role-Based Access Control:** Strict server-side permission enforcement. Committee members access aggregate township metrics while being strictly blocked from individual flat drill-downs; security guards are restricted to gate operations with zero financial access; family members have view permissions while bill payment is blocked.
 
 ---
 
-## 2. System Architecture Overview
+## 2. Professional Documentation Hierarchy
 
-Township One is designed as a secure, high-performance, mobile-first PWA backed by a modular FastAPI backend with strict server-side authorization:
+Comprehensive architecture specifications, data schemas, security models, and verification reports are maintained in the [`docs/`](docs/) directory:
 
-- **Frontend:** React 19 + TypeScript + Vite. Accessible mobile PWA (`user-scalable` enabled for pinch-to-zoom accessibility), precached offline application shell via service worker (`sw.js` strictly bypassing `/api/*`), trilingual support (English, Marathi, Hindi), responsive touch targets (≥44×44px).
-- **Backend:** FastAPI + SQLAlchemy 2.0 + Pydantic v2. Stateless architecture, server-side role resolution and flat membership validation, granular IDOR boundaries.
-- **Database & Precision:** SQLite for zero-setup local development, PostgreSQL compatible for production deployment. Financial balances and ledger entries use `NUMERIC(14,2)` / Python `Decimal` with strict bankers-rounding-free arithmetic.
-- **Database Migrations:** Alembic reproducible schema migrations (`alembic/versions/`) enabling reproducible zero-state database provisioning without relying on raw `create_all` shortcuts.
-- **Isolated Testing:** Test execution uses dedicated `TEST_DATABASE_URL` (`sqlite:///./township_one_test.db`). Production/demo databases (`township_one.db`) are strictly guarded against test mutation.
-- **Data Protection:** Built in compliance with India's **Digital Personal Data Protection (DPDP) Act 2023**: Purpose limitation, notice, strict role-based access control, and complete separation between resident PII and administrative/committee aggregate views.
+| Document | Description |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | High-level system architecture, component topology, and technology stack. |
+| [`docs/data-model.md`](docs/data-model.md) | Entity-relationship diagrams, schema tables, constraints, and data dictionaries. |
+| [`docs/database-and-seed-data.md`](docs/database-and-seed-data.md) | 2,400 flats, 28 towers, 180 staff, 4 gates, and ground truth sample personas. |
+| [`docs/authentication-and-access-control.md`](docs/authentication-and-access-control.md) | Salted SHA-256 OTP authentication, persistent JWT revocation, and RBAC matrix. |
+| [`docs/maintenance-billing.md`](docs/maintenance-billing.md) | Area-rate billing (₹6.50/sq ft), grace period boundaries, leap year support, and ledger bookkeeping. |
+| [`docs/payments-and-receipts.md`](docs/payments-and-receipts.md) | Idempotency locking, state machine retry lifecycle, test payment modes, and vouchers. |
+| [`docs/resident-experience-and-pwa.md`](docs/resident-experience-and-pwa.md) | 2-tap payment CTA, multi-bill selection, service worker caching, and trilingual i18n. |
+| [`docs/security-and-privacy.md`](docs/security-and-privacy.md) | Production configuration guards, IDOR prevention, brute-force defenses, and DPDP Act 2023 alignment. |
+| [`docs/testing-and-validation.md`](docs/testing-and-validation.md) | Verification engine methodology, test suite topology, and test execution evidence. |
+| [`docs/assumptions-and-open-decisions.md`](docs/assumptions-and-open-decisions.md) | Domain assumptions register, late fee legal notice, and architectural roadmap. |
+| [`docs/implementation-status.md`](docs/implementation-status.md) | Requirement completion matrix, verified persona checklist, and future phase boundaries. |
+| [`docs/reviewer-walkthrough.md`](docs/reviewer-walkthrough.md) | Step-by-step evaluation guide and demonstration scenarios. |
+| [`docs/deployment.md`](docs/deployment.md) | Production deployment guide, environment variables, and operations checklist. |
 
----
-
-## 2. Reviewer Persona Matrix & Test Credentials
-
-Authentication uses OTP simulation for local and demo environments (fixed mock OTP: `123456`).
-
-| Persona / Role | Name | Phone Number | Flat / Scope | Permitted Access | Restricted / Blocked Access |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Resident (Tenant)** | Swati Joshi | `9876543211` | T12-0408 (980 sqft) | View own bills, pay ₹6,370 overdue dues, test checkout, lodge complaints, view notices | Other flats' bills/receipts (403), committee reports (403), gate logs (403) |
-| **Resident (Owner)** | Neeraj Kulkarni | `9876543210` | T07-1203 (1,150 sqft) | View own bills (₹7,475 paid, ₹0 due), receipts, flat ledger, complaints | Other flats' finances (403), paying already-paid bill (400) |
-| **Family Member** | Ananya Kulkarni | `9876543213` | T07-1203 | View flat billing summary & complaints (`can_pay_bills=False`) | Initiating payments / checkout (403) |
-| **Resident (Owner)** | Aamir Shaikh | `9876543212` | T21-1601 (1,640 sqft) | View ₹5,660 balance (₹5,000 paid of ₹10,660), pay dues | Other flats' bills/receipts (403) |
-| **Help Desk** | Ramesh Patil | `9876543220` | Township Support | Complaint triage, assignment, status tracking, SLA monitoring | Financial postings (403), bank imports, visitor photos |
-| **Security Guard** | Suresh Shinde | `9876543230` | Gate 1 | Visitor verification, entry/exit logging | Resident financial records (403), complaint details (403) |
-| **Accounts Staff** | Anita Deshmukh | `9876543240` | Finance Office | Bank statement import, manual reconciliation, bill generation | Visitor security photos, committee governance actions |
-| **Committee Member** | Vikram Sardesai | `9876543250` | Management Committee | Aggregate township collections, receivables, ageing metrics | **Strictly blocked from individual flat drill-down (403)** |
-| **Admin / Operator**| System Admin | `9876543200` | Township Admin | Configuration, audit logs, system diagnostics | Audited privileged access |
+### Technical Verification Reports
+- [`docs/reports/backend-test-report.md`](docs/reports/backend-test-report.md) — 57/57 Automated backend tests passing.
+- [`docs/reports/migration-validation.md`](docs/reports/migration-validation.md) — Alembic schema migration and revision verification.
+- [`docs/reports/seed-data-validation.md`](docs/reports/seed-data-validation.md) — Database entity counts and overdue math validation.
+- [`docs/reports/frontend-validation.md`](docs/reports/frontend-validation.md) — Vitest frontend test report and production asset build metrics.
+- [`docs/reports/payment-safety-validation.md`](docs/reports/payment-safety-validation.md) — Idempotency replay matrix, concurrency benchmarks, and precision tests.
 
 ---
 
-## 3. Exact Sample Ground Truth (As of 2026-11-06)
+## 3. Reviewer Test Personas & Test Credentials
 
-Deterministic demo date: `DEMO_AS_OF_DATE = 2026-11-06T00:00:00Z`.
+The local demonstration database (`township_one.db`) is pre-seeded with test accounts. In development and testing environments, OTP verification uses the demo OTP `123456`:
+
+| Persona / Role | Name | Phone Number | Demo OTP | Scope | Permitted Access | Blocked Access |
+|---|---|---|---|---|---|---|
+| **Resident (Tenant)** | Swati Joshi | `9876543211` | `123456` | T12-0408 (980 sq ft) | View bills, pay ₹6,370 overdue dues, test checkout, lodge complaints | Other flats' records (403), committee reports (403), gate logs (403) |
+| **Resident (Owner)** | Neeraj Kulkarni | `9876543210` | `123456` | T07-1203 (1,150 sq ft) | View bills (₹7,475 paid, ₹0 due), receipts, flat ledger statement | Other flats' finances (403), duplicate payment on paid bill (400) |
+| **Family Member** | Ananya Kulkarni | `9876543213` | `123456` | T07-1203 | View flat billing summary & complaints (`can_pay_bills = False`) | Initiating payments / checkout (403) |
+| **Resident (Owner)** | Aamir Shaikh | `9876543212` | `123456` | T21-1601 (1,640 sq ft) | View ₹5,660 balance (₹5,000 paid of ₹10,660), pay dues | Other flats' records (403) |
+| **Help Desk** | Ramesh Patil | `9876543220` | `123456` | Township Support | Complaint triage, assignment, status tracking, SLA monitoring | Financial postings (403), gate security photos |
+| **Security Guard** | Suresh Shinde | `9876543230` | `123456` | Gate 1 | Visitor verification, entry/exit logging | Resident financial records (403), complaints (403) |
+| **Accounts Staff** | Anita Deshmukh | `9876543240` | `123456` | Finance Office | Manual reconciliation, bill generation, ledger audit | Security gate photos, committee governance actions |
+| **Committee Member**| Vikram Sardesai | `9876543250` | `123456` | Management Committee | Aggregate township collections, receivables, ageing metrics | **Strictly blocked from individual flat drill-down (403)** |
+
+---
+
+## 4. Ground Truth Sample Data (As of 2026-11-06)
+
+Deterministic baseline date: `DEMO_AS_OF_DATE = 2026-11-06T00:00:00Z`.
 
 1. **Flat T07-1203 (Neeraj Kulkarni):**
    - Area: 1,150 sq ft @ ₹6.50/sq ft = ₹7,475.00
    - Paid: ₹7,475.00 in full on 2026-11-03
    - Current Outstanding: ₹0.00
    - Overdue Days: 0
-   - Complaints: 0
-
 2. **Flat T12-0408 (Swati Joshi, Tenant):**
    - Area: 980 sq ft @ ₹6.50/sq ft = ₹6,370.00
-   - Issued: 2026-09-01 | Due: 2026-09-15 | Grace ends: 2026-09-20
-   - Paid: ₹0.00
-   - Current Outstanding: ₹6,370.00
-   - Overdue Days: 47 days (as of 2026-11-06)
-   - Illustrative Late Fee: ₹176.43 (18% p.a. simple interest per Maharashtra Co-operative Societies bye-laws)
-   - Complaints: 1 active ticket (Water leakage from ceiling, In Progress)
-
+   - Due Date: 2026-09-20 (Grace ended 2026-09-20)
+   - Overdue Days: **Exactly 47 days** as of 2026-11-06 ($2026\text{-}11\text{-}06 - 2026\text{-}09\text{-}20 = 47\text{ days}$)
+   - Paid: ₹0.00 | Current Outstanding: ₹6,370.00
+   - Late Fee Notice: Illustrative demo calculation (18% p.a. simple interest) pending society federation approval (not an approved legal rate).
+   - Complaints: 1 high-urgency active water leakage complaint.
 3. **Flat T21-1601 (Aamir Shaikh):**
    - Area: 1,640 sq ft @ ₹6.50/sq ft = ₹10,660.00
-   - Issued: 2026-10-01 | Due: 2026-10-15 | Grace ends: 2026-10-20
-   - Paid: ₹5,000.00 on 2026-10-14
-   - Current Outstanding: ₹5,660.00
-   - Overdue Days: 18 days (as of 2026-11-06)
-   - Complaints: 0
-
+   - Due Date: 2026-10-19 (Grace ended 2026-10-19)
+   - Overdue Days: **Exactly 18 days** as of 2026-11-06 ($2026\text{-}11\text{-}06 - 2026\text{-}10\text{-}19 = 18\text{ days}$)
+   - Paid: ₹5,000.00 on 2026-10-18 | Current Outstanding: ₹5,660.00
 4. **Tower 7 Lift Incident (CMP-2026-1002):**
-   - Linked incident grouping 10 distinct lift complaints from 10 flats across Tower 7.
-   - Status: IN_PROGRESS (never auto-closed until root-cause physical resolution).
+   - Primary ticket grouping 10 distinct lift complaints from 10 distinct flats across Tower 7.
+   - All reports remain open and SLA-tracked until physical mechanical resolution.
 
 ---
 
-## 4. Step-by-Step Setup Instructions
+## 5. Quick Start & Execution
 
-### Prerequisites
-- **Python:** 3.11 or later
-- **Node.js:** v18, v20, or v24 & npm
-- **Git**
+### 5.1 Prerequisites
+- Python 3.11+
+- Node.js 18+ (Node 20+ recommended)
+- Git
 
-### Step 1: Clone Repository & Create Virtual Environment
+### 5.2 Backend Setup & Execution
 ```bash
-git clone https://github.com/Jagadeesh58/township-one.git
-cd township-one
-
-# Create and activate Python virtual environment
-py -3.11 -m venv .venv
-
-# Windows PowerShell:
-.venv\Scripts\Activate.ps1
-# Linux/macOS:
-source .venv/bin/activate
-```
-
-### Step 2: Install Dependencies
-```bash
-# Backend dependencies (pinned)
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Frontend dependencies (clean lockfile)
+# Run safe database seed (non-destructive; skips if already seeded)
+py -3.11 seed/seed_data.py --mode safe
+
+# Start FastAPI server on port 8000
+py -3.11 -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+Swagger API Documentation: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+### 5.3 Frontend Setup & Execution
+```bash
+# Navigate to frontend
 cd frontend
-npm ci
-cd ..
-```
 
-### Step 3: Configure Environment Variables
-Copy template `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-Default configuration:
-```env
-APP_NAME="Township One"
-APP_ENV="development"
-SECRET_KEY="REDACTED"
-ALGORITHM="HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
+# Install npm dependencies
+npm install
 
-# Demo application database
-DATABASE_URL="sqlite:///./township_one.db"
-
-# Dedicated test database (must never match DATABASE_URL)
-TEST_DATABASE_URL="sqlite:///./township_one_test.db"
-
-# Reviewer baseline date (ISO 8601)
-DEMO_AS_OF_DATE="2026-11-06T00:00:00Z"
-DEFAULT_GRACE_PERIOD_DAYS=5
-DEMO_LATE_FEE_PERCENTAGE_PA=18.00
-```
-
-### Step 4: Run Alembic Migrations
-```bash
-# Apply migrations to database from zero
-alembic upgrade head
-```
-
-### Step 5: Seed Demo Database
-```bash
-# Populates 28 towers, 2,400 flats, 180 staff, 4 gates, and exact sample flats
-python seed/seed_data.py
-```
-
-### Step 6: Start Application Services
-Open two terminal windows:
-
-**Terminal 1 — Backend (FastAPI):**
-```bash
-py -3.11 -m uvicorn backend.app.main:app --reload --port 8000
-```
-- API Base: `http://localhost:8000`
-- Interactive OpenAPI Docs: `http://localhost:8000/docs`
-- Health check: `http://localhost:8000/health`
-
-**Terminal 2 — Frontend (Vite PWA):**
-```bash
-cd frontend
+# Run frontend development server
 npm run dev
 ```
-- Frontend Web App: `http://localhost:5173`
+Resident Portal Application: [http://localhost:5173](http://localhost:5173)
 
----
-
-## 5. Verification & Test Suite Execution
-
-All tests execute against the dedicated test database (`TEST_DATABASE_URL`), ensuring zero mutation of demo records.
-
-### Run Automated Backend Test Suite
+### 5.4 Running Automated Verification
 ```bash
+# Run backend pytest suite (57 tests)
 py -3.11 -m pytest tests/ -v
-```
 
-**Coverage includes 44 comprehensive regression & security tests (100% pass rate):**
-- `tests/test_d1_s1_health.py` — Health checks, standardized error envelopes
-- `tests/test_d1_s2_seed.py` — 2,400 flats, 28 towers, exact sample ground truth
-- `tests/test_d1_s3_auth.py` — OTP verification, replay prevention, IDOR denial, family permissions
-- `tests/test_d1_s4_billing.py` — Principal calculation, 5-day grace period, multiple unpaid bill aggregation, duplicate bill prevention
-- `tests/test_d1_s5_payments.py` — Cross-flat idempotency key replay prevention, zero data leakage, strict outcome enum validation (`SUCCESS`, `PENDING`, `FAILED`, `EXPIRED`), zero side-effects on non-success, receipt access control
-- `tests/test_d1_s7_integration.py` — End-to-end Day 1 resident journey (Swati overdue payment, Neeraj paid verification, Aamir partial payment, Committee aggregate scoping, Family permission enforcement)
-
-### Run Frontend Production Build & Typecheck
-```bash
+# Run frontend vitest suite (11 tests)
 cd frontend
+npm test
+
+# Build production frontend bundle
 npm run build
 ```
-
----
-
-## 6. Financial Logic & Legal Reference
-
-- **Statutory Authority:** Maharashtra Co-operative Societies Act, 1960 and Model Bye-Law No. 67.
-- **Grace Period:** 5 calendar days following the due date (15th of the month; grace window closes on the 20th). No late interest accrues during grace.
-- **Overdue Interest:** Calculated at simple interest of 18.00% per annum on principal dues after the grace window expires. Marked explicitly as illustrative demo rule.
-- **Zero-Penny Rounding:** All monetary figures use two-decimal numeric representation (`NUMERIC(14,2)` and `Decimal`).
-
----
-
-## 7. Data Protection & Security Controls
-
-1. **Payment Idempotency:** SHA-256 request payload fingerprinting bound to authenticated user, flat, bill, and currency. Key collision across different users yields generic HTTP 409 without leaking transaction references or PII.
-2. **Strict Outcome Validation:** Server-side `PaymentOutcomeEnum` rejects unknown/invalid outcomes (`TYPO_SUCCESS`, `UNKNOWN`, null) with HTTP 422 before reaching transaction state machine.
-3. **Role & Committee Scoping:** Management Committee members are restricted to aggregate metrics (`GET /api/v1/billing/committee/aggregate`) and receive HTTP 403 when requesting individual flat drill-downs.
-4. **Accessible PWA:** Mobile viewport permits pinch-to-zoom (`user-scalable=no` removed). Static shell precached via service worker while bypassing all financial API routes.

@@ -94,7 +94,7 @@ export default function App() {
         color: 'var(--text-muted)',
         background: '#ffffff'
       }}>
-        Township One • Client: Company A, Pune • 2,400 flats / 28 towers / 180 staff / 4 gates • Day 1 Build
+        Township One • Client: Company A, Pune • 2,400 flats / 28 towers / 180 staff / 4 gates
       </footer>
     </div>
   );

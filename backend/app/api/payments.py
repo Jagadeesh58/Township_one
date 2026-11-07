@@ -1,5 +1,5 @@
 """
-Day 1 · D1-S5 — Test payments and receipts
+Township One - Test payments and receipts endpoints.
 API endpoints for:
 - Simulated checkout with strict outcome verification (rejecting invalid outcome values)
 - Safe idempotent payment execution
@@ -29,7 +29,7 @@ def to_receipt_response(r: Receipt) -> ReceiptResponse:
         receipt_number=r.receipt_number,
         flat_number=r.flat_number,
         resident_name=r.resident_name,
-        amount=float(amt_dec),
+        amount=amt_dec,
         amount_inr=f"{amt_dec:.2f}",
         payment_mode=r.payment_mode,
         transaction_reference=r.transaction_reference,
@@ -43,7 +43,7 @@ def to_payment_response(p: Payment, r: Optional[Receipt] = None) -> PaymentRespo
         id=p.id,
         flat_id=p.flat_id,
         bill_id=p.bill_id,
-        amount=float(amt_dec),
+        amount=amt_dec,
         amount_inr=f"{amt_dec:.2f}",
         currency=getattr(p, "currency", "INR"),
         status=p.status,

@@ -1,9 +1,11 @@
 """
-Day 1 · D1-S4 — Maintenance billing and ledger
+Township One - Maintenance Billing and Ledger Verification Tests.
+
 Test suite verifying:
 - Precise area-based principal calculations
 - Grace period boundaries (due on 15th, grace ends 20th, interest starts 21st)
 - Multi-bill outstanding balance aggregation (unpaid_bills and total_outstanding_due)
+- Leap year calculation support (366 vs 365 days)
 - IDOR access denial across flats
 - Duplicate bill prevention for the same period
 """
@@ -35,9 +37,18 @@ def test_demo_late_fee_boundaries():
     assert calculate_demo_late_fee(Decimal("6370.00"), -5) == Decimal("0.00")
     
     # 47 days overdue on 6370 @ 18% p.a.
-    # 6370 * 0.18 * (47 / 365) = 147.67
     fee = calculate_demo_late_fee(Decimal("6370.00"), 47, Decimal("18.00"))
     assert fee > Decimal("140.00") and fee < Decimal("150.00")
+
+
+def test_demo_late_fee_leap_year_handling():
+    # Leap year (2024, 366 days): 366 days @ 10% on 1,000 = exactly 100.00
+    fee_leap = calculate_demo_late_fee(Decimal("1000.00"), 366, Decimal("10.00"), year=2024)
+    assert fee_leap == Decimal("100.00")
+
+    # Non-leap year (2025, 365 days): 365 days @ 10% on 1,000 = exactly 100.00
+    fee_non_leap = calculate_demo_late_fee(Decimal("1000.00"), 365, Decimal("10.00"), year=2025)
+    assert fee_non_leap == Decimal("100.00")
 
 
 def test_grace_period_enforcement():
@@ -112,7 +123,7 @@ def test_billing_summary_aggregates_multiple_unpaid_bills():
     assert resp.status_code == 200
     data = resp.json()
     assert data["flat_number"] == "T12-0408"
-    assert data["total_outstanding_due"] == 12740.0
+    assert float(data["total_outstanding_due"]) == 12740.0
     assert len(data["unpaid_bills"]) == 2
 
 

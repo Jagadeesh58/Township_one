@@ -43,7 +43,7 @@ class UserRoleAssignment(Base):
 
 
 class RevokedToken(Base):
-    """Day 1 · D1-S3: Persistent token revocation store for multi-worker session security."""
+    """Persistent token revocation store for multi-worker session security."""
     __tablename__ = "revoked_tokens"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)

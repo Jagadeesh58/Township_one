@@ -1,5 +1,4 @@
 # Township One — Production, Database & Verification Dependencies
-# Day 1 · D1-S1 — Foundation and Environment
 fastapi==0.162.0
 uvicorn==0.54.0
 sqlalchemy==2.0.36

@@ -1,8 +1,9 @@
 """
-Day 1 · D1-S3 — Authentication and permissions
+Township One - Authentication and Permissions Verification Tests.
+
 Test suite verifying:
-- OTP generation, validation, one-time replay prevention, and rate limiting (request and verify)
-- Production security guards (demo_hint omitted when ENVIRONMENT="production")
+- OTP generation, salted hash storage, validation, one-time replay prevention, and rate limiting (request and verify)
+- Production security guards (demo_hint omitted when APP_ENV="production")
 - JWT creation with unique JTI and persistent token revocation (in-memory + database)
 - Flat membership authorization and RBAC (Owner vs Family member vs Tenant vs Committee vs Guard)
 - Strict prevention of IDOR and Committee/Guard access to individual flat financial data
@@ -14,7 +15,7 @@ from backend.app.main import app
 from backend.app.core.database import SessionLocal
 from backend.app.core.config import settings
 from backend.app.models.entities import Flat, User, RevokedToken
-from backend.app.core.security import verify_flat_access
+from backend.app.core.security import verify_flat_access, OTP_STORE
 from fastapi import HTTPException
 
 client = TestClient(app)
@@ -26,6 +27,14 @@ def test_request_otp_success():
     data = response.json()
     assert "demo_hint" in data
     assert data["phone"] == "9876543210"
+
+    # Verify salted hash is stored, never plain text OTP
+    assert "9876543210" in OTP_STORE
+    challenge = OTP_STORE["9876543210"]
+    assert "otp_hash" in challenge
+    assert "salt" in challenge
+    assert "otp" not in challenge
+    assert len(challenge["otp_hash"]) == 64  # SHA-256
 
 
 def test_request_otp_nonexistent_user():
@@ -185,7 +194,6 @@ def test_demo_hint_hidden_in_production(monkeypatch):
 
 def test_otp_request_rate_limiting():
     phone = "9876543302"  # Rajesh Nair
-    # Clear prior challenges for clean rate test
     from backend.app.core.security import OTP_STORE
     OTP_STORE.pop(phone, None)
     
@@ -217,4 +225,3 @@ def test_database_persisted_revoked_token():
         assert revoked_entry.token_jti is not None
     finally:
         db.close()
-

@@ -1,7 +1,10 @@
 """
-Day 1 · D1-S5 — Test payments and receipts
+Township One - Test Payments and Receipts Verification Tests.
+
 Test suite verifying:
 - Payment idempotency and cryptographic request fingerprinting
+- Mandatory idempotency key validation (min 8 chars, rejection when missing or too short)
+- Production guard: simulated payments blocked in production
 - Cross-flat idempotency key collision without data leakage (generic 409)
 - Idempotency key payload mismatch rejection (409 on altered amount, flat, bill, or outcome)
 - Strict validation of test payment outcomes (SUCCESS, PENDING, FAILED, EXPIRED only)
@@ -15,6 +18,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
+from backend.app.core.config import settings
 from backend.app.core.database import SessionLocal
 from backend.app.models.entities import Bill, Flat, FlatLedgerEntry, Payment, Receipt
 
@@ -28,6 +32,66 @@ def get_auth_token(phone: str) -> tuple[str, dict]:
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     data = res.json()
     return data["access_token"], data["user"]
+
+
+def test_mandatory_idempotency_key_enforcement():
+    # Login as Swati (T12-0408)
+    token, user = get_auth_token("9876543211")
+    flat_id = user["flats"][0]["flat_id"]
+    headers = {"Authorization": f"Bearer {token}"}
+    summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
+    bill_id = summary["latest_bill"]["id"]
+
+    # 1. Missing idempotency key -> HTTP 422
+    resp_missing = client.post(
+        "/api/v1/payments/checkout",
+        headers=headers,
+        json={
+            "flat_id": flat_id,
+            "bill_id": bill_id,
+            "amount": 500.0,
+            "test_outcome": "SUCCESS"
+        }
+    )
+    assert resp_missing.status_code == 422
+
+    # 2. Too short key (< 8 chars) -> HTTP 422
+    resp_short = client.post(
+        "/api/v1/payments/checkout",
+        headers=headers,
+        json={
+            "flat_id": flat_id,
+            "bill_id": bill_id,
+            "amount": 500.0,
+            "test_outcome": "SUCCESS",
+            "idempotency_key": "short"
+        }
+    )
+    assert resp_short.status_code == 422
+
+
+def test_simulated_payment_blocked_in_production(monkeypatch):
+    # First obtain auth token while in test environment
+    token, user = get_auth_token("9876543211")
+    flat_id = user["flats"][0]["flat_id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Now switch to production environment
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+
+    resp = client.post(
+        "/api/v1/payments/checkout",
+        headers=headers,
+        json={
+            "flat_id": flat_id,
+            "bill_id": str(uuid.uuid4()),
+            "amount": 500.0,
+            "test_outcome": "SUCCESS",
+            "idempotency_key": "idem-prod-guard-check-123"
+        }
+    )
+    assert resp.status_code == 403
+    assert "disabled in production" in resp.json()["error"]["message"]
 
 
 def test_pay_already_paid_bill_rejected():
@@ -47,7 +111,8 @@ def test_pay_already_paid_bill_rejected():
             "flat_id": flat_id,
             "bill_id": bill_id,
             "amount": 7475.0,
-            "test_outcome": "SUCCESS"
+            "test_outcome": "SUCCESS",
+            "idempotency_key": "idem-already-paid-check"
         }
     )
     assert resp.status_code == 400
@@ -72,7 +137,8 @@ def test_invalid_payment_outcomes_rejected():
             "flat_id": flat_id,
             "bill_id": bill_id,
             "amount": 1000.0,
-            "test_outcome": "TYPO_SUCCESS"
+            "test_outcome": "TYPO_SUCCESS",
+            "idempotency_key": "idem-typo-test-outcome"
         }
     )
     assert resp_typo.status_code == 422
@@ -85,7 +151,8 @@ def test_invalid_payment_outcomes_rejected():
             "flat_id": flat_id,
             "bill_id": bill_id,
             "amount": 1000.0,
-            "test_outcome": "UNKNOWN"
+            "test_outcome": "UNKNOWN",
+            "idempotency_key": "idem-unknown-test-outcome"
         }
     )
     assert resp_unknown.status_code == 422
@@ -98,7 +165,8 @@ def test_invalid_payment_outcomes_rejected():
             "flat_id": flat_id,
             "bill_id": bill_id,
             "amount": 1000.0,
-            "test_outcome": None
+            "test_outcome": None,
+            "idempotency_key": "idem-none-test-outcome"
         }
     )
     assert resp_none.status_code == 422
@@ -111,7 +179,8 @@ def test_invalid_payment_outcomes_rejected():
             "flat_id": flat_id,
             "bill_id": bill_id,
             "amount": 1000.0,
-            "test_outcome": "success"
+            "test_outcome": "success",
+            "idempotency_key": "idem-lower-test-outcome"
         }
     )
     assert resp_lower.status_code == 422
@@ -314,7 +383,8 @@ def test_family_member_without_pay_permission_blocked():
             "flat_id": flat_id,
             "bill_id": str(uuid.uuid4()),
             "amount": 500.0,
-            "test_outcome": "SUCCESS"
+            "test_outcome": "SUCCESS",
+            "idempotency_key": "IDEM-FAMILY-PAY-DENIED"
         }
     )
     assert resp.status_code == 403
@@ -330,7 +400,7 @@ def test_payment_exceeding_balance_rejected():
     summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     bill = summary["unpaid_bills"][0] if summary.get("unpaid_bills") else summary["latest_bill"]
     bill_id = bill["id"]
-    balance = bill["balance_amount"]
+    balance = float(bill["balance_amount"])
 
     # Attempt to pay more than balance (e.g. balance + 1000)
     over_amount = balance + 1000.0

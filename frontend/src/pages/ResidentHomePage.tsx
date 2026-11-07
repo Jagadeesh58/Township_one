@@ -1,4 +1,4 @@
-// Day 1 · D1-S6 — Resident interface and PWA
+// Township One - Resident Home Dashboard
 // Resident home dashboard: localized greeting, 2-tap dues payment CTA, quick actions,
 // multi-flat switcher, and payment receipt presentation.
 

@@ -1,4 +1,4 @@
-// Day 1 · D1-S6 — Resident interface and PWA
+// Township One - Resident API client
 // API client for resident authentication, billing summaries with multi-bill support,
 // payment checkout with idempotency and simulated outcome dispatch.
 

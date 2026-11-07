@@ -1,4 +1,4 @@
-// Day 1 · D1-S6 — Resident interface and PWA
+// Township One - Resident Interface PWA Service Worker
 // Service worker implementing:
 // - App shell pre-caching (HTML, manifest, icons)
 // - Dynamic runtime caching for hashed frontend assets (/assets/*.js, /assets/*.css)

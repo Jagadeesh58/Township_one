@@ -1,14 +1,8 @@
 """
-Day 1 · D1-S1 — Foundation and Environment: Application Configuration.
+Township One — Application Configuration and Environment Security Controls.
 
-Responsibility:
-- Centrally load, validate, and provide application settings from environment.
-- Guard production environment: reject default insecure secret keys in production.
-- Define isolated database URLs for demo (`DATABASE_URL`) and testing (`TEST_DATABASE_URL`).
-- Provide consistent demo reference date (`DEMO_AS_OF_DATE`) across all modules.
-
-Related documentation:
-docs/day-1/D1-S1-foundation-and-environment.md
+Centralizes configuration parameters, environment variables, database URLs,
+session expiry policies, and fail-closed production safety guards.
 """
 
 import os
@@ -41,6 +35,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     OTP_EXPIRY_SECONDS: int = 300
     DEMO_OTP_CODE: str = "123456"
+    SMS_PROVIDER_API_KEY: str = ""
 
     # Maintenance Billing Defaults
     MAINTENANCE_RATE_PER_SQFT: float = 6.50
@@ -54,13 +49,27 @@ class Settings(BaseSettings):
     )
 
     def validate_production_guards(self):
-        """Fail-closed guard: ensure default development secret key is never used in production."""
+        """
+        Fail-closed security guard:
+        In production, verifies that:
+        - SECRET_KEY is not a known default, placeholder, or low-entropy key.
+        - DEBUG is strictly False.
+        - Universal fixed demo OTP is disabled.
+        """
         if self.APP_ENV.lower() == "production":
-            if "super-secret" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+            insecure_markers = [
+                "super-secret", "change-in-production", "example",
+                "placeholder", "secret-key", "default", "password", "123456"
+            ]
+            key_lower = self.SECRET_KEY.lower()
+            if any(marker in key_lower for marker in insecure_markers) or len(self.SECRET_KEY) < 32 or len(set(self.SECRET_KEY)) < 8:
                 raise RuntimeError(
-                    "FATAL SECURITY VIOLATION: Production deployment cannot use the default or insecure SECRET_KEY. "
-                    "Please configure a strong, random 32+ character SECRET_KEY in production."
+                    "FATAL SECURITY VIOLATION: Production deployment cannot use a default, placeholder, "
+                    "or weak SECRET_KEY. Please configure a strong, random 32+ character SECRET_KEY with high entropy."
                 )
+
+            if self.DEBUG:
+                raise RuntimeError("FATAL SECURITY VIOLATION: DEBUG mode must be False in production.")
 
 
 settings = Settings()

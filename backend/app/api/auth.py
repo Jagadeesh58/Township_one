@@ -1,14 +1,8 @@
 """
-Day 1 · D1-S3 — Authentication and Permissions: Auth API Endpoints.
+Township One — Authentication API Endpoints.
 
-Responsibility:
-- OTP challenge creation with rate limiting and development hints.
-- OTP verification and cryptographically signed JWT token issuance.
-- Session revocation on logout persisted to database.
-- Authenticated user profile retrieval with active flat memberships and permissions.
-
-Related documentation:
-docs/day-1/D1-S3-authentication-and-permissions.md
+Provides phone OTP challenge request and verification, JWT session issuance,
+persistent session logout revocation, and authenticated profile resolution.
 """
 
 from typing import Optional

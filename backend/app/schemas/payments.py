@@ -22,15 +22,16 @@ class PaymentInitiateRequest(BaseModel):
         PaymentOutcomeEnum.SUCCESS,
         description="Explicit test outcome: SUCCESS, PENDING, FAILED, EXPIRED. Invalid values rejected."
     )
-    idempotency_key: Optional[str] = Field(None, max_length=100)
+    idempotency_key: str = Field(..., min_length=8, max_length=100, description="Mandatory client-generated idempotency key (min 8 chars)")
 
     @field_validator("idempotency_key")
     @classmethod
-    def validate_idempotency_key(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None:
-            v = v.strip()
-            if len(v) < 8:
-                raise ValueError("Idempotency key must be at least 8 characters long.")
+    def validate_idempotency_key(cls, v: str) -> str:
+        if v is None or not v.strip():
+            raise ValueError("Idempotency key is required.")
+        v = v.strip()
+        if len(v) < 8:
+            raise ValueError("Idempotency key must be at least 8 characters long.")
         return v
 
 
@@ -39,7 +40,7 @@ class ReceiptResponse(BaseModel):
     receipt_number: str
     flat_number: str
     resident_name: str
-    amount: float
+    amount: Decimal
     amount_inr: str
     payment_mode: str
     transaction_reference: str
@@ -50,7 +51,7 @@ class PaymentResponse(BaseModel):
     id: str
     flat_id: str
     bill_id: str
-    amount: float
+    amount: Decimal
     amount_inr: str
     currency: str = "INR"
     status: str

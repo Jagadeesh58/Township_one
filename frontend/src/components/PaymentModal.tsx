@@ -1,10 +1,12 @@
-// Day 1 · D1-S6 — Resident interface and PWA
-// Payment checkout modal with multi-bill selection, stable idempotency key generation,
-// explicit test outcome selector (SUCCESS, PENDING, FAILED, EXPIRED), and localized feedback.
+// Township One - Payment checkout modal
+// Payment checkout modal with multi-bill selection, state machine retry lifecycle,
+// strict idempotency key management, explicit test outcome selector, and localized feedback.
 
 import React, { useState } from 'react';
 import { api, BillingSummary, PaymentReceipt, BillItem } from '../api/client';
 import { Language, translations } from '../i18n/translations';
+
+export type PaymentState = 'READY' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'NETWORK_INTERRUPTION';
 
 interface PaymentModalProps {
   summary: BillingSummary;
@@ -21,7 +23,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 }) => {
   const t = translations[lang];
   const [testOutcome, setTestOutcome] = useState<'SUCCESS' | 'PENDING' | 'FAILED' | 'EXPIRED'>('SUCCESS');
-  const [loading, setLoading] = useState(false);
+  const [paymentState, setPaymentState] = useState<PaymentState>('READY');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const unpaidBills: BillItem[] = summary.unpaid_bills && summary.unpaid_bills.length > 0
@@ -43,35 +45,69 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const handleBillSelect = (newBillId: string) => {
     setSelectedBillId(newBillId);
     setIdempotencyKey(generateKey());
+    setPaymentState('READY');
     setErrorMsg(null);
   };
 
-  const handlePay = async () => {
-    if (!billId) return;
-    setLoading(true);
+  const handleOutcomeSelect = (outcome: 'SUCCESS' | 'PENDING' | 'FAILED' | 'EXPIRED') => {
+    setTestOutcome(outcome);
+    setIdempotencyKey(generateKey());
+    setPaymentState('READY');
     setErrorMsg(null);
+  };
+
+  const startNewAttempt = () => {
+    setIdempotencyKey(generateKey());
+    setPaymentState('READY');
+    setErrorMsg(null);
+  };
+
+  const handlePay = async (isRetry: boolean = false) => {
+    if (!billId) return;
+    setPaymentState('PROCESSING');
+    setErrorMsg(null);
+
+    // If it's not an exact retry of a network interruption, ensure key is current
+    const keyToUse = idempotencyKey;
+
     try {
       const res = await api.checkout({
         flat_id: summary.flat_id,
         bill_id: billId,
         amount: dueAmount,
         test_outcome: testOutcome,
-        idempotency_key: idempotencyKey,
+        idempotency_key: keyToUse,
       });
 
       if (res.status === 'SUCCESS' && res.receipt) {
+        setPaymentState('SUCCESS');
         onPaymentSuccess(res.receipt);
       } else if (res.status === 'FAILED') {
+        setPaymentState('FAILED');
         setErrorMsg('Simulated Payment Failed / Bank Declined (Test Mode Outcome)');
       } else if (res.status === 'PENDING') {
+        setPaymentState('FAILED');
         setErrorMsg('Simulated Payment Pending (Awaiting Settlement)');
       } else if (res.status === 'EXPIRED') {
+        setPaymentState('FAILED');
         setErrorMsg('Simulated Payment Session Expired');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Payment processing error');
-    } finally {
-      setLoading(false);
+      const msg = err.message || '';
+      const isNetwork =
+        err.name === 'TypeError' ||
+        msg.toLowerCase().includes('network') ||
+        msg.toLowerCase().includes('fetch') ||
+        msg.toLowerCase().includes('failed to fetch') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine);
+
+      if (isNetwork) {
+        setPaymentState('NETWORK_INTERRUPTION');
+        setErrorMsg('Network interruption detected. You can safely retry without double-charge risk (reusing the exact idempotency key).');
+      } else {
+        setPaymentState('FAILED');
+        setErrorMsg(msg || 'Payment processing error');
+      }
     }
   };
 
@@ -118,6 +154,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             style={{
               background: 'transparent',
               border: 'none',
@@ -139,6 +176,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             <select
               value={selectedBillId}
               onChange={(e) => handleBillSelect(e.target.value)}
+              disabled={paymentState === 'PROCESSING'}
               style={{
                 width: '100%',
                 padding: '0.55rem',
@@ -196,7 +234,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               <button
                 key={outcome}
                 type="button"
-                onClick={() => setTestOutcome(outcome)}
+                disabled={paymentState === 'PROCESSING'}
+                onClick={() => handleOutcomeSelect(outcome)}
                 style={{
                   border: `2px solid ${testOutcome === outcome ? 'var(--primary)' : 'var(--border)'}`,
                   background: testOutcome === outcome ? '#eff6ff' : '#ffffff',
@@ -205,7 +244,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   fontSize: '0.8rem',
                   padding: '0.5rem',
                   borderRadius: '6px',
-                  cursor: 'pointer'
+                  cursor: paymentState === 'PROCESSING' ? 'not-allowed' : 'pointer'
                 }}
               >
                 {outcome}
@@ -214,10 +253,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
         </div>
 
+        {/* Status / Error Notifications */}
         {errorMsg && (
           <div style={{
-            background: '#fee2e2',
-            color: 'var(--danger)',
+            background: paymentState === 'NETWORK_INTERRUPTION' ? '#fffbeb' : '#fee2e2',
+            border: paymentState === 'NETWORK_INTERRUPTION' ? '1px solid #fde68a' : '1px solid #fecaca',
+            color: paymentState === 'NETWORK_INTERRUPTION' ? '#92400e' : 'var(--danger)',
             fontSize: '0.82rem',
             padding: '0.65rem',
             borderRadius: '6px',
@@ -228,42 +269,130 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           </div>
         )}
 
-        {/* Buttons */}
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button
-            onClick={onClose}
-            style={{
-              flex: 1,
-              background: '#f1f5f9',
-              border: 'none',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              cursor: 'pointer'
-            }}
-          >
-            {t.close}
-          </button>
-          <button
-            onClick={handlePay}
-            disabled={loading}
-            style={{
-              flex: 2,
-              background: 'var(--primary)',
-              color: '#ffffff',
-              border: 'none',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              fontWeight: 700,
-              fontSize: '0.9rem',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.7 : 1
-            }}
-          >
-            {loading ? t.processing : `${t.confirm_payment} (₹${dueAmount.toLocaleString('en-IN')})`}
-          </button>
-        </div>
+        {/* Contextual Action Buttons based on Payment State Machine */}
+        {paymentState === 'NETWORK_INTERRUPTION' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <button
+              onClick={() => handlePay(true)}
+              style={{
+                width: '100%',
+                background: '#d97706',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Retry Request (Safe with same Idempotency Key)
+            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={startNewAttempt}
+                style={{
+                  flex: 1,
+                  background: '#f1f5f9',
+                  border: 'none',
+                  padding: '0.6rem',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Start New Attempt
+              </button>
+              <button
+                onClick={onClose}
+                style={{
+                  flex: 1,
+                  background: '#f1f5f9',
+                  border: 'none',
+                  padding: '0.6rem',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                {t.close}
+              </button>
+            </div>
+          </div>
+        ) : paymentState === 'FAILED' ? (
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              onClick={onClose}
+              style={{
+                flex: 1,
+                background: '#f1f5f9',
+                border: 'none',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            >
+              {t.close}
+            </button>
+            <button
+              onClick={startNewAttempt}
+              style={{
+                flex: 2,
+                background: 'var(--primary)',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            >
+              Try New Attempt
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button
+              onClick={onClose}
+              disabled={paymentState === 'PROCESSING'}
+              style={{
+                flex: 1,
+                background: '#f1f5f9',
+                border: 'none',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                cursor: paymentState === 'PROCESSING' ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {t.close}
+            </button>
+            <button
+              onClick={() => handlePay(false)}
+              disabled={paymentState === 'PROCESSING'}
+              style={{
+                flex: 2,
+                background: 'var(--primary)',
+                color: '#ffffff',
+                border: 'none',
+                padding: '0.75rem',
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                cursor: paymentState === 'PROCESSING' ? 'not-allowed' : 'pointer',
+                opacity: paymentState === 'PROCESSING' ? 0.7 : 1
+              }}
+            >
+              {paymentState === 'PROCESSING' ? t.processing : `${t.confirm_payment} (₹${dueAmount.toLocaleString('en-IN')})`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 """
-Day 1 · D1-S5 — Test payments and receipts
+Township One - Test payments and receipts service.
 Service implementation for:
 - Simulated checkout with strict outcome validation (SUCCESS, PENDING, FAILED, EXPIRED only)
 - Cryptographic request fingerprinting & idempotency locking (per principal, flat, bill, amount, currency, method, outcome)
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 
+from backend.app.core.config import settings
 from backend.app.models.entities import (
     Flat, Bill, Payment, PaymentIdempotencyRecord, FlatLedgerEntry, Receipt, User
 )
@@ -33,7 +34,7 @@ def initiate_simulated_payment(
     currency: str = "INR",
     payment_method: str = "TEST_UPI",
     test_outcome: PaymentOutcomeEnum = PaymentOutcomeEnum.SUCCESS,
-    idempotency_key: Optional[str] = None
+    idempotency_key: str = ""
 ) -> Tuple[Payment, Optional[Receipt]]:
     """
     Simulated test payment processor with robust cryptographic idempotency,
@@ -45,7 +46,22 @@ def initiate_simulated_payment(
     - Strict outcome validation: ONLY SUCCESS, PENDING, FAILED, EXPIRED permitted.
     - Atomicity: on SUCCESS, updates Bill balance, adds FlatLedgerEntry credit, generates Receipt.
     """
-    # 1. Strict Outcome Validation (Security Fix B)
+    # 0. Production guard: Simulated payments are blocked in production
+    if getattr(settings, "APP_ENV", "development") == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Simulated test payment processor is disabled in production."
+        )
+
+    # 1. Mandatory Idempotency Key Validation
+    if not idempotency_key or len(idempotency_key.strip()) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Idempotency key is required and must be at least 8 characters long."
+        )
+    idempotency_key = idempotency_key.strip()
+
+    # 2. Strict Outcome Validation (Security Fix B)
     valid_outcomes = {o.value for o in PaymentOutcomeEnum}
     outcome_str = test_outcome.value if isinstance(test_outcome, PaymentOutcomeEnum) else str(test_outcome)
     if outcome_str not in valid_outcomes:
@@ -61,81 +77,79 @@ def initiate_simulated_payment(
             detail="Payment amount must be greater than zero."
         )
 
-    # 2. Cryptographic Request Fingerprint for Idempotency Binding (Security Fix A)
+    # 3. Cryptographic Request Fingerprint for Idempotency Binding (Security Fix A)
     # Bind authenticated principal (user_id), flat, bill, amount, currency, payment_method, and outcome
     fingerprint_raw = f"{user.id}:{flat_id}:{bill_id}:{amount:.2f}:{currency}:{payment_method}:{outcome_str}"
     request_hash = hashlib.sha256(fingerprint_raw.encode("utf-8")).hexdigest()
 
     idempotency_record: Optional[PaymentIdempotencyRecord] = None
 
-    if idempotency_key:
-        idempotency_key = idempotency_key.strip()
-        # Query for existing idempotency record
-        existing_rec = db.query(PaymentIdempotencyRecord).filter(
-            PaymentIdempotencyRecord.idempotency_key == idempotency_key
-        ).first()
+    # Query for existing idempotency record
+    existing_rec = db.query(PaymentIdempotencyRecord).filter(
+        PaymentIdempotencyRecord.idempotency_key == idempotency_key
+    ).first()
 
-        if existing_rec:
-            # Check 1: User ownership - Cross-flat replay prevention without information disclosure!
-            if existing_rec.user_id != user.id:
+    if existing_rec:
+        # Check 1: User ownership - Cross-flat replay prevention without information disclosure!
+        if existing_rec.user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Idempotency key conflict or invalid request."
+            )
+
+        # Check 2: Payload mismatch - Reused key with different bill, flat, amount, or outcome
+        if existing_rec.request_hash != request_hash:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Idempotency key has already been used with different request parameters."
+            )
+
+        # Check 3: Already completed payment
+        if existing_rec.status == "COMPLETED" and existing_rec.payment_id:
+            existing_payment = db.query(Payment).filter(
+                Payment.id == existing_rec.payment_id
+            ).first()
+            if existing_payment:
+                receipt = db.query(Receipt).filter(
+                    Receipt.payment_id == existing_payment.id
+                ).first()
+                return existing_payment, receipt
+
+        if existing_rec.status == "IN_PROGRESS":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A transaction with this idempotency key is currently being processed. Please retry."
+            )
+    else:
+        # Create in-progress record to secure lock
+        try:
+            idempotency_record = PaymentIdempotencyRecord(
+                idempotency_key=idempotency_key,
+                user_id=user.id,
+                flat_id=flat_id,
+                bill_id=bill_id,
+                amount=amount,
+                currency=currency,
+                request_hash=request_hash,
+                status="IN_PROGRESS"
+            )
+            db.add(idempotency_record)
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            # Concurrent race condition: another thread inserted the same key
+            conflict_rec = db.query(PaymentIdempotencyRecord).filter(
+                PaymentIdempotencyRecord.idempotency_key == idempotency_key
+            ).first()
+            if conflict_rec and conflict_rec.user_id != user.id:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Idempotency key conflict or invalid request."
                 )
-
-            # Check 2: Payload mismatch - Reused key with different bill, flat, amount, or outcome
-            if existing_rec.request_hash != request_hash:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Idempotency key has already been used with different request parameters."
-                )
-
-            # Check 3: Already completed payment
-            if existing_rec.status == "COMPLETED" and existing_rec.payment_id:
-                existing_payment = db.query(Payment).filter(
-                    Payment.id == existing_rec.payment_id
-                ).first()
-                if existing_payment:
-                    receipt = db.query(Receipt).filter(
-                        Receipt.payment_id == existing_payment.id
-                    ).first()
-                    return existing_payment, receipt
-
-            if existing_rec.status == "IN_PROGRESS":
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="A transaction with this idempotency key is currently being processed. Please retry."
-                )
-        else:
-            # Create in-progress record to secure lock
-            try:
-                idempotency_record = PaymentIdempotencyRecord(
-                    idempotency_key=idempotency_key,
-                    user_id=user.id,
-                    flat_id=flat_id,
-                    bill_id=bill_id,
-                    amount=amount,
-                    currency=currency,
-                    request_hash=request_hash,
-                    status="IN_PROGRESS"
-                )
-                db.add(idempotency_record)
-                db.flush()
-            except IntegrityError:
-                db.rollback()
-                # Concurrent race condition: another thread inserted the same key
-                conflict_rec = db.query(PaymentIdempotencyRecord).filter(
-                    PaymentIdempotencyRecord.idempotency_key == idempotency_key
-                ).first()
-                if conflict_rec and conflict_rec.user_id != user.id:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Idempotency key conflict or invalid request."
-                    )
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Concurrent request detected for this idempotency key. Please retry."
-                )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Concurrent request detected for this idempotency key. Please retry."
+            )
 
     # 3. Validate Bill Existence and Balance (with dialect-aware row locking)
     bill_query = db.query(Bill).filter(Bill.id == bill_id, Bill.flat_id == flat_id)

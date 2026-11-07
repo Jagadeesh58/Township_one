@@ -1,14 +1,8 @@
 """
-Day 1 · D1-S1 — Foundation and Environment: Database Engine & Session Management.
+Township One — Database Engine & Connection Pool Configuration.
 
-Responsibility:
-- Configure thread-safe, pool-verified SQLAlchemy engine.
-- Isolate test database (`TEST_DATABASE_URL`) from reviewer demo database (`DATABASE_URL`).
-- Provide request-scoped database sessions with automatic closure.
-- Support both SQLite and PostgreSQL without code alteration.
-
-Related documentation:
-docs/day-1/D1-S1-foundation-and-environment.md
+Provides thread-safe connection pooling, transaction lifecycle management,
+and session dependency factories for SQLite and PostgreSQL engines.
 """
 
 import os

@@ -1,13 +1,15 @@
 """
-Day 1 · D1-S4 — Maintenance billing and ledger
+Township One - Maintenance billing and ledger service.
 Service functions for:
 - Deterministic 2-decimal currency rounding using Decimal (half up)
 - Flat maintenance calculation (area_sqft * rate_per_sqft)
 - Grace period boundaries (due on 15th, 5-day grace until 20th, interest starts 21st)
 - Illustrative demo late fee calculation (18% p.a. simple interest pending federation approval)
+- Leap year support (366 vs 365 days)
 - Bill generation, line items, and dual-entry ledger bookkeeping (DEBIT on bill issue)
 """
 
+import calendar
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple
@@ -44,17 +46,19 @@ def calculate_principal(area_sqft: Decimal, rate_per_sqft: Decimal = Decimal("6.
 def calculate_demo_late_fee(
     principal: Decimal,
     days_overdue: int,
-    annual_rate_pct: Decimal = Decimal("18.00")
+    annual_rate_pct: Decimal = Decimal("18.00"),
+    year: Optional[int] = None
 ) -> Decimal:
     """
     Illustrative Demo Late Fee Formula:
-    Simple interest: Principal * (Rate / 100) * (Days / 365)
-    Labelled as: 'Demo assumption pending society federation approval'
+    Simple interest: Principal * (Rate / 100) * (Days / DaysInYear)
+    Note: Illustrative demo calculation pending society federation approval (not an approved legal rate).
     """
     if days_overdue <= 0 or principal <= Decimal("0.00"):
         return Decimal("0.00")
     
-    daily_rate = (annual_rate_pct / Decimal("100")) / Decimal("365")
+    days_in_year = Decimal("366") if (year and calendar.isleap(year)) else Decimal("365")
+    daily_rate = (annual_rate_pct / Decimal("100")) / days_in_year
     interest = principal * daily_rate * Decimal(days_overdue)
     return round_currency(interest)
 
@@ -90,7 +94,7 @@ def evaluate_bill_overdue_and_interest(
 
     # Past grace period: interest calculated from original due date
     overdue_days = (as_of - bill_due).days
-    late_fee = calculate_demo_late_fee(bill.balance_amount, overdue_days, rate_pa)
+    late_fee = calculate_demo_late_fee(bill.balance_amount, overdue_days, rate_pa, year=as_of.year)
     return overdue_days, late_fee
 
 

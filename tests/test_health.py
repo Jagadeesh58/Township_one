@@ -1,14 +1,11 @@
 """
-Day 1 · D1-S1 — Foundation and Environment: Health & Environment Tests.
+Township One - Health and Foundation Verification Tests.
 
 Responsibility:
 - Verify application health check and database connectivity.
 - Verify standardized error response format with request ID tracing.
 - Verify Alembic dynamic URL selection and isolation from hard-coded defaults.
-- Verify production configuration guards (rejecting default secret keys in production).
-
-Related documentation:
-docs/day-1/D1-S1-foundation-and-environment.md
+- Verify production configuration guards (rejecting default/weak secret keys and debug mode).
 """
 
 import os
@@ -62,11 +59,29 @@ def test_production_guard_rejects_default_secret():
     assert "FATAL SECURITY VIOLATION" in str(exc_info.value)
 
 
+def test_production_guard_rejects_weak_secret_and_debug_true():
+    """Verify production mode rejects short secrets and debug=True."""
+    weak_settings = Settings(
+        APP_ENV="production",
+        SECRET_KEY="short-secret",
+        DEBUG=False
+    )
+    with pytest.raises(RuntimeError):
+        weak_settings.validate_production_guards()
+
+    debug_settings = Settings(
+        APP_ENV="production",
+        SECRET_KEY="a" * 32,
+        DEBUG=True
+    )
+    with pytest.raises(RuntimeError):
+        debug_settings.validate_production_guards()
+
+
 def test_alembic_url_resolution_dynamic():
     """Verify Alembic dynamic URL resolver obtains URL from environment and ignores default placeholder."""
     from migrations.env import get_effective_migration_url
 
-    # When DATABASE_URL is set in environment, get_effective_migration_url must return it
     custom_url = "sqlite:///./temp_alembic_test.db"
     old_env = os.environ.get("DATABASE_URL")
     try:
