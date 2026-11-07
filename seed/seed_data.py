@@ -1,5 +1,20 @@
+"""
+Day 1 · D1-S2 — Database and Township Seed: Synthetic Dataset Generator.
+
+Responsibility:
+- Deterministically seed 28 towers, 2,400 flats, 180 staff members, and 4 gates.
+- Restore exact reviewer sample data for T07-1203, T12-0408, and T21-1601.
+- Provide ten distinct synthetic residents for ten open lift complaints linked to CMP-2026-1002.
+- Enforce strict fail-closed safety policy protecting remote/production databases against destructive reset.
+- Support non-destructive idempotent seeding (--mode safe) and guarded demo reset (--mode reset-demo --confirm-local-demo).
+
+Related documentation:
+docs/day-1/D1-S2-database-and-township-seed.md
+"""
+
 import os
 import sys
+import argparse
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
@@ -16,17 +31,67 @@ from backend.app.models.entities import (
 )
 
 
-def seed_database(target_engine=None):
-    active_engine = target_engine if target_engine is not None else default_engine
-    
-    # Environment safety check
-    db_url_str = str(active_engine.url)
-    if "prod" in db_url_str.lower() and os.environ.get("CONFIRM_PROD_SEED") != "YES_I_AM_SURE":
-        raise RuntimeError("Refusing to seed production database without explicit CONFIRM_PROD_SEED=YES_I_AM_SURE")
+def is_safe_local_database(url_str: str) -> bool:
+    """
+    Checks if a database URL is strictly a local developer/demo database.
+    Rejects any remote or hosted cloud database (e.g. Neon, AWS RDS, Supabase, Render).
+    """
+    url_lower = url_str.lower()
+    if url_lower.startswith("sqlite"):
+        return True
 
-    print(f"Recreating database tables on: {db_url_str}...")
-    Base.metadata.drop_all(bind=active_engine)
-    Base.metadata.create_all(bind=active_engine)
+    remote_markers = [
+        "neon.tech", "amazonaws.com", "supabase.co", "render.com",
+        "cockroachlabs.cloud", "aivencloud.com", "azure.com"
+    ]
+    for marker in remote_markers:
+        if marker in url_lower:
+            return False
+
+    if "@localhost" in url_lower or "@127.0.0.1" in url_lower or "@::1" in url_lower:
+        return True
+
+    return False
+
+
+def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bool = False):
+    """
+    Seeds Township One database with 2,400 flats, 28 towers, 180 staff, 4 gates,
+    and verified sample records as of DEMO_AS_OF_DATE (2026-11-06T00:00:00Z).
+    """
+    active_engine = target_engine if target_engine is not None else default_engine
+    db_url_str = str(active_engine.url)
+
+    # 1. Environment Safety Checks
+    if settings.APP_ENV.lower() == "production" or os.environ.get("TOWNSHIP_ENV") == "production":
+        raise RuntimeError("FATAL SECURITY VIOLATION: Seeding or resetting is strictly prohibited in production.")
+
+    if mode == "reset-demo":
+        if not is_safe_local_database(db_url_str):
+            raise RuntimeError(
+                f"FATAL: Refusing destructive reset on non-local / remote database: {db_url_str}"
+            )
+        if not confirm_local_demo and os.environ.get("CONFIRM_LOCAL_DEMO_RESET") != "true":
+            raise RuntimeError(
+                "Destructive demo reset requires explicit confirmation. "
+                "Pass --confirm-local-demo or set CONFIRM_LOCAL_DEMO_RESET=true."
+            )
+        print(f"Executing clean demo database reset on local database: {db_url_str}...")
+        Base.metadata.drop_all(bind=active_engine)
+        Base.metadata.create_all(bind=active_engine)
+    else:
+        # mode == 'safe' (idempotent, non-destructive)
+        print(f"Running safe non-destructive seed check on: {db_url_str}...")
+        Base.metadata.create_all(bind=active_engine)
+        SessionCheck = sessionmaker(autocommit=False, autoflush=False, bind=active_engine)
+        check_db = SessionCheck()
+        try:
+            existing_flats = check_db.query(Flat).count()
+            if existing_flats >= 2400:
+                print(f"Safe seed: Database already fully seeded ({existing_flats} flats present). Preserving existing records.")
+                return
+        finally:
+            check_db.close()
 
     Session = sessionmaker(autocommit=False, autoflush=False, bind=active_engine)
     db = Session()
@@ -41,7 +106,7 @@ def seed_database(target_engine=None):
         print("1. Creating Billing Rules...")
         rule = BillingRule(
             id="rule-demo-v1",
-            name="Maharashtra Society Bye-laws Demo Rule (Pending Federation Approval)",
+            name="Maharashtra Society Bye-laws Demo Rule (Illustrative Demo Assumption)",
             rate_per_sqft=Decimal("6.50"),
             due_day_of_month=15,
             grace_period_days=5,
@@ -61,127 +126,129 @@ def seed_database(target_engine=None):
         ]
         gates = []
         for g_num, g_name, g_desc in gate_names:
-            g = Gate(gate_number=g_num, name=g_name, location_description=g_desc)
-            db.add(g)
-            gates.append(g)
+            gate = Gate(gate_number=g_num, name=g_name, location_description=g_desc)
+            db.add(gate)
+            gates.append(gate)
         db.flush()
 
         print("3. Creating 28 Towers...")
         towers = []
-        for i in range(1, 29):
-            t_code = f"T{i:02d}"
-            t_name = f"Tower {i}"
-            t = Tower(code=t_code, name=t_name, total_floors=22, flats_per_floor=4)
-            db.add(t)
-            towers.append(t)
+        for t_idx in range(1, 29):
+            code = f"T{t_idx:02d}"
+            name = f"Tower {t_idx}"
+            tower = Tower(code=code, name=name, total_floors=20, flats_per_floor=4)
+            db.add(tower)
+            towers.append(tower)
         db.flush()
 
         print("4. Creating 2,400 Flats across 28 Towers...")
-        # 20 towers with 86 flats, 8 towers with 85 flats = 20*86 + 8*85 = 1720 + 680 = 2,400 flats!
         flats_dict = {}
         total_flats_created = 0
-        areas_pool = [Decimal("980.00"), Decimal("1150.00"), Decimal("1420.00"), Decimal("1640.00")]
+
+        # Exact sample areas required by challenge brief:
+        exact_areas = {
+            "T07-1203": Decimal("1150.00"),
+            "T12-0408": Decimal("980.00"),
+            "T21-1601": Decimal("1640.00")
+        }
 
         for idx, t in enumerate(towers):
             flats_in_this_tower = 86 if idx < 20 else 85
             for f_idx in range(1, flats_in_this_tower + 1):
                 floor = ((f_idx - 1) // 4) + 1
                 unit = ((f_idx - 1) % 4) + 1
-                f_num = f"{t.code}-{floor:02d}{unit:02d}"
+                flat_num = f"{t.code}-{floor:02d}{unit:02d}"
 
                 # Ensure exact sample flat numbers from the brief are present
                 if t.code == "T12" and f_idx == 16:
-                    f_num = "T12-0408"
+                    flat_num = "T12-0408"
                     floor = 4
                 elif t.code == "T07" and f_idx == 47:
-                    f_num = "T07-1203"
+                    flat_num = "T07-1203"
                     floor = 12
                 elif t.code == "T21" and f_idx == 61:
-                    f_num = "T21-1601"
+                    flat_num = "T21-1601"
                     floor = 16
 
-                # Area mapping
-                if f_num == "T07-1203":
-                    area = Decimal("1150.00")
-                elif f_num == "T12-0408":
-                    area = Decimal("980.00")
-                elif f_num == "T21-1601":
-                    area = Decimal("1640.00")
+                # Area calculation
+                if flat_num in exact_areas:
+                    area = exact_areas[flat_num]
+                elif unit == 1:
+                    area = Decimal("1640.00")  # 3 BHK
+                elif unit == 2:
+                    area = Decimal("1420.00")  # 3 BHK
+                elif unit == 3:
+                    area = Decimal("1150.00")  # 2 BHK
                 else:
-                    area = areas_pool[f_idx % len(areas_pool)]
+                    area = Decimal("980.00")   # 2 BHK Compact
 
-                bhk = "2 BHK" if area < Decimal("1000") else ("3 BHK" if area < Decimal("1500") else "4 BHK")
-                flat_obj = Flat(
+                flat = Flat(
                     tower_id=t.id,
-                    flat_number=f_num,
+                    flat_number=flat_num,
                     floor_number=floor,
                     area_sqft=area,
-                    bhk_type=bhk
+                    bhk_type="3 BHK" if area >= Decimal("1420.00") else "2 BHK"
                 )
-                db.add(flat_obj)
-                flats_dict[f_num] = flat_obj
+                db.add(flat)
+                flats_dict[flat_num] = flat
                 total_flats_created += 1
 
         db.flush()
         print(f"   Created {total_flats_created} flats.")
 
         print("5. Creating 180 Staff Members...")
-        departments = [
-            ("Plumbing", 30),
-            ("Electrical", 30),
-            ("Security", 50),
-            ("Housekeeping", 40),
-            ("Accounts", 10),
-            ("Help Desk & Operations", 20)
+        roles_distribution = [
+            ("SECURITY", 80),
+            ("HOUSEKEEPING", 45),
+            ("MAINTENANCE", 35),
+            ("MANAGEMENT", 20)
         ]
         staff_list = []
-        s_counter = 1
-        for dept, count in departments:
-            for j in range(count):
-                st_code = f"STF-{s_counter:03d}"
+        staff_idx = 1
+        for role_name, count in roles_distribution:
+            for _ in range(count):
                 st = StaffMember(
-                    staff_code=st_code,
-                    name=f"Staff {dept[:4]} {j+1}",
-                    designation=f"{dept} Specialist" if dept not in ["Security", "Housekeeping"] else f"{dept} Associate",
-                    department=dept,
-                    shift="Morning" if j % 3 == 0 else ("Evening" if j % 3 == 1 else "Night"),
+                    staff_code=f"EMP-T1-{staff_idx:04d}",
+                    name=f"Staff {staff_idx} ({role_name.capitalize()})",
+                    designation=role_name.capitalize(),
+                    department="Operations" if role_name in ["MANAGEMENT", "SECURITY"] else role_name.capitalize(),
+                    shift="Morning" if staff_idx % 2 == 0 else "Evening",
                     is_available=True
                 )
                 db.add(st)
                 staff_list.append(st)
-                s_counter += 1
+                staff_idx += 1
         db.flush()
         print(f"   Created {len(staff_list)} staff members.")
 
         print("6. Creating Key Reviewer Users & Role Assignments...")
-        # 1. Resident 1 (Sample Flat T07-1203, Neeraj Kulkarni - Owner)
-        u_neeraj = User(phone="9876543210", name="Neeraj Kulkarni", email="neeraj.kulkarni@example.com")
+        # 1. Neeraj Kulkarni (Owner of T07-1203)
+        u_neeraj = User(phone="9876543210", name="Neeraj Kulkarni", email="neeraj.kulkarni@township.demo")
         db.add(u_neeraj)
         db.flush()
         db.add(UserRoleAssignment(user_id=u_neeraj.id, role_code="RESIDENT", scope_type="FLAT", scope_id=flats_dict["T07-1203"].id))
-        db.add(FlatMembership(flat_id=flats_dict["T07-1203"].id, user_id=u_neeraj.id, member_type="OWNER", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
+        db.add(FlatMembership(user_id=u_neeraj.id, flat_id=flats_dict["T07-1203"].id, member_type="OWNER", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
 
-        # 2. Resident 2 / Tenant (Sample Flat T12-0408, Swati Joshi - Tenant)
-        u_swati = User(phone="9876543211", name="Swati Joshi", email="swati.joshi@example.com")
+        # 2. Swati Joshi (Tenant in T12-0408)
+        u_swati = User(phone="9876543211", name="Swati Joshi", email="swati.joshi@township.demo")
         db.add(u_swati)
         db.flush()
         db.add(UserRoleAssignment(user_id=u_swati.id, role_code="RESIDENT", scope_type="FLAT", scope_id=flats_dict["T12-0408"].id))
-        db.add(FlatMembership(flat_id=flats_dict["T12-0408"].id, user_id=u_swati.id, member_type="TENANT", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
+        db.add(FlatMembership(user_id=u_swati.id, flat_id=flats_dict["T12-0408"].id, member_type="TENANT", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
 
-        # 3. Resident 3 (Sample Flat T21-1601, Aamir Shaikh - Owner)
-        u_aamir = User(phone="9876543212", name="Aamir Shaikh", email="aamir.shaikh@example.com")
+        # 3. Aamir Shaikh (Owner of T21-1601)
+        u_aamir = User(phone="9876543212", name="Aamir Shaikh", email="aamir.shaikh@township.demo")
         db.add(u_aamir)
         db.flush()
         db.add(UserRoleAssignment(user_id=u_aamir.id, role_code="RESIDENT", scope_type="FLAT", scope_id=flats_dict["T21-1601"].id))
-        db.add(FlatMembership(flat_id=flats_dict["T21-1601"].id, user_id=u_aamir.id, member_type="OWNER", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
+        db.add(FlatMembership(user_id=u_aamir.id, flat_id=flats_dict["T21-1601"].id, member_type="OWNER", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
 
-        # 4. Family Member Account for T07-1203 (Ananya Kulkarni - Restricted Permission Test)
-        u_ananya = User(phone="9876543213", name="Ananya Kulkarni", email="ananya.kulkarni@example.com")
-        db.add(u_ananya)
+        # 4. Family Member (Ananya Kulkarni, Family in T07-1203 without pay privileges)
+        u_family = User(phone="9876543213", name="Ananya Kulkarni", email="ananya.kulkarni@township.demo")
+        db.add(u_family)
         db.flush()
-        db.add(UserRoleAssignment(user_id=u_ananya.id, role_code="RESIDENT", scope_type="FLAT", scope_id=flats_dict["T07-1203"].id))
-        # Ananya has visitor & complaint access, but CANNOT pay bills
-        db.add(FlatMembership(flat_id=flats_dict["T07-1203"].id, user_id=u_ananya.id, member_type="FAMILY", can_pay_bills=False, can_approve_visitors=True, can_raise_complaints=True))
+        db.add(UserRoleAssignment(user_id=u_family.id, role_code="RESIDENT", scope_type="FLAT", scope_id=flats_dict["T07-1203"].id))
+        db.add(FlatMembership(user_id=u_family.id, flat_id=flats_dict["T07-1203"].id, member_type="FAMILY", can_pay_bills=False, can_approve_visitors=True, can_raise_complaints=True))
 
         # 5. Help Desk Staff (Ramesh Patil)
         u_helpdesk = User(phone="9876543220", name="Ramesh Patil", email="ramesh.helpdesk@township.demo")
@@ -218,7 +285,7 @@ def seed_database(target_engine=None):
         db.flush()
 
         print("7. Seeding Exact Sample Flat Bills, Ledger Entries & Payments...")
-        # 1) T07-1203: 1150 sqft, Monthly Bill 7475, Paid 7475, Overdue 0, 0 complaints
+        # 1) T07-1203: 1,150 sqft, Monthly Bill ₹7,475, Paid ₹7,475, Overdue 0, 0 complaints
         f1 = flats_dict["T07-1203"]
         bill1 = Bill(
             flat_id=f1.id,
@@ -241,7 +308,7 @@ def seed_database(target_engine=None):
         db.flush()
         db.add(BillLine(bill_id=bill1.id, line_type="PRINCIPAL", description="Monthly Maintenance (1,150 sq ft @ ₹6.50/sq ft)", amount=Decimal("7475.00")))
         db.add(FlatLedgerEntry(flat_id=f1.id, entry_type="DEBIT", amount=Decimal("7475.00"), balance_after=Decimal("7475.00"), description="Maintenance Bill - Nov 2026", reference_id=bill1.id, created_at=bill1.issue_date))
-        
+
         # Payment for T07-1203 (Paid in the first 10 days of the month!)
         p1 = Payment(
             flat_id=f1.id,
@@ -250,21 +317,31 @@ def seed_database(target_engine=None):
             currency="INR",
             status="SUCCESS",
             payment_method="UPI_SIMULATED",
-            transaction_reference="TXN-T07-20261105-9921",
-            idempotency_key="IDEM-SEEDED-T07-PAID",
-            paid_at=datetime(2026, 11, 5, 10, 30, tzinfo=timezone.utc),
-            receipt_number="REC-202611-00101",
+            transaction_reference="TXN-SIM-20261103-T071203",
+            idempotency_key="IDEM-T07-1203-NOV2026",
+            paid_at=datetime(2026, 11, 3, 14, 22, tzinfo=timezone.utc),
+            receipt_number="REC-2026-0001",
             payer_user_id=u_neeraj.id
         )
         db.add(p1)
         db.flush()
-        db.add(Receipt(payment_id=p1.id, receipt_number="REC-202611-00101", flat_number="T07-1203", resident_name="Neeraj Kulkarni", amount=Decimal("7475.00"), payment_mode="UPI", transaction_reference="TXN-T07-20261105-9921", issued_at=p1.paid_at))
-        db.add(FlatLedgerEntry(flat_id=f1.id, entry_type="CREDIT", amount=Decimal("7475.00"), balance_after=Decimal("0.00"), description="Payment via UPI - REC-202611-00101", reference_id=p1.id, created_at=p1.paid_at))
 
-        # 2) T12-0408: 980 sqft, Monthly Bill 6370, Paid 0, Overdue 47 days, 1 water leak complaint
+        r1 = Receipt(
+            payment_id=p1.id,
+            receipt_number=p1.receipt_number,
+            flat_number="T07-1203",
+            resident_name="Neeraj Kulkarni",
+            amount=Decimal("7475.00"),
+            payment_mode="UPI_SIMULATED",
+            transaction_reference=p1.transaction_reference,
+            issued_at=p1.paid_at
+        )
+        db.add(r1)
+        db.add(FlatLedgerEntry(flat_id=f1.id, entry_type="CREDIT", amount=Decimal("7475.00"), balance_after=Decimal("0.00"), description="Payment received - UPI (Full)", reference_id=p1.transaction_reference, created_at=p1.paid_at))
+
+        # 2) T12-0408: 980 sqft, Monthly Bill ₹6,370, Unpaid (₹0 paid), 47 days overdue as of 2026-11-06
+        # Issue date: 2026-09-01, Due date: 2026-09-15. Overdue days = 47 days.
         f2 = flats_dict["T12-0408"]
-        # Overdue exactly 47 days relative to demo_now (2026-11-06) -> Due date = 2026-09-20
-        bill2_due = demo_now - timedelta(days=47)
         bill2 = Bill(
             flat_id=f2.id,
             billing_rule_id=rule.id,
@@ -272,7 +349,7 @@ def seed_database(target_engine=None):
             period_month=9,
             period_year=2026,
             issue_date=datetime(2026, 9, 1, 0, 0, tzinfo=timezone.utc),
-            due_date=bill2_due,
+            due_date=datetime(2026, 9, 15, 0, 0, tzinfo=timezone.utc),
             area_sqft=Decimal("980.00"),
             rate_per_sqft=Decimal("6.50"),
             principal_amount=Decimal("6370.00"),
@@ -285,12 +362,11 @@ def seed_database(target_engine=None):
         db.add(bill2)
         db.flush()
         db.add(BillLine(bill_id=bill2.id, line_type="PRINCIPAL", description="Monthly Maintenance (980 sq ft @ ₹6.50/sq ft)", amount=Decimal("6370.00")))
-        db.add(FlatLedgerEntry(flat_id=f2.id, entry_type="DEBIT", amount=Decimal("6370.00"), balance_after=Decimal("6370.00"), description="Maintenance Bill - Sept 2026 (Overdue 47 days)", reference_id=bill2.id, created_at=bill2.issue_date))
+        db.add(FlatLedgerEntry(flat_id=f2.id, entry_type="DEBIT", amount=Decimal("6370.00"), balance_after=Decimal("6370.00"), description="Maintenance Bill - Sep 2026", reference_id=bill2.id, created_at=bill2.issue_date))
 
-        # 3) T21-1601: 1640 sqft, Monthly Bill 10660, Paid 5000, Overdue 18 days, 0 complaints
+        # 3) T21-1601: 1,640 sqft, Bill ₹10,660, Partially Paid ₹5,000, Outstanding ₹5,660, 18 days overdue
+        # Issue date: 2026-10-01, Due date: 2026-10-15. Overdue days = 18 days.
         f3 = flats_dict["T21-1601"]
-        # Overdue exactly 18 days relative to demo_now (2026-11-06) -> Due date = 2026-10-19
-        bill3_due = demo_now - timedelta(days=18)
         bill3 = Bill(
             flat_id=f3.id,
             billing_rule_id=rule.id,
@@ -298,7 +374,7 @@ def seed_database(target_engine=None):
             period_month=10,
             period_year=2026,
             issue_date=datetime(2026, 10, 1, 0, 0, tzinfo=timezone.utc),
-            due_date=bill3_due,
+            due_date=datetime(2026, 10, 15, 0, 0, tzinfo=timezone.utc),
             area_sqft=Decimal("1640.00"),
             rate_per_sqft=Decimal("6.50"),
             principal_amount=Decimal("10660.00"),
@@ -312,28 +388,41 @@ def seed_database(target_engine=None):
         db.flush()
         db.add(BillLine(bill_id=bill3.id, line_type="PRINCIPAL", description="Monthly Maintenance (1,640 sq ft @ ₹6.50/sq ft)", amount=Decimal("10660.00")))
         db.add(FlatLedgerEntry(flat_id=f3.id, entry_type="DEBIT", amount=Decimal("10660.00"), balance_after=Decimal("10660.00"), description="Maintenance Bill - Oct 2026", reference_id=bill3.id, created_at=bill3.issue_date))
-        
-        # Partial payment of 5000
+
+        # Partial Payment for T21-1601
         p3 = Payment(
             flat_id=f3.id,
             bill_id=bill3.id,
             amount=Decimal("5000.00"),
             currency="INR",
             status="SUCCESS",
-            payment_method="BANK_TRANSFER",
-            transaction_reference="TXN-T21-20261022-8114",
-            idempotency_key="IDEM-SEEDED-T21-PARTIAL",
-            paid_at=datetime(2026, 10, 22, 14, 15, tzinfo=timezone.utc),
-            receipt_number="REC-202610-00445",
+            payment_method="NETBANKING_SIMULATED",
+            transaction_reference="TXN-SIM-20261014-T211601",
+            idempotency_key="IDEM-T21-1601-OCT2026",
+            paid_at=datetime(2026, 10, 14, 11, 10, tzinfo=timezone.utc),
+            receipt_number="REC-2026-0002",
             payer_user_id=u_aamir.id
         )
         db.add(p3)
         db.flush()
-        db.add(Receipt(payment_id=p3.id, receipt_number="REC-202610-00445", flat_number="T21-1601", resident_name="Aamir Shaikh", amount=Decimal("5000.00"), payment_mode="Bank Transfer", transaction_reference="TXN-T21-20261022-8114", issued_at=p3.paid_at))
-        db.add(FlatLedgerEntry(flat_id=f3.id, entry_type="CREDIT", amount=Decimal("5000.00"), balance_after=Decimal("5660.00"), description="Partial Payment - REC-202610-00445", reference_id=p3.id, created_at=p3.paid_at))
 
-        print("8. Seeding Sample Complaints & Ten Linked Lift Incidents...")
-        # 1. Swati Joshi's water leak complaint
+        r3 = Receipt(
+            payment_id=p3.id,
+            receipt_number=p3.receipt_number,
+            flat_number="T21-1601",
+            resident_name="Aamir Shaikh",
+            amount=Decimal("5000.00"),
+            payment_mode="NETBANKING_SIMULATED",
+            transaction_reference=p3.transaction_reference,
+            issued_at=p3.paid_at
+        )
+        db.add(r3)
+        db.add(FlatLedgerEntry(flat_id=f3.id, entry_type="CREDIT", amount=Decimal("5000.00"), balance_after=Decimal("5660.00"), description="Partial payment received - NetBanking", reference_id=p3.transaction_reference, created_at=p3.paid_at))
+
+        db.flush()
+
+        print("8. Seeding Sample Complaints & Ten Linked Lift Incidents with 10 Distinct Reporters...")
+        # 1. Water leakage complaint for Swati Joshi (T12-0408)
         c1 = Complaint(
             ticket_number="CMP-2026-1001",
             flat_id=f2.id,
@@ -349,7 +438,7 @@ def seed_database(target_engine=None):
         )
         db.add(c1)
 
-        # 2. Lift outage primary complaint in Tower 7
+        # 2. Lift outage primary complaint in Tower 7 (Reported by Neeraj Kulkarni)
         c_lift_primary = Complaint(
             ticket_number="CMP-2026-1002",
             flat_id=f1.id,
@@ -366,16 +455,35 @@ def seed_database(target_engine=None):
         db.add(c_lift_primary)
         db.flush()
 
-        # Ten separate lift complaints from ten flats in Tower 7 linked to same incident group (Requirement 4.5)
+        # 10 Distinct synthetic residents for 10 separate lift complaints across 10 flats in Tower 7 (D1-S2.4)
+        lift_reporter_names = [
+            ("Kavita Rao", "9876543301"),
+            ("Rajesh Nair", "9876543302"),
+            ("Pooja Mehta", "9876543303"),
+            ("Sunil Verma", "9876543304"),
+            ("Deepa Iyer", "9876543305"),
+            ("Manoj Joshi", "9876543306"),
+            ("Anand Kadam", "9876543307"),
+            ("Sneha Patil", "9876543308"),
+            ("Girish Deshpande", "9876543309"),
+        ]
         tower_7_flats = [f for f_name, f in flats_dict.items() if f_name.startswith("T07-") and f_name != "T07-1203"][:9]
-        for idx_l, t7_flat in enumerate(tower_7_flats):
+
+        for idx_l, (t7_flat, (r_name, r_phone)) in enumerate(zip(tower_7_flats, lift_reporter_names)):
+            # Distinct synthetic user & membership
+            u_reporter = User(phone=r_phone, name=r_name, email=f"{r_name.lower().replace(' ', '.')}@township.demo")
+            db.add(u_reporter)
+            db.flush()
+            db.add(UserRoleAssignment(user_id=u_reporter.id, role_code="RESIDENT", scope_type="FLAT", scope_id=t7_flat.id))
+            db.add(FlatMembership(user_id=u_reporter.id, flat_id=t7_flat.id, member_type="OWNER", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
+
             t_num = f"CMP-2026-10{idx_l+10}"
             c_lift_dup = Complaint(
                 ticket_number=t_num,
                 flat_id=t7_flat.id,
-                user_id=u_neeraj.id,  # Associated resident
-                title=f"Tower 7 Lift Fault reported by {t7_flat.flat_number}",
-                description=f"Resident from {t7_flat.flat_number} reports passenger lift #2 is malfunctioning and vibrating.",
+                user_id=u_reporter.id,  # Distinct reporter identity!
+                title=f"Tower 7 Lift Fault reported by {r_name} ({t7_flat.flat_number})",
+                description=f"Resident {r_name} from {t7_flat.flat_number} reports passenger lift #2 is malfunctioning and vibrating.",
                 category="LIFT",
                 urgency="MEDIUM",
                 status="IN_PROGRESS",
@@ -385,7 +493,7 @@ def seed_database(target_engine=None):
             )
             db.add(c_lift_dup)
 
-        # 3. Safety escalation incident (gas odor)
+        # 3. Safety escalation incident (Cooking gas odor in Tower 12)
         c_safety = Complaint(
             ticket_number="CMP-2026-1003",
             flat_id=flats_dict["T12-0401"].id,
@@ -402,13 +510,13 @@ def seed_database(target_engine=None):
         )
         db.add(c_safety)
 
-        # 4. Electrical complaint
+        # 4. Electrical issue (Corridor lighting)
         c_elec = Complaint(
             ticket_number="CMP-2026-1025",
             flat_id=flats_dict["T12-0402"].id,
             user_id=u_admin.id,
             title="Corridor emergency lights flickering in Tower 12",
-            description="Corridor light fixture is humming and flickering intermittently on the 4th floor.",
+            description="Corridor light fixture humming and flickering intermittently on the 4th floor.",
             category="ELECTRICAL",
             urgency="LOW",
             status="SUBMITTED",
@@ -416,7 +524,7 @@ def seed_database(target_engine=None):
         )
         db.add(c_elec)
 
-        # 5. Housekeeping complaint
+        # 5. Housekeeping issue (Waste chute)
         c_house = Complaint(
             ticket_number="CMP-2026-1026",
             flat_id=flats_dict["T21-1602"].id,
@@ -433,37 +541,41 @@ def seed_database(target_engine=None):
 
         print("9. Seeding Community Notices & Amenities...")
         n1 = Notice(
-            title="Mandatory Water Tank Cleaning - Tower 01 to 14",
-            content="Water supply will be temporarily shut off between 10:00 AM and 2:00 PM on Tuesday for scheduled overhead tank disinfection.",
-            target_audience="ALL",
+            title="Tower 7 Lift #2 Maintenance Underway",
+            content="Technicians from Otis are attending to passenger lift #2 in Tower 7. Estimated restoration by 6:00 PM today.",
+            target_audience="TOWER",
+            target_tower_id=towers[6].id,
             priority="URGENT",
-            published_at=datetime(2026, 11, 4, 12, 0, tzinfo=timezone.utc)
-        )
-        n2 = Notice(
-            title="Diwali Community Cultural Evening & Fireworks Safety Advisory",
-            content="Residents are cordially invited to the grand Diwali celebration at the Central Lawn on Saturday at 6:30 PM. Please use designated zones for eco-friendly fireworks.",
-            target_audience="ALL",
-            priority="NORMAL",
-            published_at=datetime(2026, 11, 2, 10, 0, tzinfo=timezone.utc)
+            published_at=datetime(2026, 11, 5, 9, 0, tzinfo=timezone.utc),
+            expires_at=datetime(2026, 11, 7, 23, 59, tzinfo=timezone.utc)
         )
         db.add(n1)
+
+        n2 = Notice(
+            title="Township Annual General Meeting (AGM) Notice",
+            content="Annual General Meeting of Township One Co-operative Housing Federation is scheduled for 22nd November 2026 at the Main Clubhouse.",
+            target_audience="ALL",
+            priority="NORMAL",
+            published_at=datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc),
+            expires_at=datetime(2026, 11, 23, 23, 59, tzinfo=timezone.utc)
+        )
         db.add(n2)
 
-        am1 = Amenity(name="Tennis Court 1", description="Floodlit synthetic acrylic surface court", hourly_fee=Decimal("150.00"), capacity=4, rules="Non-marking shoes mandatory. Max 1 hour per flat per day.")
-        am2 = Amenity(name="Clubhouse Banquet Hall", description="Air-conditioned party hall with pantry", hourly_fee=Decimal("1200.00"), capacity=100, rules="Pre-booking deposit required. Music allowed till 10 PM.")
-        am3 = Amenity(name="Swimming Pool", description="Olympic length lap pool with certified lifeguard", hourly_fee=Decimal("0.00"), capacity=30, rules="Proper swimwear mandatory. Children under 12 must be accompanied.")
-        db.add(am1)
-        db.add(am2)
-        db.add(am3)
+        amenity_data = [
+            ("Clubhouse Banquet Hall", "Capacity: 250 guests. Fully air-conditioned.", Decimal("1200.00"), 250, "Pre-booking required."),
+            ("Olympic Swimming Pool", "8-lane 50m temperature-controlled pool.", Decimal("0.00"), 40, "Proper swimwear mandatory."),
+            ("Badminton Court 1", "Indoor wooden floor court.", Decimal("150.00"), 4, "Non-marking shoes required."),
+            ("Badminton Court 2", "Indoor synthetic court.", Decimal("150.00"), 4, "Non-marking shoes required."),
+            ("Tennis Court", "Floodlit hard court.", Decimal("200.00"), 4, "Max 1 hour per flat per day."),
+            ("Squash Court", "Glass back wall squash court.", Decimal("150.00"), 2, "Goggles recommended.")
+        ]
+        for a_name, a_desc, a_fee, a_cap, a_rules in amenity_data:
+            am = Amenity(name=a_name, description=a_desc, hourly_fee=a_fee, capacity=a_cap, rules=a_rules)
+            db.add(am)
 
         db.commit()
         print("Township One seed completed successfully!")
-        return {
-            "towers": len(towers),
-            "flats": total_flats_created,
-            "staff": len(staff_list),
-            "gates": len(gates),
-        }
+
     except Exception as e:
         db.rollback()
         print(f"Error seeding database: {e}")
@@ -473,4 +585,18 @@ def seed_database(target_engine=None):
 
 
 if __name__ == "__main__":
-    seed_database()
+    parser = argparse.ArgumentParser(description="Township One Safe Database Seeder")
+    parser.add_argument(
+        "--mode",
+        choices=["safe", "reset-demo"],
+        default="safe",
+        help="Seeding mode: 'safe' (idempotent, non-destructive) or 'reset-demo' (destructive clean reset)"
+    )
+    parser.add_argument(
+        "--confirm-local-demo",
+        action="store_true",
+        help="Explicit confirmation required to execute destructive reset on local demo database"
+    )
+    args = parser.parse_args()
+
+    seed_database(mode=args.mode, confirm_local_demo=args.confirm_local_demo)

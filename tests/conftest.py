@@ -53,7 +53,7 @@ app.dependency_overrides[get_db] = override_get_db
 @pytest.fixture(scope="module", autouse=True)
 def reset_test_db_per_module():
     """Seeds the test database before each test module to ensure clean isolation without touching demo db."""
-    seed_database(target_engine=test_engine)
+    seed_database(target_engine=test_engine, mode="reset-demo", confirm_local_demo=True)
 
 
 @pytest.fixture(autouse=True)

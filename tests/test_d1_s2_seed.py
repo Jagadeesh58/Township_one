@@ -1,9 +1,23 @@
+"""
+Day 1 · D1-S2 — Database and Township Seed: Seed & Dataset Tests.
+
+Responsibility:
+- Verify exact township entity counts: 28 towers, 2,400 flats, 180 staff, 4 gates.
+- Verify exact sample flats: T07-1203 (paid), T12-0408 (unpaid, 47 days overdue), T21-1601 (partial, 18 days overdue).
+- Verify 10 distinct synthetic residents for 10 Tower 7 lift complaints linked to CMP-2026-1002.
+- Verify fail-closed seed reset safety policy (refusing unconfirmed or remote database resets).
+
+Related documentation:
+docs/day-1/D1-S2-database-and-township-seed.md
+"""
+
 from decimal import Decimal
 import pytest
 from backend.app.core.database import SessionLocal
 from backend.app.models.entities import (
     Tower, Flat, StaffMember, Gate, Bill, Complaint, User, UserRoleAssignment, FlatMembership
 )
+from seed.seed_data import is_safe_local_database, seed_database
 
 
 def test_seed_entity_counts():
@@ -115,7 +129,8 @@ def test_family_member_permission_boundaries():
         db.close()
 
 
-def test_ten_linked_lift_complaints():
+def test_ten_linked_lift_complaints_with_distinct_reporters():
+    """Verify 10 distinct residents lodged 10 separate lift complaints linked to CMP-2026-1002."""
     db = SessionLocal()
     try:
         primary = db.query(Complaint).filter(Complaint.ticket_number == "CMP-2026-1002").first()
@@ -126,8 +141,18 @@ def test_ten_linked_lift_complaints():
         linked_complaints = db.query(Complaint).filter(Complaint.duplicate_of_id == primary.id).all()
         # 9 duplicates + 1 primary = 10 total lift reports from 10 distinct flats
         assert len(linked_complaints) == 9
-        
-        # Verify all linked complaints remain open and SLA tracked (NEVER auto-closed!)
+
+        all_lift_complaints = [primary] + linked_complaints
+
+        # 1. Verify 10 distinct reporter user IDs
+        reporter_ids = {c.user_id for c in all_lift_complaints}
+        assert len(reporter_ids) == 10, f"Expected 10 distinct reporters, got {len(reporter_ids)}"
+
+        # 2. Verify 10 distinct flats across Tower 7
+        flat_ids = {c.flat_id for c in all_lift_complaints}
+        assert len(flat_ids) == 10, f"Expected 10 distinct flats, got {len(flat_ids)}"
+
+        # 3. Verify all linked complaints remain open and SLA tracked (NEVER auto-closed!)
         for c in linked_complaints:
             assert c.status in ["ASSIGNED", "IN_PROGRESS", "SUBMITTED"]
             assert c.resolved_at is None
@@ -145,3 +170,23 @@ def test_reviewer_role_assignments():
             assert assignment.is_active is True
     finally:
         db.close()
+
+
+def test_seed_safety_rejects_unconfirmed_destructive_reset():
+    """Verify seed_database fails closed if reset-demo is attempted without explicit confirmation."""
+    with pytest.raises(RuntimeError) as exc_info:
+        seed_database(mode="reset-demo", confirm_local_demo=False)
+    assert "Destructive demo reset requires explicit confirmation" in str(exc_info.value)
+
+
+def test_seed_safety_rejects_remote_database_urls():
+    """Verify is_safe_local_database rejects hosted / cloud databases."""
+    assert is_safe_local_database("sqlite:///./township_one.db") is True
+    assert is_safe_local_database("postgresql://user:pass@localhost:5432/township") is True
+    assert is_safe_local_database("postgresql://user:pass@127.0.0.1:5432/township") is True
+
+    # Cloud hosted databases must be blocked
+    assert is_safe_local_database("postgresql://user:pass@ep-summer-pool.us-east-2.aws.neon.tech/db") is False
+    assert is_safe_local_database("postgresql://user:pass@my-cluster.rds.amazonaws.com/db") is False
+    assert is_safe_local_database("postgresql://user:pass@db.supabase.co/township") is False
+    assert is_safe_local_database("postgresql://user:pass@dpg-render.com/township") is False
