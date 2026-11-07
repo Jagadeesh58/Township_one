@@ -288,3 +288,118 @@ def test_production_sms_provider_succeeds_with_configured_credentials(monkeypatc
     provider = get_sms_provider()
     assert provider is not None
     assert provider.send_otp("9876543210", "654321") is True
+
+
+def test_cookie_httponly_and_csrf_on_verify_otp():
+    """Verify verify-otp sets HttpOnly SameSite=Lax session cookie and readable CSRF cookie."""
+    phone = "9876543210"
+    client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    resp = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    assert resp.status_code == 200
+
+    # Verify session cookie
+    assert "township_session" in resp.cookies
+    session_cookie = resp.cookies["township_session"]
+    assert len(session_cookie) > 20
+
+    # Verify CSRF cookie
+    assert "township_csrf" in resp.cookies
+    csrf_cookie = resp.cookies["township_csrf"]
+    assert len(csrf_cookie) > 20
+
+    # Verify Set-Cookie header directives
+    set_cookie_headers = [v for k, v in resp.headers.raw if k.decode("latin1").lower() == "set-cookie"]
+    session_header = next((h.decode("latin1") for h in set_cookie_headers if "township_session=" in h.decode("latin1")), "")
+    assert "httponly" in session_header.lower()
+    assert "samesite=lax" in session_header.lower()
+
+    csrf_header = next((h.decode("latin1") for h in set_cookie_headers if "township_csrf=" in h.decode("latin1")), "")
+    assert "httponly" not in csrf_header.lower()
+    assert "samesite=lax" in csrf_header.lower()
+
+
+def test_csrf_missing_on_post_returns_403():
+    """Verify that state-changing POST with session cookie but missing X-CSRF-Token is rejected with 403."""
+    custom_client = TestClient(app)
+    custom_client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
+    login_resp = custom_client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
+    assert login_resp.status_code == 200
+
+    # Attempt POST /api/v1/auth/logout without X-CSRF-Token header
+    resp = custom_client.post("/api/v1/auth/logout")
+    assert resp.status_code == 403
+    assert "CSRF" in resp.json()["error"]["message"]
+
+
+def test_csrf_invalid_on_post_returns_403():
+    """Verify that state-changing POST with invalid X-CSRF-Token is rejected with 403."""
+    custom_client = TestClient(app)
+    custom_client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
+    login_resp = custom_client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
+    assert login_resp.status_code == 200
+
+    # Attempt POST with mismatched CSRF header
+    resp = custom_client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": "invalid-tampered-csrf-token-12345"}
+    )
+    assert resp.status_code == 403
+    assert "CSRF" in resp.json()["error"]["message"]
+
+
+def test_csrf_valid_on_post_returns_200():
+    """Verify that state-changing POST with valid matching X-CSRF-Token header succeeds with 200."""
+    custom_client = TestClient(app)
+    custom_client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
+    login_resp = custom_client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
+    assert login_resp.status_code == 200
+    csrf_token = login_resp.cookies.get("township_csrf")
+
+    # POST with matching X-CSRF-Token header
+    resp = custom_client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": csrf_token}
+    )
+    assert resp.status_code == 200
+    assert "Logged out successfully" in resp.json()["message"]
+
+
+def test_logout_clears_cookie_and_revokes_token():
+    """Verify that logout deletes both session and CSRF cookies, and revokes access token."""
+    phone = "9876543211"
+    from backend.app.models.entities import OTPChallenge
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
+    from backend.app.core.security import OTP_STORE
+    OTP_STORE.pop(phone, None)
+
+    custom_client = TestClient(app)
+    custom_client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    login_resp = custom_client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    assert login_resp.status_code == 200
+    session_token = login_resp.cookies.get("township_session")
+    csrf_token = login_resp.cookies.get("township_csrf")
+
+    # Verify authenticated before logout
+    me_resp = custom_client.get("/api/v1/auth/me")
+    assert me_resp.status_code == 200
+
+    # Execute logout
+    logout_resp = custom_client.post(
+        "/api/v1/auth/logout",
+        headers={"X-CSRF-Token": csrf_token}
+    )
+    assert logout_resp.status_code == 200
+
+    # Verify session cookie was deleted/cleared in response
+    set_cookie_headers = [v for k, v in logout_resp.headers.raw if k.decode("latin1").lower() == "set-cookie"]
+    session_header = next((h.decode("latin1") for h in set_cookie_headers if "township_session=" in h.decode("latin1")), "")
+    assert ('""' in session_header or 'max-age=0' in session_header.lower())
+
+    # Verify subsequent request is unauthorized
+    post_logout_me = custom_client.get("/api/v1/auth/me")
+    assert post_logout_me.status_code == 401

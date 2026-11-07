@@ -14,20 +14,17 @@ export default function App() {
   // Check existing session
   useEffect(() => {
     const initSession = async () => {
-      const token = api.getAuthToken();
-      if (token) {
-        try {
-          const profile = await api.getMe();
-          setUser(profile);
-          if (profile.flats && profile.flats.length > 0) {
-            setSelectedFlatId(profile.flats[0].flat_id);
-          }
-        } catch (e) {
-          api.clearAuthToken();
-          setUser(null);
+      try {
+        const profile = await api.getMe();
+        setUser(profile);
+        if (profile.flats && profile.flats.length > 0) {
+          setSelectedFlatId(profile.flats[0].flat_id);
         }
+      } catch (e) {
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     initSession();
 

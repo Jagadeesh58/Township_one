@@ -18,7 +18,7 @@ import hmac
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -244,19 +244,33 @@ def revoke_token_persisted(token: str, user_id: str, db: Session):
 
 
 def get_current_user(
+    request: Request = None,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Validates bearer token, checks database & in-memory revocation, and resolves active user.
+    Validates token from HttpOnly session cookie first, with fallback to Bearer token.
+    Checks database & in-memory revocation, and resolves active user.
     """
-    if not credentials:
+    token = None
+    if credentials:
+        token = credentials.credentials
+
+    if not token and request is not None and "township_session" in request.cookies:
+        token = request.cookies.get("township_session")
+
+    if not token and request is not None:
+        auth_hdr = request.headers.get("Authorization", "")
+        if auth_hdr.startswith("Bearer "):
+            token = auth_hdr.split(" ")[1]
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please provide a Bearer token."
+            detail="Authentication required. Please provide a session cookie or Bearer token."
         )
 
-    token = credentials.credentials
+    token = token.strip()
     if token in REVOKED_TOKENS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

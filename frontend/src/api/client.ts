@@ -1,6 +1,8 @@
 // Township One - Resident API client
 // API client for resident authentication, billing summaries with multi-bill support,
 // payment checkout with idempotency and simulated outcome dispatch.
+// Enforces HttpOnly session cookie authentication with credentials: 'include'
+// and double-submit CSRF protection on mutating requests.
 
 const API_BASE = '/api/v1';
 
@@ -95,13 +97,40 @@ export interface PaymentReceipt {
   issued_at: string;
 }
 
-export const api = {
-  getAuthToken: () => localStorage.getItem('township_token'),
-  setAuthToken: (t: string) => localStorage.setItem('township_token', t),
-  clearAuthToken: () => localStorage.removeItem('township_token'),
+/**
+ * Reads double-submit CSRF token from document cookie.
+ */
+function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)township_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
+/**
+ * Shared fetch helper ensuring credentials: 'include' and automatic
+ * X-CSRF-Token header attachment on mutating requests.
+ */
+async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers.set('X-CSRF-Token', csrfToken);
+    }
+  }
+
+  return fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+}
+
+export const api = {
   async requestOtp(phone: string) {
-    const res = await fetch(`${API_BASE}/auth/otp/request`, {
+    const res = await fetchWithAuth(`${API_BASE}/auth/otp/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone }),
@@ -114,7 +143,7 @@ export const api = {
   },
 
   async verifyOtp(phone: string, otp: string) {
-    const res = await fetch(`${API_BASE}/auth/otp/verify`, {
+    const res = await fetchWithAuth(`${API_BASE}/auth/otp/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, otp }),
@@ -124,39 +153,27 @@ export const api = {
       throw new Error(err.error?.message || 'Invalid OTP');
     }
     const data = await res.json();
-    api.setAuthToken(data.access_token);
     return data;
   },
 
   async getMe(): Promise<UserProfile> {
-    const token = api.getAuthToken();
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetchWithAuth(`${API_BASE}/auth/me`);
     if (!res.ok) throw new Error('Unauthorized');
     return res.json();
   },
 
   async logout() {
-    const token = api.getAuthToken();
-    if (token) {
-      try {
-        await fetch(`${API_BASE}/auth/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      } catch (e) {
-        console.error(e);
-      }
+    try {
+      await fetchWithAuth(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+      });
+    } catch (e) {
+      console.error(e);
     }
-    api.clearAuthToken();
   },
 
   async getBillingSummary(flatId: string): Promise<BillingSummary> {
-    const token = api.getAuthToken();
-    const res = await fetch(`${API_BASE}/billing/flats/${flatId}/summary`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetchWithAuth(`${API_BASE}/billing/flats/${flatId}/summary`);
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.error?.message || 'Failed to fetch billing');
@@ -172,12 +189,10 @@ export const api = {
     test_outcome?: string;
     idempotency_key?: string;
   }) {
-    const token = api.getAuthToken();
-    const res = await fetch(`${API_BASE}/payments/checkout`, {
+    const res = await fetchWithAuth(`${API_BASE}/payments/checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         ...payload,

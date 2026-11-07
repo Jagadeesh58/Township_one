@@ -1,5 +1,6 @@
 import time
 import uuid
+import secrets
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -43,6 +44,44 @@ async def add_process_time_and_request_id(request: Request, call_next):
     process_time = time.time() - start_time
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time"] = f"{process_time:.4f}s"
+    return response
+
+# CSRF Protection Middleware for State-Changing Requests (POST, PUT, PATCH, DELETE)
+@app.middleware("http")
+async def csrf_protect_middleware(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        path = request.url.path.rstrip("/")
+        exempt_paths = {
+            f"{settings.API_PREFIX}/auth/otp/request",
+            "/auth/otp/request",
+            f"{settings.API_PREFIX}/auth/otp/verify",
+            "/auth/otp/verify",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+        }
+        if path not in exempt_paths:
+            session_cookie = request.cookies.get("township_session")
+            csrf_cookie = request.cookies.get("township_csrf")
+            csrf_header = request.headers.get("X-CSRF-Token")
+
+            # Enforce CSRF on cookie-authenticated / browser requests.
+            # Automated API/curl clients sending Authorization: Bearer are exempt.
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+                    return JSONResponse(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        content={
+                            "error": {
+                                "code": "CSRF_ERROR",
+                                "message": "CSRF token missing or invalid",
+                                "request_id": getattr(request.state, "request_id", None),
+                            }
+                        }
+                    )
+
+    response = await call_next(request)
     return response
 
 

@@ -6,7 +6,8 @@ persistent session logout revocation, and authenticated profile resolution.
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request, Response
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
@@ -87,7 +88,11 @@ def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/otp/verify", response_model=TokenResponse)
-def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
+def verify_otp(
+    payload: OTPVerify,
+    response: Response,
+    db: Session = Depends(get_db)
+):
     phone = payload.phone.strip()
     user = db.query(User).filter(User.phone == phone, User.is_active == True).first()
     if not user:
@@ -98,6 +103,30 @@ def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid OTP code. Please check and try again.")
 
     token = create_access_token(data={"sub": user.id, "phone": user.phone})
+    csrf_token = secrets.token_urlsafe(32)
+    is_secure = (settings.APP_ENV.lower() not in ["development", "test"])
+
+    # HttpOnly session cookie
+    response.set_cookie(
+        key="township_session",
+        value=token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        samesite="lax",
+        secure=is_secure,
+        path="/"
+    )
+    # Readable double-submit CSRF cookie
+    response.set_cookie(
+        key="township_csrf",
+        value=csrf_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=False,
+        samesite="lax",
+        secure=is_secure,
+        path="/"
+    )
+
     profile = build_user_profile(user, db)
 
     return TokenResponse(
@@ -117,11 +146,32 @@ def get_profile(
 
 @router.post("/logout")
 def logout(
+    request: Request,
+    response: Response,
     authorization: Optional[str] = Header(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if authorization and authorization.startswith("Bearer "):
+    token = request.cookies.get("township_session")
+    if not token and authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
+
+    if token:
         revoke_token_persisted(token=token, user_id=current_user.id, db=db)
+
+    is_secure = (settings.APP_ENV.lower() not in ["development", "test"])
+    response.delete_cookie(
+        key="township_session",
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=is_secure
+    )
+    response.delete_cookie(
+        key="township_csrf",
+        path="/",
+        httponly=False,
+        samesite="lax",
+        secure=is_secure
+    )
     return {"message": "Logged out successfully. Session revoked."}
