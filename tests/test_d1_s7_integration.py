@@ -147,4 +147,50 @@ def test_full_day1_resident_billing_and_payment_journey():
     assert aamir_summary["latest_bill"]["principal_amount"] == 10660.0
     assert aamir_summary["latest_bill"]["paid_amount"] == 5000.0
     assert aamir_summary["current_due"] == 5660.0
+    assert aamir_summary["overdue_days"] >= 15
     assert aamir_summary["latest_bill"]["status"] == "PARTIALLY_PAID"
+
+    # -------------------------------------------------------------
+    # Step 9: Committee Role Strict Scoping Verification
+    # -------------------------------------------------------------
+    client.post("/api/v1/auth/otp/request", json={"phone": "9876543250"})
+    comm_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"}).json()
+    comm_headers = {"Authorization": f"Bearer {comm_login['access_token']}"}
+
+    # Committee can view aggregate billing metrics
+    comm_agg = client.get("/api/v1/billing/committee/aggregate", headers=comm_headers)
+    assert comm_agg.status_code == 200
+    agg_data = comm_agg.json()
+    assert "total_billed_inr" in agg_data
+    assert "total_collected_inr" in agg_data
+    assert "collection_efficiency_pct" in agg_data
+
+    # Committee is strictly blocked (403) from individual flat billing summaries
+    comm_flat_drilldown = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=comm_headers)
+    assert comm_flat_drilldown.status_code == 403
+
+    # -------------------------------------------------------------
+    # Step 10: Family Member Permission Scoping
+    # -------------------------------------------------------------
+    client.post("/api/v1/auth/otp/request", json={"phone": "9876543213"})
+    ananya_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543213", "otp": "123456"}).json()
+    ananya_headers = {"Authorization": f"Bearer {ananya_login['access_token']}"}
+    ananya_flat_id = ananya_login["user"]["flats"][0]["flat_id"]
+
+    # Ananya can view billing summary for T07-1203
+    ananya_summary = client.get(f"/api/v1/billing/flats/{ananya_flat_id}/summary", headers=ananya_headers)
+    assert ananya_summary.status_code == 200
+
+    # But Ananya cannot pay bills (can_pay_bills=False)
+    ananya_pay = client.post(
+        "/api/v1/payments/checkout",
+        headers=ananya_headers,
+        json={
+            "flat_id": ananya_flat_id,
+            "bill_id": neeraj_summary["latest_bill"]["id"],
+            "amount": 100.0,
+            "test_outcome": "SUCCESS"
+        }
+    )
+    assert ananya_pay.status_code == 403
+    assert "does not permit bill payment" in ananya_pay.json()["error"]["message"].lower()
