@@ -6,6 +6,7 @@ session expiry policies, and fail-closed production safety guards.
 """
 
 import os
+import secrets
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     PORT: int = 8000
     API_PREFIX: str = "/api/v1"
-    SECRET_KEY: str = "REDACTED"
+    SECRET_KEY: str = ""
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://localhost:3000",
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
-    # Database URLs
+    # Database URLs (PostgreSQL standard per architecture; SQLite fast-test local fallback)
     DATABASE_URL: str = "sqlite:///./township_one.db"
     TEST_DATABASE_URL: str = "sqlite:///./township_one_test.db"
 
@@ -48,13 +49,23 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
+    def model_post_init(self, __context):
+        if not self.SECRET_KEY:
+            if self.APP_ENV.lower() in ["development", "test", "demo"]:
+                object.__setattr__(self, "SECRET_KEY", secrets.token_urlsafe(32))
+            else:
+                raise RuntimeError(
+                    "FATAL SECURITY VIOLATION: SECRET_KEY environment variable is required outside development. "
+                    "Please configure a strong, random 32+ character SECRET_KEY."
+                )
+
     def validate_production_guards(self):
         """
         Fail-closed security guard:
         In production, verifies that:
         - SECRET_KEY is not a known default, placeholder, or low-entropy key.
         - DEBUG is strictly False.
-        - Universal fixed demo OTP is disabled.
+        - SMS_PROVIDER_API_KEY is configured.
         """
         if self.APP_ENV.lower() == "production":
             insecure_markers = [

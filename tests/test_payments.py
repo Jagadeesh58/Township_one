@@ -13,6 +13,7 @@ Test suite verifying:
 - Cross-resident receipt and payment IDOR prevention
 """
 
+import os
 import uuid
 from decimal import Decimal
 import pytest
@@ -425,3 +426,15 @@ def test_payment_exceeding_balance_rejected():
     )
     assert resp.status_code == 400
     assert "cannot exceed current outstanding balance" in resp.json()["error"]["message"]
+
+
+def test_postgresql_row_locking_in_payments():
+    """
+    Validates PostgreSQL row locking (SELECT ... FOR UPDATE) against a live PostgreSQL database
+    when PG_DATABASE_URL or TEST_POSTGRESQL_URL is set in environment (e.g. CI workflow service container).
+    """
+    pg_url = os.environ.get("PG_DATABASE_URL") or os.environ.get("TEST_POSTGRESQL_URL")
+    if not pg_url:
+        pytest.skip("PG_DATABASE_URL not set; skipping live PostgreSQL row locking concurrency test.")
+    from tests.test_payment_concurrency import test_postgresql_with_for_update_row_locking
+    test_postgresql_with_for_update_row_locking()
