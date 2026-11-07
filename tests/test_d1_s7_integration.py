@@ -1,9 +1,31 @@
+"""
+Day 1 · D1-S7 — Integration and Day 1 verification
+End-to-end integration test suite verifying the complete Day 1 resident journey:
+- Resident OTP authentication and profile retrieval
+- Billing summary retrieval with area/rate calculations and overdue tracking
+- Simulated payment checkout (FAILED outcome preserves dues, SUCCESS outcome reduces dues and creates receipt)
+- Dual-entry flat ledger reconciliation
+- Prevention of duplicate payments on already-paid bills
+- Seed data verification across sample flats:
+    * Neeraj Kulkarni (T07-1203, 1150 sq ft, fully paid)
+    * Aamir Shaikh (T21-1601, 1640 sq ft, partially paid)
+    * Swati Joshi (T12-0408, 980 sq ft, tenant)
+- Committee aggregate reports allowed, individual flat drilldown strictly forbidden (403)
+- Family member role permissions (read permitted, pay denied)
+"""
+
 from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
+from backend.app.core.security import OTP_STORE
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def clear_otp_store():
+    OTP_STORE.clear()
 
 
 def test_full_day1_resident_billing_and_payment_journey():
