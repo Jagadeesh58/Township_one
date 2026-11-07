@@ -1,3 +1,11 @@
+"""
+Day 1 · D1-S5 — Test payments and receipts
+API endpoints for:
+- Simulated checkout with strict outcome verification (rejecting invalid outcome values)
+- Safe idempotent payment execution
+- Resident payment status and receipt retrieval with strict cross-resident IDOR protections
+"""
+
 from decimal import Decimal
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status

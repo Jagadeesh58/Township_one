@@ -1,3 +1,13 @@
+"""
+Day 1 · D1-S5 — Test payments and receipts
+Service implementation for:
+- Simulated checkout with strict outcome validation (SUCCESS, PENDING, FAILED, EXPIRED only)
+- Cryptographic request fingerprinting & idempotency locking (per principal, flat, bill, amount, currency, method, outcome)
+- Cross-flat replay protection & information leakage prevention (generic 409 without leaking metadata)
+- Dialect-aware concurrency row-locking
+- Dual-entry atomic ledger posting (CREDIT on payment SUCCESS) and receipt generation
+"""
+
 import hashlib
 import uuid
 from datetime import datetime, timezone
@@ -52,8 +62,8 @@ def initiate_simulated_payment(
         )
 
     # 2. Cryptographic Request Fingerprint for Idempotency Binding (Security Fix A)
-    # Bind authenticated principal (user_id), flat, bill, amount, currency, and outcome
-    fingerprint_raw = f"{user.id}:{flat_id}:{bill_id}:{amount:.2f}:{currency}:{outcome_str}"
+    # Bind authenticated principal (user_id), flat, bill, amount, currency, payment_method, and outcome
+    fingerprint_raw = f"{user.id}:{flat_id}:{bill_id}:{amount:.2f}:{currency}:{payment_method}:{outcome_str}"
     request_hash = hashlib.sha256(fingerprint_raw.encode("utf-8")).hexdigest()
 
     idempotency_record: Optional[PaymentIdempotencyRecord] = None
@@ -127,8 +137,11 @@ def initiate_simulated_payment(
                     detail="Concurrent request detected for this idempotency key. Please retry."
                 )
 
-    # 3. Validate Bill Existence and Balance
-    bill = db.query(Bill).filter(Bill.id == bill_id, Bill.flat_id == flat_id).first()
+    # 3. Validate Bill Existence and Balance (with dialect-aware row locking)
+    bill_query = db.query(Bill).filter(Bill.id == bill_id, Bill.flat_id == flat_id)
+    if db.bind and db.bind.dialect.name != "sqlite":
+        bill_query = bill_query.with_for_update()
+    bill = bill_query.first()
     if not bill:
         if idempotency_record:
             db.rollback()

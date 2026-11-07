@@ -1,3 +1,15 @@
+"""
+Day 1 · D1-S5 — Test payments and receipts
+Test suite verifying:
+- Payment idempotency and cryptographic request fingerprinting
+- Cross-flat idempotency key collision without data leakage (generic 409)
+- Idempotency key payload mismatch rejection (409 on altered amount, flat, bill, or outcome)
+- Strict validation of test payment outcomes (SUCCESS, PENDING, FAILED, EXPIRED only)
+- Over-allocation prevention (cannot pay more than outstanding bill balance)
+- Rejection of double payment on already-paid bills
+- Cross-resident receipt and payment IDOR prevention
+"""
+
 import uuid
 from decimal import Decimal
 import pytest
@@ -10,6 +22,8 @@ client = TestClient(app)
 
 
 def get_auth_token(phone: str) -> tuple[str, dict]:
+    from backend.app.core.security import OTP_STORE
+    OTP_STORE.pop(phone, None)
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     data = res.json()
@@ -305,3 +319,31 @@ def test_family_member_without_pay_permission_blocked():
     )
     assert resp.status_code == 403
     assert "does not permit bill payment" in resp.json()["error"]["message"].lower()
+
+
+def test_payment_exceeding_balance_rejected():
+    # Login as Swati (T12-0408)
+    token, user = get_auth_token("9876543211")
+    flat_id = user["flats"][0]["flat_id"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
+    bill = summary["unpaid_bills"][0] if summary.get("unpaid_bills") else summary["latest_bill"]
+    bill_id = bill["id"]
+    balance = bill["balance_amount"]
+
+    # Attempt to pay more than balance (e.g. balance + 1000)
+    over_amount = balance + 1000.0
+    resp = client.post(
+        "/api/v1/payments/checkout",
+        headers=headers,
+        json={
+            "flat_id": flat_id,
+            "bill_id": bill_id,
+            "amount": over_amount,
+            "test_outcome": "SUCCESS",
+            "idempotency_key": f"IDEM-OVERPAY-{uuid.uuid4()}"
+        }
+    )
+    assert resp.status_code == 400
+    assert "cannot exceed current outstanding balance" in resp.json()["error"]["message"]
