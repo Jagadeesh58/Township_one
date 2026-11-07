@@ -58,9 +58,7 @@ def reset_test_db_per_module():
 
 @pytest.fixture(autouse=True)
 def isolate_test_state():
-    from backend.app.core.security import OTP_STORE, REVOKED_TOKENS
-    OTP_STORE.clear()
+    from backend.app.core.security import REVOKED_TOKENS
     REVOKED_TOKENS.clear()
     yield
-    OTP_STORE.clear()
     REVOKED_TOKENS.clear()

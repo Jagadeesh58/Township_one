@@ -19,14 +19,20 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
-from backend.app.core.security import OTP_STORE
+from backend.app.core.database import SessionLocal
+from backend.app.models.entities import OTPChallenge
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def clear_otp_store():
-    OTP_STORE.clear()
+def clear_otp_challenges():
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).delete()
+        db.commit()
+    finally:
+        db.close()
 
 
 def test_full_resident_billing_and_payment_journey():

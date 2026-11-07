@@ -24,7 +24,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ lang, onLoginSuccess }) =>
     try {
       const res = await api.requestOtp(targetPhone);
       setPhone(targetPhone);
-      setDemoHint(res.demo_hint || 'Demo OTP: 123456');
+      setDemoHint(res.demo_hint || null);
       setStep('OTP');
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to request OTP');

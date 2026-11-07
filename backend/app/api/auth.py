@@ -64,7 +64,11 @@ def build_user_profile(user: User, db: Session) -> UserProfileResponse:
 
 
 @router.post("/otp/request")
-def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
+def request_otp(
+    payload: OTPRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
     phone = payload.phone.strip()
     user = db.query(User).filter(User.phone == phone, User.is_active == True).first()
     if not user:
@@ -73,15 +77,16 @@ def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
             detail="No registered resident or staff account found with this phone number."
         )
 
-    otp = create_otp_challenge(phone, db=db)
+    client_ip = request.client.host if request.client else None
+    otp = create_otp_challenge(phone, db=db, ip_address=client_ip)
     response_data = {
         "message": "OTP sent successfully to registered mobile number.",
         "phone": phone,
         "expires_in_seconds": settings.OTP_EXPIRY_SECONDS
     }
 
-    # Only include demo hint in non-production environments
-    if settings.APP_ENV.lower() != "production":
+    # Only include demo hint in development or demo environments
+    if settings.APP_ENV.lower() in ("development", "demo"):
         response_data["demo_hint"] = f"Demo OTP is {otp}"
 
     return response_data

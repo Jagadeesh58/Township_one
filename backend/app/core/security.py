@@ -29,77 +29,73 @@ from backend.app.services.sms import get_sms_provider
 
 security = HTTPBearer(auto_error=False)
 
-# In-memory OTP Store: {phone: {"otp_hash": str, "salt": str, "expires_at": datetime, "attempts": int, "used": bool, "request_timestamps": List[datetime]}}
-OTP_STORE: Dict[str, Dict[str, Any]] = {}
 REVOKED_TOKENS: set = set()
 
 
-def create_otp_challenge(phone: str, db: Optional[Session] = None) -> str:
+def create_otp_challenge(phone: str, db: Session, ip_address: Optional[str] = None) -> str:
     """
-    Creates an OTP challenge with rate-limiting, salt-hashed storage, and configurable expiration.
-    In production mode, a cryptographically secure random 6-digit OTP is generated and dispatched
-    via SMSProvider. In dev/test mode, the deterministic demo code is used.
-    When a database session is provided, OTP challenges are persistently stored in `otp_challenges` table.
+    Creates an OTP challenge with query-driven rate-limiting and persistent salt-hashed storage
+    exclusively in the `otp_challenges` database table.
+
+    Rate limits:
+    - Max 5 requests per 10 minutes per phone number
+    - Max 20 requests per hour per IP address (when ip_address is provided)
+
+    Fixed DEMO_OTP_CODE is strictly allowed ONLY in development and demo environments
+    (APP_ENV in ('development', 'demo')) as an evaluator convenience. In staging/production,
+    a cryptographically random 6-digit code is generated and dispatched via SMSProvider.
     """
     now = datetime.now(timezone.utc)
-    window_start = now - timedelta(minutes=10)
+    phone_window = now - timedelta(minutes=10)
 
-    # Rate limiting: max 5 OTP requests per 10 minutes
-    if db is not None:
-        recent_count = db.query(OTPChallenge).filter(
-            OTPChallenge.phone == phone,
-            OTPChallenge.created_at > window_start
+    # 1. Rate limiting: max 5 OTP requests per 10 minutes per phone
+    recent_phone_count = db.query(OTPChallenge).filter(
+        OTPChallenge.phone == phone,
+        OTPChallenge.created_at >= phone_window
+    ).count()
+    if recent_phone_count >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
+        )
+
+    # 2. Rate limiting: max 20 OTP requests per hour per IP
+    if ip_address:
+        ip_window = now - timedelta(hours=1)
+        recent_ip_count = db.query(OTPChallenge).filter(
+            OTPChallenge.ip_address == ip_address,
+            OTPChallenge.created_at >= ip_window
         ).count()
-        if recent_count >= 5:
+        if recent_ip_count >= 20:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
-            )
-    else:
-        record = OTP_STORE.get(phone, {"request_timestamps": []})
-        recent_requests = [ts for ts in record.get("request_timestamps", []) if ts > window_start]
-        if len(recent_requests) >= 5:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
+                detail="Rate limit exceeded: Too many OTP requests from this IP address. Please wait before retrying."
             )
 
     sms_provider = get_sms_provider()
 
-    if settings.APP_ENV.lower() == "production":
-        otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
-    else:
+    # Fixed DEMO_OTP_CODE is strictly allowed ONLY in development and demo environments
+    if settings.APP_ENV.lower() in ("development", "demo"):
         otp_code = settings.DEMO_OTP_CODE
+    else:
+        otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
 
     salt = secrets.token_hex(16)
     otp_hash = hashlib.sha256(f"{salt}:{otp_code}".encode("utf-8")).hexdigest()
     expires_at = now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS)
 
-    if db is not None:
-        challenge = OTPChallenge(
-            phone=phone,
-            otp_hash=otp_hash,
-            salt=salt,
-            expires_at=expires_at,
-            attempts=0,
-            is_used=False,
-            created_at=now
-        )
-        db.add(challenge)
-        db.commit()
-
-    # Maintain in-memory cache as well
-    rec = OTP_STORE.setdefault(phone, {"request_timestamps": []})
-    rec_timestamps = [ts for ts in rec.get("request_timestamps", []) if ts > window_start]
-    rec_timestamps.append(now)
-    OTP_STORE[phone] = {
-        "otp_hash": otp_hash,
-        "salt": salt,
-        "expires_at": expires_at,
-        "attempts": 0,
-        "used": False,
-        "request_timestamps": rec_timestamps
-    }
+    challenge = OTPChallenge(
+        phone=phone,
+        otp_hash=otp_hash,
+        salt=salt,
+        expires_at=expires_at,
+        attempts=0,
+        is_used=False,
+        ip_address=ip_address,
+        created_at=now
+    )
+    db.add(challenge)
+    db.commit()
 
     # Dispatch via SMS provider
     sms_provider.send_otp(phone, otp_code)
@@ -107,93 +103,54 @@ def create_otp_challenge(phone: str, db: Optional[Session] = None) -> str:
     return otp_code
 
 
-def verify_otp_challenge(phone: str, otp: str, db: Optional[Session] = None) -> bool:
+def verify_otp_challenge(phone: str, otp: str, db: Session) -> bool:
     """
-    Verifies OTP challenge enforcing salt-hash validation, expiration, single-use, and max 3 invalid attempts.
+    Verifies OTP challenge exclusively from the database table `otp_challenges`.
+    Enforces salt-hash validation, expiration, single-use, and max 3 invalid attempts.
     """
     now = datetime.now(timezone.utc)
 
-    if db is not None:
-        challenge = db.query(OTPChallenge).filter(
-            OTPChallenge.phone == phone
-        ).order_by(OTPChallenge.created_at.desc()).first()
+    challenge = db.query(OTPChallenge).filter(
+        OTPChallenge.phone == phone
+    ).order_by(OTPChallenge.created_at.desc()).first()
 
-        if not challenge:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active OTP challenge found. Please request an OTP."
-            )
-
-        if challenge.is_used:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OTP has already been used."
-            )
-
-        exp = challenge.expires_at
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
-        if now > exp:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OTP has expired. Please request a new one."
-            )
-
-        challenge.attempts += 1
-        if challenge.attempts > 3:
-            challenge.is_used = True
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many invalid attempts. OTP invalidated."
-            )
-
-        attempt_hash = hashlib.sha256(f"{challenge.salt}:{otp}".encode("utf-8")).hexdigest()
-        if not hmac.compare_digest(challenge.otp_hash, attempt_hash):
-            db.commit()
-            return False
-
-        challenge.is_used = True
-        db.commit()
-
-        if phone in OTP_STORE:
-            OTP_STORE[phone]["used"] = True
-
-        return True
-
-    # Fallback to in-memory store
-    record = OTP_STORE.get(phone)
-    if not record:
+    if not challenge:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active OTP challenge found. Please request an OTP."
         )
 
-    if record["used"]:
+    if challenge.is_used:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OTP has already been used."
         )
 
-    if now > record["expires_at"]:
+    exp = challenge.expires_at
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if now > exp:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="OTP has expired. Please request a new one."
         )
 
-    record["attempts"] += 1
-    if record["attempts"] > 3:
-        record["used"] = True
+    challenge.attempts += 1
+    if challenge.attempts > 3:
+        challenge.is_used = True
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many invalid attempts. OTP invalidated."
         )
 
-    attempt_hash = hashlib.sha256(f"{record['salt']}:{otp}".encode("utf-8")).hexdigest()
-    if not hmac.compare_digest(record["otp_hash"], attempt_hash):
+    attempt_hash = hashlib.sha256(f"{challenge.salt}:{otp}".encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(challenge.otp_hash, attempt_hash):
+        db.commit()
         return False
 
-    record["used"] = True
+    challenge.is_used = True
+    db.commit()
     return True
 
 

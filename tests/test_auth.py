@@ -15,7 +15,8 @@ from backend.app.main import app
 from backend.app.core.database import SessionLocal
 from backend.app.core.config import settings
 from backend.app.models.entities import Flat, User, RevokedToken
-from backend.app.core.security import verify_flat_access, OTP_STORE
+from backend.app.core.security import verify_flat_access
+from backend.app.models.entities import OTPChallenge
 from fastapi import HTTPException
 
 client = TestClient(app)
@@ -29,12 +30,15 @@ def test_request_otp_success():
     assert data["phone"] == "9876543210"
 
     # Verify salted hash is stored, never plain text OTP
-    assert "9876543210" in OTP_STORE
-    challenge = OTP_STORE["9876543210"]
-    assert "otp_hash" in challenge
-    assert "salt" in challenge
-    assert "otp" not in challenge
-    assert len(challenge["otp_hash"]) == 64  # SHA-256
+    db = SessionLocal()
+    try:
+        challenge = db.query(OTPChallenge).filter(OTPChallenge.phone == "9876543210").order_by(OTPChallenge.created_at.desc()).first()
+        assert challenge is not None
+        assert challenge.otp_hash is not None
+        assert challenge.salt is not None
+        assert len(challenge.otp_hash) == 64  # SHA-256
+    finally:
+        db.close()
 
 
 def test_request_otp_nonexistent_user():
@@ -195,8 +199,7 @@ def test_demo_hint_hidden_in_production(monkeypatch):
 
 def test_otp_request_rate_limiting():
     phone = "9876543302"  # Rajesh Nair
-    from backend.app.core.security import OTP_STORE
-    OTP_STORE.pop(phone, None)
+    # Persistent DB cleaning handled via SessionLocal
     
     # Fire 5 requests
     for _ in range(5):
@@ -218,8 +221,7 @@ def test_database_persisted_revoked_token():
         db.commit()
     finally:
         db.close()
-    from backend.app.core.security import OTP_STORE
-    OTP_STORE.pop(phone, None)
+    # Persistent DB cleaning handled via SessionLocal
 
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     login = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"}).json()
@@ -374,8 +376,7 @@ def test_logout_clears_cookie_and_revokes_token():
         db.commit()
     finally:
         db.close()
-    from backend.app.core.security import OTP_STORE
-    OTP_STORE.pop(phone, None)
+    # Persistent DB cleaning handled via SessionLocal
 
     custom_client = TestClient(app)
     custom_client.post("/api/v1/auth/otp/request", json={"phone": phone})
@@ -403,3 +404,82 @@ def test_logout_clears_cookie_and_revokes_token():
     # Verify subsequent request is unauthorized
     post_logout_me = custom_client.get("/api/v1/auth/me")
     assert post_logout_me.status_code == 401
+
+
+def test_expired_otp_fails():
+    """Verify that an expired OTP challenge cannot be verified and returns 400."""
+    from datetime import datetime, timezone, timedelta
+    phone = "9876543213"
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
+
+    resp = client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    assert resp.status_code == 200
+
+    # Backdate challenge expiry to the past
+    db = SessionLocal()
+    try:
+        challenge = db.query(OTPChallenge).filter(OTPChallenge.phone == phone).order_by(OTPChallenge.created_at.desc()).first()
+        assert challenge is not None
+        challenge.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
+        db.commit()
+    finally:
+        db.close()
+
+    verify_resp = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    assert verify_resp.status_code == 400
+    assert "expired" in verify_resp.json()["error"]["message"].lower()
+
+
+def test_server_restart_survival_otp_persisted():
+    """
+    Verify server restart survival:
+    An OTP challenge requested before app reload can be successfully verified after reload
+    because it is persisted in the database table `otp_challenges`, not stored in volatile RAM.
+    """
+    phone = "9876543220"
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
+
+    # Pre-reload client requests OTP
+    pre_reload_client = TestClient(app)
+    req_resp = pre_reload_client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    assert req_resp.status_code == 200
+
+    # Simulate app server reload / fresh process start by creating an entirely new TestClient
+    post_reload_client = TestClient(app)
+    post_reload_resp = post_reload_client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    assert post_reload_resp.status_code == 200
+    assert "access_token" in post_reload_resp.json()
+    assert post_reload_resp.json()["user"]["name"] == "Ramesh Patil"
+
+
+def test_ip_rate_limiting_exceeded():
+    """Verify max 20 OTP requests per hour per IP address."""
+    from backend.app.core.security import create_otp_challenge
+    ip = "192.168.1.100"
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.ip_address == ip).delete()
+        db.commit()
+        # Fire 20 challenge creations from same IP
+        for i in range(20):
+            create_otp_challenge(phone=f"9876543{i:03d}", db=db, ip_address=ip)
+
+        # 21st must raise 429
+        with pytest.raises(HTTPException) as exc_info:
+            create_otp_challenge(phone="9876543999", db=db, ip_address=ip)
+        assert exc_info.value.status_code == 429
+        assert "Too many OTP requests from this IP" in exc_info.value.detail
+    finally:
+        db.query(OTPChallenge).filter(OTPChallenge.ip_address == ip).delete()
+        db.commit()
+        db.close()

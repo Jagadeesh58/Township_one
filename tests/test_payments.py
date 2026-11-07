@@ -27,10 +27,8 @@ client = TestClient(app)
 
 
 def get_auth_token(phone: str) -> tuple[str, dict]:
-    from backend.app.core.security import OTP_STORE
     from backend.app.core.database import SessionLocal
     from backend.app.models.entities import OTPChallenge
-    OTP_STORE.pop(phone, None)
     db = SessionLocal()
     try:
         db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()

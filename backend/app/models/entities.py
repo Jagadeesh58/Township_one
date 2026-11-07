@@ -327,5 +327,6 @@ class OTPChallenge(Base):
     expires_at = Column(DateTime, nullable=False)
     attempts = Column(Integer, nullable=False, default=0)
     is_used = Column(Boolean, nullable=False, default=False)
+    ip_address = Column(String(45), nullable=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

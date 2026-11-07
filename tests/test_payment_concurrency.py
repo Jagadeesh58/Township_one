@@ -20,13 +20,18 @@ from sqlalchemy.orm import sessionmaker
 from backend.app.main import app
 from backend.app.core.database import SessionLocal, Base
 from backend.app.models.entities import Bill, Payment, OTPChallenge
-from backend.app.core.security import OTP_STORE
+from backend.app.models.entities import OTPChallenge
 
 client = TestClient(app)
 
 
 def get_auth_token(phone: str) -> tuple[str, dict]:
-    OTP_STORE.pop(phone, None)
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
     db = SessionLocal()
     try:
         db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
