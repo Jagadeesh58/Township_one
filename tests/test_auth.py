@@ -186,6 +186,7 @@ def test_guard_access_to_finance_denied():
 
 def test_demo_hint_hidden_in_production(monkeypatch):
     monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", "test-sms-key")
     resp = client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
     assert resp.status_code == 200
     data = resp.json()
@@ -209,8 +210,19 @@ def test_otp_request_rate_limiting():
 
 
 def test_database_persisted_revoked_token():
-    client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
-    login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"}).json()
+    phone = "9876543210"
+    from backend.app.models.entities import OTPChallenge
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
+    from backend.app.core.security import OTP_STORE
+    OTP_STORE.pop(phone, None)
+
+    client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    login = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"}).json()
     token = login["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -225,3 +237,54 @@ def test_database_persisted_revoked_token():
         assert revoked_entry.token_jti is not None
     finally:
         db.close()
+
+
+
+def test_database_persisted_otp_challenge():
+    """Verify OTP challenge is stored persistently in database table otp_challenges."""
+    phone = "9876543210"
+    from backend.app.models.entities import OTPChallenge
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
+    resp = client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    assert resp.status_code == 200
+
+    from backend.app.models.entities import OTPChallenge
+    db = SessionLocal()
+    try:
+        challenge = db.query(OTPChallenge).filter(OTPChallenge.phone == phone).order_by(OTPChallenge.created_at.desc()).first()
+        assert challenge is not None
+        assert challenge.otp_hash is not None
+        assert len(challenge.otp_hash) == 64
+        assert challenge.salt is not None
+        assert challenge.is_used is False
+    finally:
+        db.close()
+
+
+def test_production_sms_provider_fails_closed_without_credentials(monkeypatch):
+    """Verify that in production mode, missing SMS_PROVIDER_API_KEY fails closed."""
+    from backend.app.services.sms import get_sms_provider
+
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", "")
+
+    with pytest.raises(RuntimeError) as exc_info:
+        get_sms_provider()
+    assert "SMS provider requires a valid SMS_PROVIDER_API_KEY" in str(exc_info.value)
+
+
+def test_production_sms_provider_succeeds_with_configured_credentials(monkeypatch):
+    """Verify that in production mode, configured SMS_PROVIDER_API_KEY initializes provider successfully."""
+    from backend.app.services.sms import get_sms_provider
+
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", "test-sms-key")
+
+    provider = get_sms_provider()
+    assert provider is not None
+    assert provider.send_otp("9876543210", "654321") is True

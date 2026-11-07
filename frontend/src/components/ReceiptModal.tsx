@@ -1,6 +1,7 @@
 import React from 'react';
 import { PaymentReceipt } from '../api/client';
 import { Language, translations } from '../i18n/translations';
+import { formatMoney } from '../utils/money';
 
 interface ReceiptModalProps {
   receipt: PaymentReceipt;
@@ -89,7 +90,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ receipt, lang, onClo
             marginTop: '0.5rem'
           }}>
             <span>Amount Paid:</span>
-            <span style={{ color: 'var(--success)' }}>₹{receipt.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span style={{ color: 'var(--success)' }}>{formatMoney(receipt.amount)}</span>
           </div>
         </div>
 

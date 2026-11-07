@@ -56,7 +56,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
     if (act === 'pay') {
       setShowPaymentModal(true);
     } else {
-      alert(`${act.toUpperCase()} module is available in Day 2 & Day 3 modules!`);
+      alert(`${act.toUpperCase()} workflow will be available in the upcoming release phase.`);
     }
   };
 

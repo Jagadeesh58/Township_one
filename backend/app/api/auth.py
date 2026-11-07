@@ -72,7 +72,7 @@ def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
             detail="No registered resident or staff account found with this phone number."
         )
 
-    otp = create_otp_challenge(phone)
+    otp = create_otp_challenge(phone, db=db)
     response_data = {
         "message": "OTP sent successfully to registered mobile number.",
         "phone": phone,
@@ -93,7 +93,7 @@ def verify_otp(payload: OTPVerify, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
 
-    is_valid = verify_otp_challenge(phone, payload.otp.strip())
+    is_valid = verify_otp_challenge(phone, payload.otp.strip(), db=db)
     if not is_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid OTP code. Please check and try again.")
 

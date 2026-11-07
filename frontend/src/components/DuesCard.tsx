@@ -5,6 +5,7 @@
 import React from 'react';
 import { BillingSummary } from '../api/client';
 import { Language, translations } from '../i18n/translations';
+import { formatMoney, isPositiveMoney } from '../utils/money';
 
 interface DuesCardProps {
   summary: BillingSummary | null;
@@ -42,7 +43,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
   if (!summary) return null;
 
   const totalOutstanding = summary.total_outstanding_due ?? summary.current_due;
-  const hasDue = totalOutstanding > 0;
+  const hasDue = isPositiveMoney(totalOutstanding);
   const unpaidCount = summary.unpaid_bills?.length || (hasDue ? 1 : 0);
 
   return (
@@ -100,7 +101,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
       {/* Big Due Amount Display */}
       <div>
         <div style={{ fontSize: '2.2rem', fontWeight: 800, color: hasDue ? 'var(--text-main)' : 'var(--success)', lineHeight: 1.1 }}>
-          ₹{totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          {formatMoney(totalOutstanding)}
         </div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
           {summary.flat_number} • {summary.area_sqft} {t.sqft} @ {t.per_sqft_month}
@@ -113,7 +114,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
       </div>
 
       {/* Late fee breakdown notice if overdue */}
-      {hasDue && summary.estimated_late_fee > 0 && (
+      {hasDue && isPositiveMoney(summary.estimated_late_fee) && (
         <div style={{
           background: '#fffbeb',
           border: '1px solid #fef3c7',
@@ -123,7 +124,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: '#92400e' }}>
             <span>{t.late_fee_estimate}:</span>
-            <span>+₹{summary.estimated_late_fee.toFixed(2)}</span>
+            <span>+{formatMoney(summary.estimated_late_fee)}</span>
           </div>
           <div style={{ fontSize: '0.7rem', color: '#b45309', marginTop: '2px' }}>
             *{summary.late_fee_notice}
@@ -149,7 +150,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
               cursor: 'pointer'
             }}
           >
-            {t.pay_now} (₹{totalOutstanding.toLocaleString('en-IN')})
+            {t.pay_now} ({formatMoney(totalOutstanding)})
           </button>
         ) : (
           <div style={{

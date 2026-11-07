@@ -24,7 +24,8 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
-from backend.app.models.entities import User, UserRoleAssignment, FlatMembership, Flat, RevokedToken
+from backend.app.models.entities import User, UserRoleAssignment, FlatMembership, Flat, RevokedToken, OTPChallenge
+from backend.app.services.sms import get_sms_provider
 
 security = HTTPBearer(auto_error=False)
 
@@ -33,48 +34,134 @@ OTP_STORE: Dict[str, Dict[str, Any]] = {}
 REVOKED_TOKENS: set = set()
 
 
-def create_otp_challenge(phone: str) -> str:
+def create_otp_challenge(phone: str, db: Optional[Session] = None) -> str:
     """
-    Creates an OTP challenge with rate-limiting, salt-hashed in-memory storage, and configurable expiration.
-    In production mode, a cryptographically secure random 6-digit OTP is generated.
+    Creates an OTP challenge with rate-limiting, salt-hashed storage, and configurable expiration.
+    In production mode, a cryptographically secure random 6-digit OTP is generated and dispatched
+    via SMSProvider. In dev/test mode, the deterministic demo code is used.
+    When a database session is provided, OTP challenges are persistently stored in `otp_challenges` table.
     """
     now = datetime.now(timezone.utc)
-    record = OTP_STORE.get(phone, {"request_timestamps": []})
+    window_start = now - timedelta(minutes=10)
 
     # Rate limiting: max 5 OTP requests per 10 minutes
-    window_start = now - timedelta(minutes=10)
-    recent_requests = [ts for ts in record.get("request_timestamps", []) if ts > window_start]
-    if len(recent_requests) >= 5:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
-        )
+    if db is not None:
+        recent_count = db.query(OTPChallenge).filter(
+            OTPChallenge.phone == phone,
+            OTPChallenge.created_at > window_start
+        ).count()
+        if recent_count >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
+            )
+    else:
+        record = OTP_STORE.get(phone, {"request_timestamps": []})
+        recent_requests = [ts for ts in record.get("request_timestamps", []) if ts > window_start]
+        if len(recent_requests) >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
+            )
 
-    recent_requests.append(now)
+    sms_provider = get_sms_provider()
 
     if settings.APP_ENV.lower() == "production":
         otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
     else:
-        otp_code = settings.DEMO_OTP_CODE  # Deterministic demo code 123456
+        otp_code = settings.DEMO_OTP_CODE
 
     salt = secrets.token_hex(16)
     otp_hash = hashlib.sha256(f"{salt}:{otp_code}".encode("utf-8")).hexdigest()
+    expires_at = now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS)
 
+    if db is not None:
+        challenge = OTPChallenge(
+            phone=phone,
+            otp_hash=otp_hash,
+            salt=salt,
+            expires_at=expires_at,
+            attempts=0,
+            is_used=False,
+            created_at=now
+        )
+        db.add(challenge)
+        db.commit()
+
+    # Maintain in-memory cache as well
+    rec = OTP_STORE.setdefault(phone, {"request_timestamps": []})
+    rec_timestamps = [ts for ts in rec.get("request_timestamps", []) if ts > window_start]
+    rec_timestamps.append(now)
     OTP_STORE[phone] = {
         "otp_hash": otp_hash,
         "salt": salt,
-        "expires_at": now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS),
+        "expires_at": expires_at,
         "attempts": 0,
         "used": False,
-        "request_timestamps": recent_requests
+        "request_timestamps": rec_timestamps
     }
+
+    # Dispatch via SMS provider
+    sms_provider.send_otp(phone, otp_code)
+
     return otp_code
 
 
-def verify_otp_challenge(phone: str, otp: str) -> bool:
+def verify_otp_challenge(phone: str, otp: str, db: Optional[Session] = None) -> bool:
     """
     Verifies OTP challenge enforcing salt-hash validation, expiration, single-use, and max 3 invalid attempts.
     """
+    now = datetime.now(timezone.utc)
+
+    if db is not None:
+        challenge = db.query(OTPChallenge).filter(
+            OTPChallenge.phone == phone
+        ).order_by(OTPChallenge.created_at.desc()).first()
+
+        if not challenge:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No active OTP challenge found. Please request an OTP."
+            )
+
+        if challenge.is_used:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP has already been used."
+            )
+
+        exp = challenge.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if now > exp:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OTP has expired. Please request a new one."
+            )
+
+        challenge.attempts += 1
+        if challenge.attempts > 3:
+            challenge.is_used = True
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many invalid attempts. OTP invalidated."
+            )
+
+        attempt_hash = hashlib.sha256(f"{challenge.salt}:{otp}".encode("utf-8")).hexdigest()
+        if not hmac.compare_digest(challenge.otp_hash, attempt_hash):
+            db.commit()
+            return False
+
+        challenge.is_used = True
+        db.commit()
+
+        if phone in OTP_STORE:
+            OTP_STORE[phone]["used"] = True
+
+        return True
+
+    # Fallback to in-memory store
     record = OTP_STORE.get(phone)
     if not record:
         raise HTTPException(
@@ -88,7 +175,6 @@ def verify_otp_challenge(phone: str, otp: str) -> bool:
             detail="OTP has already been used."
         )
 
-    now = datetime.now(timezone.utc)
     if now > record["expires_at"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -107,7 +193,6 @@ def verify_otp_challenge(phone: str, otp: str) -> bool:
     if not hmac.compare_digest(record["otp_hash"], attempt_hash):
         return False
 
-    # Mark as used (one-time consumption)
     record["used"] = True
     return True
 

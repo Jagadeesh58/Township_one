@@ -204,3 +204,19 @@ def test_seed_safety_rejects_remote_database_urls():
     assert is_safe_local_database("postgresql://user:pass@my-cluster.rds.amazonaws.com/db") is False
     assert is_safe_local_database("postgresql://user:pass@db.supabase.co/township") is False
     assert is_safe_local_database("postgresql://user:pass@dpg-render.com/township") is False
+
+
+def test_seed_safe_mode_rejects_remote_database_engine():
+    """Verify seed_database in both safe and reset-demo mode rejects remote database engines before touching them."""
+    class DummyRemoteEngine:
+        url = "postgresql://admin:secret@ep-cool-cloud.us-east-2.aws.neon.tech/prod_db"
+
+    dummy_engine = DummyRemoteEngine()
+
+    with pytest.raises(RuntimeError) as exc_safe:
+        seed_database(target_engine=dummy_engine, mode="safe")
+    assert "Refusing to seed or modify non-local / remote database" in str(exc_safe.value)
+
+    with pytest.raises(RuntimeError) as exc_reset:
+        seed_database(target_engine=dummy_engine, mode="reset-demo", confirm_local_demo=True)
+    assert "Refusing to seed or modify non-local / remote database" in str(exc_reset.value)

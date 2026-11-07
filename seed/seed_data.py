@@ -66,11 +66,12 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
     if settings.APP_ENV.lower() == "production" or os.environ.get("TOWNSHIP_ENV") == "production":
         raise RuntimeError("FATAL SECURITY VIOLATION: Seeding or resetting is strictly prohibited in production.")
 
+    if not is_safe_local_database(db_url_str):
+        raise RuntimeError(
+            f"FATAL: Refusing to seed or modify non-local / remote database: {db_url_str}"
+        )
+
     if mode == "reset-demo":
-        if not is_safe_local_database(db_url_str):
-            raise RuntimeError(
-                f"FATAL: Refusing destructive reset on non-local / remote database: {db_url_str}"
-            )
         if not confirm_local_demo and os.environ.get("CONFIRM_LOCAL_DEMO_RESET") != "true":
             raise RuntimeError(
                 "Destructive demo reset requires explicit confirmation. "
@@ -86,20 +87,44 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         SessionCheck = sessionmaker(autocommit=False, autoflush=False, bind=active_engine)
         check_db = SessionCheck()
         try:
-            existing_flats = check_db.query(Flat).count()
-            existing_users = check_db.query(User).count()
-            existing_bills = check_db.query(Bill).count()
+            towers_count = check_db.query(Tower).count()
+            flats_count = check_db.query(Flat).count()
+            staff_count = check_db.query(StaffMember).count()
+            gates_count = check_db.query(Gate).count()
+            users_count = check_db.query(User).count()
+            bills_count = check_db.query(Bill).count()
 
-            if existing_flats == 2400 and existing_users >= 15 and existing_bills >= 3:
-                # Validate sample consistency
-                f1_bill = check_db.query(Bill).join(Flat).filter(Flat.flat_number == "T07-1203").first()
-                if f1_bill and f1_bill.status == "PAID":
-                    print(f"Safe seed: Database is fully seeded ({existing_flats} flats, {existing_users} users) and verified consistent. Preserving records.")
-                    return {"status": "already_seeded", "flats_count": existing_flats, "users_count": existing_users}
-            elif existing_flats > 0 or existing_users > 0 or existing_bills > 0:
+            # Verify sample bills with exact statuses and balances
+            b1 = check_db.query(Bill).join(Flat).filter(Flat.flat_number == "T07-1203").first()
+            b2 = check_db.query(Bill).join(Flat).filter(Flat.flat_number == "T12-0408").first()
+            b3 = check_db.query(Bill).join(Flat).filter(Flat.flat_number == "T21-1601").first()
+
+            is_dataset_complete = (
+                towers_count == 28 and
+                flats_count == 2400 and
+                staff_count == 180 and
+                gates_count == 4 and
+                users_count >= 15 and
+                bills_count >= 3 and
+                b1 is not None and b1.status == "PAID" and Decimal(str(b1.balance_amount)) == Decimal("0.00") and
+                b2 is not None and b2.status == "OVERDUE" and Decimal(str(b2.balance_amount)) == Decimal("6370.00") and
+                b3 is not None and b3.status == "PARTIALLY_PAID" and Decimal(str(b3.balance_amount)) == Decimal("5660.00")
+            )
+
+            if is_dataset_complete:
+                print(f"Safe seed: Database is fully seeded (28 towers, 2,400 flats, 180 staff, 4 gates) and verified consistent. Preserving records.")
+                return {
+                    "status": "already_seeded",
+                    "towers_count": towers_count,
+                    "flats_count": flats_count,
+                    "staff_count": staff_count,
+                    "gates_count": gates_count,
+                    "users_count": users_count
+                }
+            elif flats_count > 0 or users_count > 0 or bills_count > 0:
                 raise RuntimeError(
                     f"Safe seed aborted: Database is in a partially seeded or inconsistent state "
-                    f"({existing_flats}/2400 flats, {existing_users} users, {existing_bills} bills). "
+                    f"({flats_count}/2400 flats, {towers_count}/28 towers, {staff_count}/180 staff, {gates_count}/4 gates, {users_count} users). "
                     "Refusing to mutate partially seeded database in safe mode. "
                     "Run with --mode reset-demo --confirm-local-demo to cleanly reseed."
                 )

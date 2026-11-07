@@ -114,14 +114,17 @@ def get_flat_billing_summary(
     total_outstanding = Decimal("0.00")
     total_estimated_late_fee = Decimal("0.00")
     max_overdue_days = 0
+    max_interest_eligible_days = 0
 
     for b in unpaid_bills:
         b_bal = Decimal(str(b.balance_amount))
         total_outstanding += b_bal
-        days_ovd, l_fee = evaluate_bill_overdue_and_interest(b, rule, as_of=effective_now)
-        total_estimated_late_fee += l_fee
-        if days_ovd > max_overdue_days:
-            max_overdue_days = days_ovd
+        eval_res = evaluate_bill_overdue_and_interest(b, rule, as_of=effective_now)
+        total_estimated_late_fee += eval_res.late_fee
+        if eval_res.calendar_overdue_days > max_overdue_days:
+            max_overdue_days = eval_res.calendar_overdue_days
+        if eval_res.interest_eligible_days > max_interest_eligible_days:
+            max_interest_eligible_days = eval_res.interest_eligible_days
 
     total_outstanding = round_currency(total_outstanding)
     total_estimated_late_fee = round_currency(total_estimated_late_fee)
@@ -139,6 +142,7 @@ def get_flat_billing_summary(
         total_outstanding_due=total_outstanding,
         total_outstanding_due_inr=f"{total_outstanding:.2f}",
         overdue_days=max_overdue_days,
+        interest_eligible_days=max_interest_eligible_days,
         estimated_late_fee=total_estimated_late_fee,
         estimated_late_fee_inr=f"{total_estimated_late_fee:.2f}",
         late_fee_notice="Illustrative demo calculation (18% p.a. simple interest after 5-day grace period) pending society federation approval (not an approved legal rate)",

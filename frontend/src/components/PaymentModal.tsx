@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { api, BillingSummary, PaymentReceipt, BillItem } from '../api/client';
 import { Language, translations } from '../i18n/translations';
+import { formatMoney, generateIdempotencyKey } from '../utils/money';
 
 export type PaymentState = 'READY' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'NETWORK_INTERRUPTION';
 
@@ -34,9 +35,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     () => unpaidBills[0]?.id || summary.latest_bill?.id || ''
   );
 
-  const generateKey = () => `idem-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-  // Stable idempotency key for this payment modal session; preserved across retries of the same attempt
-  const [idempotencyKey, setIdempotencyKey] = useState<string>(generateKey);
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(generateIdempotencyKey);
 
   const selectedBill = unpaidBills.find(b => b.id === selectedBillId) || summary.latest_bill;
   const billId = selectedBill?.id;
@@ -44,20 +43,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
   const handleBillSelect = (newBillId: string) => {
     setSelectedBillId(newBillId);
-    setIdempotencyKey(generateKey());
+    setIdempotencyKey(generateIdempotencyKey());
     setPaymentState('READY');
     setErrorMsg(null);
   };
 
   const handleOutcomeSelect = (outcome: 'SUCCESS' | 'PENDING' | 'FAILED' | 'EXPIRED') => {
     setTestOutcome(outcome);
-    setIdempotencyKey(generateKey());
+    setIdempotencyKey(generateIdempotencyKey());
     setPaymentState('READY');
     setErrorMsg(null);
   };
 
   const startNewAttempt = () => {
-    setIdempotencyKey(generateKey());
+    setIdempotencyKey(generateIdempotencyKey());
     setPaymentState('READY');
     setErrorMsg(null);
   };
@@ -189,7 +188,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             >
               {unpaidBills.map((b) => (
                 <option key={b.id} value={b.id}>
-                  Bill {b.period_month}/{b.period_year} — ₹{((b.balance_amount ?? b.total_amount) || 0).toFixed(2)} ({b.status})
+                  Bill {b.period_month}/{b.period_year} — {formatMoney(b.balance_amount ?? b.total_amount)} ({b.status})
                 </option>
               ))}
             </select>
@@ -220,7 +219,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', fontWeight: 700, borderTop: '1px dashed var(--border)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
             <span>{t.amount_due}:</span>
-            <span style={{ color: 'var(--primary)' }}>₹{dueAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span style={{ color: 'var(--primary)' }}>{formatMoney(dueAmount)}</span>
           </div>
         </div>
 
@@ -389,7 +388,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 opacity: paymentState === 'PROCESSING' ? 0.7 : 1
               }}
             >
-              {paymentState === 'PROCESSING' ? t.processing : `${t.confirm_payment} (₹${dueAmount.toLocaleString('en-IN')})`}
+              {paymentState === 'PROCESSING' ? t.processing : `${t.confirm_payment} (${formatMoney(dueAmount)})`}
             </button>
           </div>
         )}

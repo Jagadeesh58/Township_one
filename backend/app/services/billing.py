@@ -63,18 +63,45 @@ def calculate_demo_late_fee(
     return round_currency(interest)
 
 
+class OverdueEvaluation:
+    """
+    Overdue calculation result separating calendar overdue days from interest-eligible days.
+    Supports backward-compatible unpacking as (calendar_overdue_days, late_fee).
+    """
+    def __init__(self, calendar_overdue_days: int, late_fee: Decimal, interest_eligible_days: int = 0):
+        self.calendar_overdue_days = calendar_overdue_days
+        self.late_fee = late_fee
+        self.interest_eligible_days = interest_eligible_days
+
+    def __iter__(self):
+        yield self.calendar_overdue_days
+        yield self.late_fee
+
+    def __getitem__(self, item):
+        return (self.calendar_overdue_days, self.late_fee)[item]
+
+    def __repr__(self):
+        return (
+            f"OverdueEvaluation(calendar_overdue_days={self.calendar_overdue_days}, "
+            f"interest_eligible_days={self.interest_eligible_days}, late_fee={self.late_fee})"
+        )
+
+
 def evaluate_bill_overdue_and_interest(
     bill: Bill,
     rule: Optional[BillingRule] = None,
     as_of: Optional[datetime] = None
-) -> Tuple[int, Decimal]:
+) -> OverdueEvaluation:
     """
     Calculates overdue days and applicable late fee with strict grace period adherence:
-    - If as_of <= due_date + grace_period_days: grace period active -> 0 overdue days, 0 late fee.
-    - If as_of > due_date + grace_period_days: grace period expired -> interest accrued from due date.
+    - Calendar overdue days: calendar days elapsed since bill.due_date (0 if as_of <= due_date).
+    - Grace period: default 5 days.
+    - If calendar_overdue_days <= grace_days: grace period active -> 0 interest-eligible days, ₹0.00 late fee.
+    - If calendar_overdue_days > grace_days: grace period expired -> interest calculated ONLY on
+      interest_eligible_days (calendar_overdue_days - grace_days).
     """
     if bill.balance_amount <= Decimal("0.00"):
-        return 0, Decimal("0.00")
+        return OverdueEvaluation(0, Decimal("0.00"), 0)
 
     if not as_of:
         as_of = get_effective_date()
@@ -82,20 +109,22 @@ def evaluate_bill_overdue_and_interest(
     bill_due = bill.due_date
     if bill_due.tzinfo is None:
         bill_due = bill_due.replace(tzinfo=timezone.utc)
+    if as_of.tzinfo is None:
+        as_of = as_of.replace(tzinfo=timezone.utc)
+
+    calendar_overdue_days = max(0, (as_of.date() - bill_due.date()).days)
 
     grace_days = rule.grace_period_days if rule else settings.DEFAULT_GRACE_PERIOD_DAYS
     rate_pa = rule.late_fee_percentage_pa if rule else Decimal(str(settings.DEMO_LATE_FEE_PERCENTAGE_PA))
 
-    grace_cutoff = bill_due + timedelta(days=grace_days)
+    if calendar_overdue_days <= grace_days:
+        # Grace period active: no late fee accrued
+        return OverdueEvaluation(calendar_overdue_days, Decimal("0.00"), 0)
 
-    if as_of <= grace_cutoff:
-        # Grace period active
-        return 0, Decimal("0.00")
-
-    # Past grace period: interest calculated from original due date
-    overdue_days = (as_of - bill_due).days
-    late_fee = calculate_demo_late_fee(bill.balance_amount, overdue_days, rate_pa, year=as_of.year)
-    return overdue_days, late_fee
+    # Past grace period: interest calculated ONLY on post-grace interest-eligible days
+    interest_eligible_days = calendar_overdue_days - grace_days
+    late_fee = calculate_demo_late_fee(bill.balance_amount, interest_eligible_days, rate_pa, year=as_of.year)
+    return OverdueEvaluation(calendar_overdue_days, late_fee, interest_eligible_days)
 
 
 def generate_flat_bill(

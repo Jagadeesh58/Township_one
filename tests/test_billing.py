@@ -66,23 +66,63 @@ def test_grace_period_enforcement():
         due_date=datetime(2026, 11, 15, 0, 0, tzinfo=timezone.utc)
     )
 
-    # 1. Check on Nov 18 (3 days past due, but within 5-day grace period)
+    # 1. Check on Nov 18 (3 calendar days past due, but within 5-day grace period: 0 interest-eligible days, ₹0 fee)
     as_of_nov18 = datetime(2026, 11, 18, 0, 0, tzinfo=timezone.utc)
-    overdue_days, fee = evaluate_bill_overdue_and_interest(bill, rule, as_of=as_of_nov18)
-    assert overdue_days == 0
-    assert fee == Decimal("0.00")
+    res_nov18 = evaluate_bill_overdue_and_interest(bill, rule, as_of=as_of_nov18)
+    assert res_nov18.calendar_overdue_days == 3
+    assert res_nov18.interest_eligible_days == 0
+    assert res_nov18.late_fee == Decimal("0.00")
 
-    # 2. Check on Nov 20 (exact grace cutoff)
+    # 2. Check on Nov 20 (exact grace cutoff: 5 calendar overdue days, 0 interest-eligible days, ₹0 fee)
     as_of_nov20 = datetime(2026, 11, 20, 0, 0, tzinfo=timezone.utc)
-    overdue_days, fee = evaluate_bill_overdue_and_interest(bill, rule, as_of=as_of_nov20)
-    assert overdue_days == 0
-    assert fee == Decimal("0.00")
+    res_nov20 = evaluate_bill_overdue_and_interest(bill, rule, as_of=as_of_nov20)
+    assert res_nov20.calendar_overdue_days == 5
+    assert res_nov20.interest_eligible_days == 0
+    assert res_nov20.late_fee == Decimal("0.00")
 
-    # 3. Check on Nov 22 (past grace period -> interest calculated from Nov 15)
+    # 3. Check on Nov 22 (past grace period -> interest calculated on 2 interest-eligible days)
     as_of_nov22 = datetime(2026, 11, 22, 0, 0, tzinfo=timezone.utc)
-    overdue_days, fee = evaluate_bill_overdue_and_interest(bill, rule, as_of=as_of_nov22)
-    assert overdue_days == 7  # 7 days from due date Nov 15
-    assert fee > Decimal("0.00")
+    res_nov22 = evaluate_bill_overdue_and_interest(bill, rule, as_of=as_of_nov22)
+    assert res_nov22.calendar_overdue_days == 7
+    assert res_nov22.interest_eligible_days == 2  # 7 - 5 = 2 days
+    assert res_nov22.late_fee > Decimal("0.00")
+
+
+def test_overdue_and_grace_period_specification_fixtures():
+    """
+    Validates exact prompt specification for grace-period and late fee separation:
+    - Due date 2026-09-20, as-of 2026-11-06: 47 calendar overdue days, 42 interest-eligible days.
+    - Due date 2026-10-19, as-of 2026-11-06: 18 calendar overdue days, 13 interest-eligible days.
+    """
+    rule = BillingRule(
+        name="Standard Rule",
+        rate_per_sqft=Decimal("6.50"),
+        grace_period_days=5,
+        late_fee_percentage_pa=Decimal("18.00")
+    )
+    as_of = datetime(2026, 11, 6, 0, 0, tzinfo=timezone.utc)
+
+    # 1. T12-0408 (Sep 2026 bill, due 2026-09-20, balance ₹6,370)
+    bill_sep = Bill(
+        principal_amount=Decimal("6370.00"),
+        balance_amount=Decimal("6370.00"),
+        due_date=datetime(2026, 9, 20, 0, 0, tzinfo=timezone.utc)
+    )
+    eval_sep = evaluate_bill_overdue_and_interest(bill_sep, rule, as_of=as_of)
+    assert eval_sep.calendar_overdue_days == 47
+    assert eval_sep.interest_eligible_days == 42
+    assert eval_sep.late_fee == Decimal("131.94")
+
+    # 2. T21-1601 (Oct 2026 bill, due 2026-10-19, balance ₹5,660)
+    bill_oct = Bill(
+        principal_amount=Decimal("10660.00"),
+        balance_amount=Decimal("5660.00"),
+        due_date=datetime(2026, 10, 19, 0, 0, tzinfo=timezone.utc)
+    )
+    eval_oct = evaluate_bill_overdue_and_interest(bill_oct, rule, as_of=as_of)
+    assert eval_oct.calendar_overdue_days == 18
+    assert eval_oct.interest_eligible_days == 13
+    assert eval_oct.late_fee == Decimal("36.29")
 
 
 def test_billing_summary_aggregates_multiple_unpaid_bills():

@@ -27,7 +27,15 @@ client = TestClient(app)
 
 def get_auth_token(phone: str) -> tuple[str, dict]:
     from backend.app.core.security import OTP_STORE
+    from backend.app.core.database import SessionLocal
+    from backend.app.models.entities import OTPChallenge
     OTP_STORE.pop(phone, None)
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     data = res.json()

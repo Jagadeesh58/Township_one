@@ -1,6 +1,7 @@
 import React from 'react';
 import { BillingSummary } from '../api/client';
 import { Language, translations } from '../i18n/translations';
+import { formatMoney, isPositiveMoney } from '../utils/money';
 
 interface LedgerViewProps {
   summary: BillingSummary;
@@ -31,8 +32,8 @@ export const LedgerView: React.FC<LedgerViewProps> = ({ summary, lang }) => {
           <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
             Current Balance
           </span>
-          <div style={{ fontSize: '1.1rem', fontWeight: 800, color: summary.current_due > 0 ? 'var(--danger)' : 'var(--success)' }}>
-            ₹{summary.current_due.toFixed(2)}
+          <div style={{ fontSize: '1.1rem', fontWeight: 800, color: isPositiveMoney(summary.current_due) ? 'var(--danger)' : 'var(--success)' }}>
+            {formatMoney(summary.current_due)}
           </div>
         </div>
       </div>
@@ -63,13 +64,13 @@ export const LedgerView: React.FC<LedgerViewProps> = ({ summary, lang }) => {
                     {entry.description}
                   </td>
                   <td style={{ padding: '0.6rem', textAlign: 'right', color: entry.entry_type === 'DEBIT' ? 'var(--danger)' : 'inherit', fontWeight: entry.entry_type === 'DEBIT' ? 600 : 400 }}>
-                    {entry.entry_type === 'DEBIT' ? entry.amount.toFixed(2) : '-'}
+                    {entry.entry_type === 'DEBIT' ? formatMoney(entry.amount, { showCurrency: false }) : '-'}
                   </td>
                   <td style={{ padding: '0.6rem', textAlign: 'right', color: entry.entry_type === 'CREDIT' ? 'var(--success)' : 'inherit', fontWeight: entry.entry_type === 'CREDIT' ? 700 : 400 }}>
-                    {entry.entry_type === 'CREDIT' ? entry.amount.toFixed(2) : '-'}
+                    {entry.entry_type === 'CREDIT' ? formatMoney(entry.amount, { showCurrency: false }) : '-'}
                   </td>
                   <td style={{ padding: '0.6rem', textAlign: 'right', fontWeight: 700 }}>
-                    ₹{entry.balance_after.toFixed(2)}
+                    {formatMoney(entry.balance_after)}
                   </td>
                 </tr>
               ))}

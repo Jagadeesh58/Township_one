@@ -71,6 +71,12 @@ class Settings(BaseSettings):
             if self.DEBUG:
                 raise RuntimeError("FATAL SECURITY VIOLATION: DEBUG mode must be False in production.")
 
+            if not self.SMS_PROVIDER_API_KEY or len(self.SMS_PROVIDER_API_KEY.strip()) < 8:
+                raise RuntimeError(
+                    "FATAL SECURITY VIOLATION: Production deployment requires a valid SMS_PROVIDER_API_KEY "
+                    "for transactional OTP delivery. Failing closed."
+                )
+
 
 settings = Settings()
 settings.validate_production_guards()

@@ -57,6 +57,7 @@ class FlatBillingSummaryResponse(BaseModel):
     total_outstanding_due: Decimal
     total_outstanding_due_inr: str
     overdue_days: int
+    interest_eligible_days: int = 0
     estimated_late_fee: Decimal
     estimated_late_fee_inr: str
     late_fee_notice: str

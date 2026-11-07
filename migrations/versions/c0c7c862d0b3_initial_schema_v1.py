@@ -29,6 +29,18 @@ def upgrade() -> None:
     sa.Column('rules', sa.Text(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('otp_challenges',
+    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('phone', sa.String(length=20), nullable=False),
+    sa.Column('otp_hash', sa.String(length=64), nullable=False),
+    sa.Column('salt', sa.String(length=32), nullable=False),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
+    sa.Column('attempts', sa.Integer(), nullable=False),
+    sa.Column('is_used', sa.Boolean(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_otp_challenges_phone'), 'otp_challenges', ['phone'], unique=False)
     op.create_table('billing_rules',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
@@ -303,4 +315,6 @@ def downgrade() -> None:
     op.drop_table('gates')
     op.drop_table('billing_rules')
     op.drop_table('amenities')
+    op.drop_index(op.f('ix_otp_challenges_phone'), table_name='otp_challenges')
+    op.drop_table('otp_challenges')
     # ### end Alembic commands ###

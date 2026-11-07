@@ -5,23 +5,34 @@ Test suite verifying:
 - Concurrent payment requests against the same bill using ThreadPoolExecutor
 - Prevention of over-allocation (total successful paid allocations <= initial balance)
 - Concurrent identical requests with the same idempotency key result in exactly 1 payment record
+- PostgreSQL row locking (with_for_update) concurrency validation against PostgreSQL service
 """
 
+import os
 import uuid
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from backend.app.main import app
-from backend.app.core.database import SessionLocal
-from backend.app.models.entities import Bill, Payment
+from backend.app.core.database import SessionLocal, Base
+from backend.app.models.entities import Bill, Payment, OTPChallenge
+from backend.app.core.security import OTP_STORE
 
 client = TestClient(app)
 
 
 def get_auth_token(phone: str) -> tuple[str, dict]:
-    from backend.app.core.security import OTP_STORE
     OTP_STORE.pop(phone, None)
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     data = res.json()
@@ -69,8 +80,6 @@ def test_concurrent_identical_idempotency_requests():
 
     # Check outcomes: At least one must succeed (200), and others must either return 200 (original result) or 409
     successful_results = [r for r in results if r.status_code == 200]
-    conflict_results = [r for r in results if r.status_code == 409]
-
     assert len(successful_results) >= 1
     # Total distinct payment IDs created must be EXACTLY 1
     payment_ids = {r.json()["id"] for r in successful_results}
@@ -134,3 +143,65 @@ def test_concurrent_payments_prevent_over_allocation():
         assert b.paid_amount <= b.total_amount
     finally:
         db.close()
+
+
+def test_postgresql_with_for_update_row_locking():
+    """
+    Validates PostgreSQL row locking (SELECT ... FOR UPDATE) against a live PostgreSQL database
+    when PG_DATABASE_URL or TEST_POSTGRESQL_URL is set in environment (e.g. CI workflow service container).
+    """
+    pg_url = os.environ.get("PG_DATABASE_URL") or os.environ.get("TEST_POSTGRESQL_URL")
+    if not pg_url:
+        pytest.skip("PG_DATABASE_URL not set; skipping live PostgreSQL row locking concurrency test.")
+
+    pg_engine = create_engine(pg_url)
+    Base.metadata.create_all(bind=pg_engine)
+    PgSession = sessionmaker(bind=pg_engine)
+
+    init_db = PgSession()
+    test_bill_id = str(uuid.uuid4())
+    flat_id = str(uuid.uuid4())
+    bill = Bill(
+        id=test_bill_id,
+        flat_id=flat_id,
+        period_month=11,
+        period_year=2026,
+        principal_amount=Decimal("5000.00"),
+        total_amount=Decimal("5000.00"),
+        paid_amount=Decimal("0.00"),
+        balance_amount=Decimal("5000.00"),
+        status="ISSUED"
+    )
+    init_db.add(bill)
+    init_db.commit()
+    init_db.close()
+
+    def concurrent_lock_and_pay(amount: Decimal):
+        sess = PgSession()
+        try:
+            b = sess.query(Bill).filter(Bill.id == test_bill_id).with_for_update().first()
+            if b.balance_amount >= amount:
+                b.paid_amount += amount
+                b.balance_amount -= amount
+                sess.commit()
+                return True
+            else:
+                sess.rollback()
+                return False
+        finally:
+            sess.close()
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(concurrent_lock_and_pay, Decimal("2000.00")) for _ in range(5)]
+        outcomes = [f.result() for f in as_completed(futures)]
+
+    success_count = sum(1 for o in outcomes if o)
+    assert success_count == 2
+
+    verify_db = PgSession()
+    try:
+        final_bill = verify_db.query(Bill).filter(Bill.id == test_bill_id).first()
+        assert final_bill.paid_amount == Decimal("4000.00")
+        assert final_bill.balance_amount == Decimal("1000.00")
+    finally:
+        verify_db.close()
