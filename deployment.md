@@ -1,5 +1,7 @@
 # TOWNSHIP ONE — PRODUCTION DEPLOYMENT & OPERATIONS GUIDE
 
+**Repository URL:** https://github.com/Jagadeesh58/Township_one.git  
+
 ---
 
 ## 1. System Architecture Overview

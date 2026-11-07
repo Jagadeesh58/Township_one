@@ -1,5 +1,6 @@
 # TOWNSHIP ONE — Gated Township Resident & Operations Platform
 
+**Repository URL:** https://github.com/Jagadeesh58/Township_one.git  
 **Client:** Company A, Pune  
 **Township Context:** 2,400 residential flats across 28 towers, 180 on-site staff, 4 multi-lane access gates, managing ₹22–26 crore annual maintenance budget.  
 **Scope Authority:** Challenge Brief Part C: Brief 2 (Gated township resident app for maintenance, complaints, and visitors).  
