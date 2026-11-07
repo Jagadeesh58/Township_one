@@ -1,5 +1,9 @@
+// Day 1 · D1-S6 — Resident interface and PWA
+// Payment checkout modal with multi-bill selection, stable idempotency key generation,
+// explicit test outcome selector (SUCCESS, PENDING, FAILED, EXPIRED), and localized feedback.
+
 import React, { useState } from 'react';
-import { api, BillingSummary, PaymentReceipt } from '../api/client';
+import { api, BillingSummary, PaymentReceipt, BillItem } from '../api/client';
 import { Language, translations } from '../i18n/translations';
 
 interface PaymentModalProps {
@@ -19,11 +23,28 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [testOutcome, setTestOutcome] = useState<'SUCCESS' | 'PENDING' | 'FAILED' | 'EXPIRED'>('SUCCESS');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // Stable idempotency key for this payment modal session; preserved across retries
-  const [idempotencyKey] = useState<string>(() => `idem-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`);
 
-  const billId = summary.latest_bill?.id;
-  const dueAmount = summary.current_due;
+  const unpaidBills: BillItem[] = summary.unpaid_bills && summary.unpaid_bills.length > 0
+    ? summary.unpaid_bills
+    : (summary.latest_bill ? [summary.latest_bill] : []);
+
+  const [selectedBillId, setSelectedBillId] = useState<string>(
+    () => unpaidBills[0]?.id || summary.latest_bill?.id || ''
+  );
+
+  const generateKey = () => `idem-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+  // Stable idempotency key for this payment modal session; preserved across retries of the same attempt
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(generateKey);
+
+  const selectedBill = unpaidBills.find(b => b.id === selectedBillId) || summary.latest_bill;
+  const billId = selectedBill?.id;
+  const dueAmount = selectedBill ? (selectedBill.balance_amount ?? selectedBill.total_amount) : summary.current_due;
+
+  const handleBillSelect = (newBillId: string) => {
+    setSelectedBillId(newBillId);
+    setIdempotencyKey(generateKey());
+    setErrorMsg(null);
+  };
 
   const handlePay = async () => {
     if (!billId) return;
@@ -101,12 +122,41 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               background: 'transparent',
               border: 'none',
               fontSize: '1.2rem',
-              color: 'var(--text-muted)'
+              color: 'var(--text-muted)',
+              cursor: 'pointer'
             }}
           >
             ✕
           </button>
         </div>
+
+        {/* Multi-Bill Selector if more than 1 unpaid bill */}
+        {unpaidBills.length > 1 && (
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>
+              Select Bill ({unpaidBills.length} unpaid):
+            </label>
+            <select
+              value={selectedBillId}
+              onChange={(e) => handleBillSelect(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.55rem',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                background: '#ffffff',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}
+            >
+              {unpaidBills.map((b) => (
+                <option key={b.id} value={b.id}>
+                  Bill {b.period_month}/{b.period_year} — ₹{((b.balance_amount ?? b.total_amount) || 0).toFixed(2)} ({b.status})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Bill Details Summary */}
         <div style={{
@@ -124,6 +174,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             <span style={{ color: 'var(--text-muted)' }}>{t.area}:</span>
             <span>{summary.area_sqft} {t.sqft}</span>
           </div>
+          {selectedBill && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Period:</span>
+              <span>{selectedBill.period_month}/{selectedBill.period_year}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', fontWeight: 700, borderTop: '1px dashed var(--border)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
             <span>{t.amount_due}:</span>
             <span style={{ color: 'var(--primary)' }}>₹{dueAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
@@ -148,7 +204,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                   fontWeight: 600,
                   fontSize: '0.8rem',
                   padding: '0.5rem',
-                  borderRadius: '6px'
+                  borderRadius: '6px',
+                  cursor: 'pointer'
                 }}
               >
                 {outcome}
@@ -182,7 +239,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               padding: '0.75rem',
               borderRadius: '8px',
               fontWeight: 600,
-              fontSize: '0.9rem'
+              fontSize: '0.9rem',
+              cursor: 'pointer'
             }}
           >
             {t.close}
@@ -199,6 +257,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               borderRadius: '8px',
               fontWeight: 700,
               fontSize: '0.9rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.7 : 1
             }}
           >

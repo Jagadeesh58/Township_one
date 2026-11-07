@@ -1,3 +1,7 @@
+// Day 1 · D1-S6 — Resident interface and PWA
+// Resident home dashboard: localized greeting, 2-tap dues payment CTA, quick actions,
+// multi-flat switcher, and payment receipt presentation.
+
 import React, { useState, useEffect } from 'react';
 import { api, UserProfile, BillingSummary, PaymentReceipt } from '../api/client';
 import { Language, translations } from '../i18n/translations';

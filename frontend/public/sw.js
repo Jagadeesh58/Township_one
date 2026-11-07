@@ -1,3 +1,10 @@
+// Day 1 · D1-S6 — Resident interface and PWA
+// Service worker implementing:
+// - App shell pre-caching (HTML, manifest, icons)
+// - Dynamic runtime caching for hashed frontend assets (/assets/*.js, /assets/*.css)
+// - Strict network-only bypass for /api/* requests (never caches private or financial data)
+// - Offline navigation fallback to cached /index.html shell
+
 const CACHE_NAME = 'township-one-shell-v1';
 const STATIC_ASSETS = [
   '/',
@@ -41,9 +48,37 @@ self.addEventListener('fetch', (event) => {
     return; // Pass through directly to network
   }
 
-  // Network first, fallback to cache for app shell
+  // Handle navigation requests: Network first, fallback to cached /index.html
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Handle static assets (/assets/*): Cache-first with network fallback and cache-on-fetch
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        });
+      })
+    );
+    return;
+  }
+
+  // Default: Network first, fallback to cache for shell assets
   event.respondWith(
-    fetch(event.request)
-      .catch(() => caches.match(event.request))
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });

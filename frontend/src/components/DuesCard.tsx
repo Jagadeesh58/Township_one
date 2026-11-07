@@ -1,3 +1,7 @@
+// Day 1 · D1-S6 — Resident interface and PWA
+// DuesCard component: 2-tap direct payment CTA from resident home screen,
+// displaying total outstanding dues, multi-bill notices, area-rate calculations, and late fees.
+
 import React from 'react';
 import { BillingSummary } from '../api/client';
 import { Language, translations } from '../i18n/translations';
@@ -37,7 +41,9 @@ export const DuesCard: React.FC<DuesCardProps> = ({
 
   if (!summary) return null;
 
-  const hasDue = summary.current_due > 0;
+  const totalOutstanding = summary.total_outstanding_due ?? summary.current_due;
+  const hasDue = totalOutstanding > 0;
+  const unpaidCount = summary.unpaid_bills?.length || (hasDue ? 1 : 0);
 
   return (
     <div style={{
@@ -94,11 +100,16 @@ export const DuesCard: React.FC<DuesCardProps> = ({
       {/* Big Due Amount Display */}
       <div>
         <div style={{ fontSize: '2.2rem', fontWeight: 800, color: hasDue ? 'var(--text-main)' : 'var(--success)', lineHeight: 1.1 }}>
-          ₹{summary.current_due.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          ₹{totalOutstanding.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
         </div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
           {summary.flat_number} • {summary.area_sqft} {t.sqft} @ {t.per_sqft_month}
         </div>
+        {unpaidCount > 1 && (
+          <div style={{ fontSize: '0.78rem', color: '#b45309', marginTop: '0.35rem', fontWeight: 600 }}>
+            {unpaidCount} unpaid bills pending
+          </div>
+        )}
       </div>
 
       {/* Late fee breakdown notice if overdue */}
@@ -134,10 +145,11 @@ export const DuesCard: React.FC<DuesCardProps> = ({
               borderRadius: '8px',
               fontWeight: 700,
               fontSize: '0.95rem',
-              boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)'
+              boxShadow: '0 2px 4px rgba(37, 99, 235, 0.25)',
+              cursor: 'pointer'
             }}
           >
-            {t.pay_now} (₹{summary.current_due.toLocaleString('en-IN')})
+            {t.pay_now} (₹{totalOutstanding.toLocaleString('en-IN')})
           </button>
         ) : (
           <div style={{

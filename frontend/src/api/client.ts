@@ -1,3 +1,7 @@
+// Day 1 · D1-S6 — Resident interface and PWA
+// API client for resident authentication, billing summaries with multi-bill support,
+// payment checkout with idempotency and simulated outcome dispatch.
+
 const API_BASE = '/api/v1';
 
 export interface UserRole {
@@ -26,32 +30,53 @@ export interface UserProfile {
   flats: UserFlat[];
 }
 
+export interface BillLine {
+  id: string;
+  line_type: string;
+  description: string;
+  amount: number;
+  amount_inr?: string;
+}
+
+export interface BillItem {
+  id: string;
+  period_month: number;
+  period_year: number;
+  principal_amount: number;
+  principal_amount_inr?: string;
+  late_fee_amount: number;
+  total_amount: number;
+  total_amount_inr?: string;
+  paid_amount: number;
+  paid_amount_inr?: string;
+  balance_amount: number;
+  balance_amount_inr?: string;
+  status: string;
+  due_date: string;
+  lines: BillLine[];
+}
+
 export interface BillingSummary {
   flat_id: string;
   flat_number: string;
   area_sqft: number;
   current_due: number;
+  current_due_inr?: string;
+  total_outstanding_due: number;
+  total_outstanding_due_inr?: string;
   overdue_days: number;
   estimated_late_fee: number;
+  estimated_late_fee_inr?: string;
   late_fee_notice: string;
-  latest_bill?: {
-    id: string;
-    period_month: number;
-    period_year: number;
-    principal_amount: number;
-    late_fee_amount: number;
-    total_amount: number;
-    paid_amount: number;
-    balance_amount: number;
-    status: string;
-    due_date: string;
-    lines: Array<{ line_type: string; description: string; amount: number }>;
-  };
+  unpaid_bills?: BillItem[];
+  latest_bill?: BillItem;
   recent_ledger: Array<{
     id: string;
     entry_type: string;
     amount: number;
+    amount_inr?: string;
     balance_after: number;
+    balance_after_inr?: string;
     description: string;
     reference_id?: string;
     created_at: string;
