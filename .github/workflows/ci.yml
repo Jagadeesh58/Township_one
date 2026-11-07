@@ -7,6 +7,18 @@ on:
     branches: [ main, master ]
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   backend-tests:
     runs-on: ubuntu-latest
     services:
@@ -54,7 +66,7 @@ jobs:
         run: |
           pytest tests/ -v
 
-  frontend-build:
+  frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -72,8 +84,11 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Run Frontend Tests
         run: npm test
 
-      - name: Typecheck and Build
+      - name: Build
         run: npm run build
