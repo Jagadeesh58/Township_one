@@ -41,6 +41,10 @@ frontend/build/
 *.sqlite3
 township_one.db
 
+# Archives
+*.zip
+*.tar.gz
+
 # Environment & Secrets
 .env
 .env.local
