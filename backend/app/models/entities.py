@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import (
-    Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey, Text, Enum
+    Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
@@ -96,7 +96,7 @@ class StaffMember(Base):
     staff_code = Column(String(20), unique=True, nullable=False)
     name = Column(String(100), nullable=False)
     designation = Column(String(50), nullable=False)
-    department = Column(String(50), nullable=False)  # Plumbing, Electrical, Security, Housekeeping, Accounts, Management
+    department = Column(String(50), nullable=False)  # Plumbing, Electrical, Security, Housekeeping, Accounts, Operations
     shift = Column(String(20), default="Morning")  # Morning, Evening, Night
     is_available = Column(Boolean, default=True)
 
@@ -108,7 +108,7 @@ class Gate(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     gate_number = Column(Integer, unique=True, nullable=False)  # 1, 2, 3, 4
-    name = Column(String(50), nullable=False)  # North Gate, South Gate, etc.
+    name = Column(String(50), nullable=False)  # Main North Gate, South Gate, etc.
     location_description = Column(String(100), nullable=True)
 
 
@@ -127,10 +127,14 @@ class BillingRule(Base):
 
 class Bill(Base):
     __tablename__ = "bills"
+    __table_args__ = (
+        UniqueConstraint("flat_id", "period_month", "period_year", name="uq_flat_bill_period"),
+    )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     flat_id = Column(String(36), ForeignKey("flats.id"), nullable=False)
     billing_rule_id = Column(String(36), ForeignKey("billing_rules.id"), nullable=True)
+    billing_rule_version = Column(String(50), default="v1.0-demo", nullable=False)
     period_month = Column(Integer, nullable=False)
     period_year = Column(Integer, nullable=False)
     issue_date = Column(DateTime, nullable=False)
@@ -169,15 +173,41 @@ class Payment(Base):
     flat_id = Column(String(36), ForeignKey("flats.id"), nullable=False)
     bill_id = Column(String(36), ForeignKey("bills.id"), nullable=False)
     amount = Column(Numeric(14, 2), nullable=False)
+    currency = Column(String(10), default="INR", nullable=False)
     status = Column(String(20), default="SUCCESS")  # SUCCESS, PENDING, FAILED, EXPIRED
     payment_method = Column(String(30), default="UPI_SIMULATED")
-    transaction_reference = Column(String(50), unique=True, nullable=False)
+    transaction_reference = Column(String(50), unique=True, index=True, nullable=False)
+    idempotency_key = Column(String(100), nullable=True, index=True)
     paid_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     receipt_number = Column(String(50), unique=True, nullable=True)
     payer_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     bill = relationship("Bill", back_populates="payments")
     receipt = relationship("Receipt", back_populates="payment", uselist=False)
+
+
+class PaymentIdempotencyRecord(Base):
+    __tablename__ = "payment_idempotency_records"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_payment_idempotency_key"),
+    )
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    idempotency_key = Column(String(100), unique=True, index=True, nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    flat_id = Column(String(36), ForeignKey("flats.id"), nullable=False)
+    bill_id = Column(String(36), ForeignKey("bills.id"), nullable=False)
+    amount = Column(Numeric(14, 2), nullable=False)
+    currency = Column(String(10), default="INR", nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    status = Column(String(20), default="IN_PROGRESS", nullable=False)  # IN_PROGRESS, COMPLETED, FAILED
+    payment_id = Column(String(36), ForeignKey("payments.id"), nullable=True)
+    response_code = Column(Integer, nullable=True)
+    response_payload = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    payment = relationship("Payment", foreign_keys=[payment_id])
 
 
 class FlatLedgerEntry(Base):

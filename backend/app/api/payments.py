@@ -15,12 +15,14 @@ router = APIRouter(prefix="/payments", tags=["Payments"])
 
 
 def to_receipt_response(r: Receipt) -> ReceiptResponse:
+    amt_dec = Decimal(str(r.amount))
     return ReceiptResponse(
         id=r.id,
         receipt_number=r.receipt_number,
         flat_number=r.flat_number,
         resident_name=r.resident_name,
-        amount=float(r.amount),
+        amount=float(amt_dec),
+        amount_inr=f"{amt_dec:.2f}",
         payment_mode=r.payment_mode,
         transaction_reference=r.transaction_reference,
         issued_at=r.issued_at
@@ -28,11 +30,14 @@ def to_receipt_response(r: Receipt) -> ReceiptResponse:
 
 
 def to_payment_response(p: Payment, r: Optional[Receipt] = None) -> PaymentResponse:
+    amt_dec = Decimal(str(p.amount))
     return PaymentResponse(
         id=p.id,
         flat_id=p.flat_id,
         bill_id=p.bill_id,
-        amount=float(p.amount),
+        amount=float(amt_dec),
+        amount_inr=f"{amt_dec:.2f}",
+        currency=getattr(p, "currency", "INR"),
         status=p.status,
         payment_method=p.payment_method,
         transaction_reference=p.transaction_reference,
@@ -48,7 +53,7 @@ def checkout(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Server-side authorization: user must have 'pay' permission for this flat
+    # Server-side authorization: user must have active membership with 'pay' permission for this flat
     verify_flat_access(current_user, payload.flat_id, action="pay")
 
     payment, receipt = initiate_simulated_payment(
@@ -57,6 +62,7 @@ def checkout(
         flat_id=payload.flat_id,
         bill_id=payload.bill_id,
         amount=Decimal(str(payload.amount)),
+        currency=payload.currency,
         payment_method=payload.payment_method,
         test_outcome=payload.test_outcome,
         idempotency_key=payload.idempotency_key
@@ -89,4 +95,11 @@ def get_receipt(
     payment = receipt.payment
     if payment:
         verify_flat_access(current_user, payment.flat_id, action="read")
+    else:
+        from backend.app.models.entities import Flat
+        flat = db.query(Flat).filter(Flat.flat_number == receipt.flat_number).first()
+        if flat:
+            verify_flat_access(current_user, flat.id, action="read")
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to receipt.")
     return to_receipt_response(receipt)

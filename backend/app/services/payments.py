@@ -1,13 +1,16 @@
+import hashlib
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-import uuid
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 
 from backend.app.models.entities import (
-    Flat, Bill, Payment, FlatLedgerEntry, Receipt, User
+    Flat, Bill, Payment, PaymentIdempotencyRecord, FlatLedgerEntry, Receipt, User
 )
+from backend.app.schemas.payments import PaymentOutcomeEnum
 from backend.app.services.billing import round_currency
 
 
@@ -17,82 +20,177 @@ def initiate_simulated_payment(
     flat_id: str,
     bill_id: str,
     amount: Decimal,
+    currency: str = "INR",
     payment_method: str = "TEST_UPI",
-    test_outcome: str = "SUCCESS",
+    test_outcome: PaymentOutcomeEnum = PaymentOutcomeEnum.SUCCESS,
     idempotency_key: Optional[str] = None
 ) -> Tuple[Payment, Optional[Receipt]]:
     """
-    Simulated test payment processor with deterministic outcomes:
-    - SUCCESS: Atomically creates Payment, updates Bill balance, adds FlatLedgerEntry credit, generates Receipt.
-    - PENDING / FAILED / EXPIRED: Records Payment attempt without updating Bill or Ledger or generating Receipt.
+    Simulated test payment processor with robust cryptographic idempotency,
+    cross-flat boundary protection, and strict outcome validation:
+    - Dedicated PaymentIdempotencyRecord tracking with request fingerprinting.
+    - Replaying identical payload returns original payment and receipt.
+    - Replaying same key with different payload returns 409 Conflict.
+    - Replaying another resident's key returns generic 409 without data leakage.
+    - Strict outcome validation: ONLY SUCCESS, PENDING, FAILED, EXPIRED permitted.
+    - Atomicity: on SUCCESS, updates Bill balance, adds FlatLedgerEntry credit, generates Receipt.
     """
-    # 1. Fetch and validate bill
+    # 1. Strict Outcome Validation (Security Fix B)
+    valid_outcomes = {o.value for o in PaymentOutcomeEnum}
+    outcome_str = test_outcome.value if isinstance(test_outcome, PaymentOutcomeEnum) else str(test_outcome)
+    if outcome_str not in valid_outcomes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid payment outcome '{outcome_str}'. Allowed values: {sorted(list(valid_outcomes))}"
+        )
+
+    amount = round_currency(amount)
+    if amount <= Decimal("0.00"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment amount must be greater than zero."
+        )
+
+    # 2. Cryptographic Request Fingerprint for Idempotency Binding (Security Fix A)
+    # Bind authenticated principal (user_id), flat, bill, amount, currency, and outcome
+    fingerprint_raw = f"{user.id}:{flat_id}:{bill_id}:{amount:.2f}:{currency}:{outcome_str}"
+    request_hash = hashlib.sha256(fingerprint_raw.encode("utf-8")).hexdigest()
+
+    idempotency_record: Optional[PaymentIdempotencyRecord] = None
+
+    if idempotency_key:
+        idempotency_key = idempotency_key.strip()
+        # Query for existing idempotency record
+        existing_rec = db.query(PaymentIdempotencyRecord).filter(
+            PaymentIdempotencyRecord.idempotency_key == idempotency_key
+        ).first()
+
+        if existing_rec:
+            # Check 1: User ownership - Cross-flat replay prevention without information disclosure!
+            if existing_rec.user_id != user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Idempotency key conflict or invalid request."
+                )
+
+            # Check 2: Payload mismatch - Reused key with different bill, flat, amount, or outcome
+            if existing_rec.request_hash != request_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Idempotency key has already been used with different request parameters."
+                )
+
+            # Check 3: Already completed payment
+            if existing_rec.status == "COMPLETED" and existing_rec.payment_id:
+                existing_payment = db.query(Payment).filter(
+                    Payment.id == existing_rec.payment_id
+                ).first()
+                if existing_payment:
+                    receipt = db.query(Receipt).filter(
+                        Receipt.payment_id == existing_payment.id
+                    ).first()
+                    return existing_payment, receipt
+
+            if existing_rec.status == "IN_PROGRESS":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="A transaction with this idempotency key is currently being processed. Please retry."
+                )
+        else:
+            # Create in-progress record to secure lock
+            try:
+                idempotency_record = PaymentIdempotencyRecord(
+                    idempotency_key=idempotency_key,
+                    user_id=user.id,
+                    flat_id=flat_id,
+                    bill_id=bill_id,
+                    amount=amount,
+                    currency=currency,
+                    request_hash=request_hash,
+                    status="IN_PROGRESS"
+                )
+                db.add(idempotency_record)
+                db.flush()
+            except IntegrityError:
+                db.rollback()
+                # Concurrent race condition: another thread inserted the same key
+                conflict_rec = db.query(PaymentIdempotencyRecord).filter(
+                    PaymentIdempotencyRecord.idempotency_key == idempotency_key
+                ).first()
+                if conflict_rec and conflict_rec.user_id != user.id:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Idempotency key conflict or invalid request."
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Concurrent request detected for this idempotency key. Please retry."
+                )
+
+    # 3. Validate Bill Existence and Balance
     bill = db.query(Bill).filter(Bill.id == bill_id, Bill.flat_id == flat_id).first()
     if not bill:
+        if idempotency_record:
+            db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found for this flat.")
 
-    # 2. Check for idempotency replay first
-    if idempotency_key:
-        existing_payment = db.query(Payment).filter(
-            Payment.transaction_reference == idempotency_key
-        ).first()
-        if existing_payment:
-            receipt = db.query(Receipt).filter(Receipt.payment_id == existing_payment.id).first()
-            return existing_payment, receipt
-
-    # 3. Check if bill is already paid
     if bill.balance_amount <= Decimal("0.00"):
+        if idempotency_record:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Bill {bill.id} is already fully paid. Duplicate payment is not permitted."
         )
 
-    # 4. Validate amount
-    amount = round_currency(amount)
-    if amount <= Decimal("0.00"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment amount must be greater than zero.")
     if amount > bill.balance_amount:
+        if idempotency_record:
+            db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Payment amount (₹{amount}) cannot exceed current outstanding balance (₹{bill.balance_amount})."
         )
 
-    # Generate unique transaction reference
-    txn_ref = idempotency_key if idempotency_key else f"TXN-SIM-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+    # 4. Generate unique payment transaction reference (distinct from idempotency key!)
+    now_dt = datetime.now(timezone.utc)
+    txn_ref = f"TXN-SIM-{now_dt.strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
 
-    # Handle outcomes
-    test_outcome = test_outcome.upper()
-    if test_outcome not in ["SUCCESS", "PENDING", "FAILED", "EXPIRED"]:
-        test_outcome = "SUCCESS"
-
-    if test_outcome != "SUCCESS":
-        # Record non-successful payment attempt
+    # 5. Non-SUCCESS outcomes (PENDING, FAILED, EXPIRED)
+    if outcome_str != "SUCCESS":
         payment = Payment(
             flat_id=flat_id,
             bill_id=bill_id,
             amount=amount,
-            status=test_outcome,
+            currency=currency,
+            status=outcome_str,
             payment_method=payment_method,
             transaction_reference=txn_ref,
-            paid_at=datetime.now(timezone.utc),
+            idempotency_key=idempotency_key,
+            paid_at=now_dt,
             payer_user_id=user.id
         )
         db.add(payment)
+        db.flush()
+
+        if idempotency_record:
+            idempotency_record.payment_id = payment.id
+            idempotency_record.status = "COMPLETED"
+
         db.commit()
         db.refresh(payment)
         return payment, None
 
-    # SUCCESS: Atomic posting
-    now_dt = datetime.now(timezone.utc)
+    # 6. SUCCESS outcome: Atomic posting & Ledger credit
     receipt_no = f"REC-{now_dt.strftime('%Y%m')}-{uuid.uuid4().hex[:5].upper()}"
 
     payment = Payment(
         flat_id=flat_id,
         bill_id=bill_id,
         amount=amount,
+        currency=currency,
         status="SUCCESS",
         payment_method=payment_method,
         transaction_reference=txn_ref,
+        idempotency_key=idempotency_key,
         paid_at=now_dt,
         receipt_number=receipt_no,
         payer_user_id=user.id
@@ -100,7 +198,7 @@ def initiate_simulated_payment(
     db.add(payment)
     db.flush()
 
-    # Update Bill balance and status
+    # Update Bill
     bill.paid_amount = round_currency(bill.paid_amount + amount)
     bill.balance_amount = round_currency(bill.total_amount - bill.paid_amount)
     if bill.balance_amount == Decimal("0.00"):
@@ -108,7 +206,7 @@ def initiate_simulated_payment(
     else:
         bill.status = "PARTIALLY_PAID"
 
-    # Update Flat Ledger
+    # Update Flat Ledger (Debit was posted when bill was created; now post Credit)
     last_ledger = db.query(FlatLedgerEntry).filter(
         FlatLedgerEntry.flat_id == flat_id
     ).order_by(FlatLedgerEntry.created_at.desc()).first()
@@ -139,6 +237,10 @@ def initiate_simulated_payment(
         issued_at=now_dt
     )
     db.add(receipt)
+
+    if idempotency_record:
+        idempotency_record.payment_id = payment.id
+        idempotency_record.status = "COMPLETED"
 
     db.commit()
     db.refresh(payment)
