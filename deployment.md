@@ -6,12 +6,12 @@
 
 **Township One** is an enterprise-grade reliability runtime and resident portal designed for large residential communities (modeled on Company A, Pune: 2,400 flats, 28 towers, 180 staff, 4 access gates).
 
-- **Backend Runtime:** Python 3.11+ ASGI application using FastAPI 0.162, SQLAlchemy 2.0 ORM, and Alembic database migrations.
-- **Frontend Client:** React 19 + TypeScript + Vite 6 Progressive Web Application (PWA) with multilingual i18n (English, Marathi, Hindi) and offline cache capabilities.
+- **Backend Runtime:** Python 3.11+ ASGI application using FastAPI, SQLAlchemy 2.0 ORM, and Alembic database migrations.
+- **Frontend Client:** React 19 + TypeScript + Vite Progressive Web Application (PWA) with multilingual i18n (English, Marathi, Hindi) and offline cache capabilities.
 - **Database Architecture:**
   - Local Development & Testing: SQLite with WAL mode.
   - Production Deployment: PostgreSQL 15+ via high-performance `psycopg` (v3) with connection pooling and `SELECT ... FOR UPDATE` row-level concurrency locking.
-- **Security & Authorization:** Salted SHA-256 OTP challenges with database persistence, PyJWT access tokens, server-side RBAC, and persistent token revocation via `revoked_tokens`.
+- **Security & Authorization:** Salted SHA-256 OTP challenges with database persistence, HttpOnly SameSite=Lax session cookies, double-submit CSRF protection, PyJWT access tokens, server-side RBAC, and persistent token revocation via `revoked_tokens`.
 
 ---
 
@@ -19,40 +19,40 @@
 
 - **Python:** 3.11.0 or higher
 - **Node.js:** v20.x or higher (LTS recommended), npm v10+
-- **Database:** PostgreSQL 15+ (Production) or SQLite 3.35+ (Development)
+- **Database:** PostgreSQL 15+ (Production standard) or SQLite 3.35+ (Development fallback)
 - **Memory & Storage:** 2 GB RAM minimum, 10 GB disk space
 
 ---
 
 ## 3. Environment Configuration (`.env`)
 
-Create a `.env` file in the project root:
+Configure environment variables via host environment or a secure `.env` file:
 
 ```bash
 # Application Identity & Mode
-APP_NAME="Township One"
-APP_ENV="production"                # Options: development, staging, production
-DEBUG=false                         # MUST be false in production
+APP_NAME=Township One
+APP_ENV=production                # Options: development, staging, production
+DEBUG=false                       # MUST be false in production
 
 # Network & Server
 PORT=8000
-API_PREFIX="/api/v1"
-ALLOWED_ORIGINS="https://township.example.com,https://app.township.example.com"
+API_PREFIX=/api/v1
+ALLOWED_ORIGINS=<set-in-host-env>
 
-# Cryptographic Keys (MUST be strong high-entropy keys >= 32 characters in production)
-SECRET_KEY="REDACTED=="
+# Cryptographic Keys (MUST be strong high-entropy key >= 32 characters in production)
+SECRET_KEY=<set-in-host-env>
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
 # Database URLs
-DATABASE_URL="postgresql+psycopg://township_prod_user:REDACTED@localhost:5432/township_one_prod"
-TEST_DATABASE_URL="sqlite:///./township_one_test.db"
+DATABASE_URL=<set-in-host-env>
+TEST_DATABASE_URL=<set-in-host-env>
 
 # SMS Gateway Credentials (Required in production; system fails closed if omitted)
-SMS_PROVIDER_API_KEY="REDACTED"
+SMS_PROVIDER_API_KEY=<set-in-host-env>
 OTP_EXPIRY_SECONDS=300
 
 # Canonical Reference Snapshot Date
-DEMO_AS_OF_DATE="2026-11-06T00:00:00Z"
+DEMO_AS_OF_DATE=2026-11-06T00:00:00Z
 
 # Maintenance Billing Parameters
 MAINTENANCE_RATE_PER_SQFT=6.50
@@ -66,11 +66,8 @@ DEMO_LATE_FEE_PERCENTAGE_PA=18.00
 
 ### Step 1: Clone and Prepare Python Environment
 ```bash
-git clone https://github.com/company-a/township-one.git
-cd township-one
-
 # Create virtual environment
-python3.11 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate   # On Windows: .venv\Scripts\Activate.ps1
 
 # Install production dependencies
@@ -86,10 +83,10 @@ alembic upgrade head
 ### Step 3: Seed Synthetic Reference Data (Optional for Demo / Staging)
 ```bash
 # Safe mode: validates completeness or seeds fresh local DB without touching remote DBs
-python -m seed.seed_data --mode safe
+python scripts/seed.py --mode safe
 
 # Reset demo mode (strictly local databases only; fails closed on remote hosts):
-# python -m seed.seed_data --mode reset-demo --confirm-local-demo
+# python scripts/seed.py --mode reset-demo --confirm-local-demo
 ```
 
 ### Step 4: Build Frontend Assets
@@ -189,10 +186,10 @@ curl -f http://localhost:8000/health/ready
 Before deploying any release, run the complete automated test suite:
 
 ```bash
-# 1. Run Backend Pytest Suite (Unit, Integration, Concurrency, RBAC)
-py -m pytest -v
+# 1. Run Backend Pytest Suite
+pytest tests/ -v
 
-# 2. Run Frontend Vitest Suite (Components, Money Precision, Idempotency)
+# 2. Run Frontend Vitest Suite
 cd frontend
 npm test
 

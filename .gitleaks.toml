@@ -1,0 +1,24 @@
+title = "Township One Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist for synthetic test fixtures and documentation placeholders"
+regexes = [
+    '''(?i)ci-test-secret-key''',
+    '''(?i)township_dev_password''',
+    '''(?i)township-one-super-secret-key''',
+    '''(?i)REDACTED''',
+    '''(?i)replace-with-a-strong-random''',
+    '''(?i)test-sms-key''',
+    '''(?i)CHANGE_ME''',
+    '''(?i)test-secret''',
+]
+paths = [
+    '''^tests/''',
+    '''^docs/''',
+    '''^\.env\.example''',
+    '''^deployment\.md''',
+    '''^docker-compose\.yml''',
+]
