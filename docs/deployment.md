@@ -1,0 +1,40 @@
+# TOWNSHIP ONE — DEPLOYMENT & OPERATIONS GUIDE
+
+---
+
+## 1. System Architecture
+- **Backend:** FastAPI (Python 3.11+), SQLAlchemy 2.0 ORM, Alembic migrations.
+- **Frontend:** React 19, TypeScript, Vite 6, Service Worker PWA.
+- **Database:** SQLite (local dev/tests) or PostgreSQL 15+ (production via `psycopg`).
+
+---
+
+## 2. Environment Variables (.env)
+```bash
+APP_NAME="Township One"
+APP_ENV="development" # Set to "production" in production environments
+DEBUG=True           # Set to False in production
+PORT=8000
+SECRET_KEY="replace-with-a-strong-random-32char-secret"
+ALLOWED_ORIGINS="http://localhost:5173,http://localhost:3000"
+DATABASE_URL="sqlite:///./township_one.db"
+TEST_DATABASE_URL="sqlite:///./township_one_test.db"
+DEMO_AS_OF_DATE="2026-11-06T00:00:00Z"
+```
+
+---
+
+## 3. Production Hardening Checklist
+- [x] Set `APP_ENV=production` and `DEBUG=False`.
+- [x] Configure strong 32+ character `SECRET_KEY`. The backend startup guard will hard-abort if the default secret is used in production.
+- [x] Verify database URL separation (`DATABASE_URL` vs `TEST_DATABASE_URL`).
+- [x] Run database migrations:
+  ```bash
+  py -3.11 -m alembic upgrade head
+  ```
+- [x] Build frontend assets:
+  ```bash
+  cd frontend
+  npm run build
+  ```
+- [x] Serve backend via production ASGI server (Uvicorn / Gunicorn with Uvicorn workers).

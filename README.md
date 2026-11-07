@@ -2,11 +2,38 @@
 
 **Client:** Company A, Pune  
 **Township Context:** 2,400 apartments across 28 towers, 180 on-site staff, 4 access gates, managing ₹22–26 crore annual maintenance budget.  
-**Scope Authority:** Challenge Brief Part C: Brief 2 (Gated township's resident app for maintenance, complaints, and visitors).
+**Scope Authority:** Challenge Brief Part C: Brief 2 (Gated township's resident app for maintenance, complaints, and visitors).  
+**Execution Standard:** Day 1 · D1-S1 through D1-S7 Verified and Locked.
 
 ---
 
-## 1. System Architecture Overview
+## 1. Day 1 Session Architecture & Verification Roadmap
+
+Township One is structured and documented strictly by Day and Session:
+
+| Session ID | Session Name | Core Scope | Status | Documentation & Reports |
+|---|---|---|---|---|
+| **D1-S1** | Foundation and environment | Config isolation, production guards, dynamic migration URL, connection pooling | **VERIFIED** (6/6 tests pass) | [Session Doc](docs/day-1/D1-S1-foundation-and-environment.md) • [Report](docs/reports/day1/D1-S1-test-report.md) |
+| **D1-S2** | Database and township seed | 28 towers, 2,400 flats, 180 staff, 4 gates, sample personas, lift complaint | **VERIFIED** (9/9 tests pass) | [Session Doc](docs/day-1/D1-S2-database-and-township-seed.md) • [Report](docs/reports/day1/D1-S2-seed-validation-report.md) |
+| **D1-S3** | Authentication and permissions | OTP challenges, replay block, rate limits, JWT with JTI, persistent revocation, RBAC | **VERIFIED** (14/14 tests pass) | [Session Doc](docs/day-1/D1-S3-authentication-and-permissions.md) • [Report](docs/reports/day1/D1-S3-security-test-report.md) |
+| **D1-S4** | Maintenance billing and ledger | Area-rate billing (₹6.50/sqft), 5-day grace period, 18% p.a. demo late fee, ledger | **VERIFIED** (6/6 tests pass) | [Session Doc](docs/day-1/D1-S4-maintenance-billing-and-ledger.md) • [Report](docs/reports/day1/D1-S4-financial-test-report.md) |
+| **D1-S5** | Test payments and receipts | Cryptographic idempotency, cross-flat leak prevention, strict outcomes, receipts | **VERIFIED** (8/8 tests pass) | [Session Doc](docs/day-1/D1-S5-test-payments-and-receipts.md) • [Report](docs/reports/day1/D1-S5-payment-test-report.md) |
+| **D1-S6** | Resident interface and PWA | 2-tap payment CTA, multi-bill selector, bilingual EN/MR, PWA caching with `/api/*` bypass | **VERIFIED** (Vite build 0 errors) | [Session Doc](docs/day-1/D1-S6-resident-interface-and-pwa.md) • [Report](docs/reports/day1/D1-S6-frontend-pwa-test-report.md) |
+| **D1-S7** | Integration and Day 1 verification | End-to-end resident journey, reviewer flats validation, test state isolation | **VERIFIED** (44/44 tests pass) | [Session Doc](docs/day-1/D1-S7-integration-and-day1-verification.md) • [Report](docs/reports/day1/D1-S7-end-to-end-test-report.md) |
+
+- **Comprehensive Reports:**
+  - Master Day 1 Sign-off: [`docs/day-1/D1-DAY1-COMPLETION-REPORT.md`](docs/day-1/D1-DAY1-COMPLETION-REPORT.md)
+  - Full Session Traceability: [`docs/SESSION-TRACEABILITY.md`](docs/SESSION-TRACEABILITY.md)
+  - Current Implementation Status: [`docs/IMPLEMENTATION-STATUS.md`](docs/IMPLEMENTATION-STATUS.md)
+  - Master Test Report: [`docs/test-report.md`](docs/test-report.md)
+  - Reviewer Walkthrough: [`docs/reviewer-walkthrough.md`](docs/reviewer-walkthrough.md)
+  - Architectural Decisions: [`docs/design-decisions.md`](docs/design-decisions.md)
+  - Assumptions & Limitations: [`docs/assumptions.md`](docs/assumptions.md)
+  - Deployment Guide: [`docs/deployment.md`](docs/deployment.md)
+
+---
+
+## 2. System Architecture Overview
 
 Township One is designed as a secure, high-performance, mobile-first PWA backed by a modular FastAPI backend with strict server-side authorization:
 
@@ -169,7 +196,7 @@ All tests execute against the dedicated test database (`TEST_DATABASE_URL`), ens
 py -3.11 -m pytest tests/ -v
 ```
 
-**Coverage includes 35 comprehensive regression & security tests:**
+**Coverage includes 44 comprehensive regression & security tests (100% pass rate):**
 - `tests/test_d1_s1_health.py` — Health checks, standardized error envelopes
 - `tests/test_d1_s2_seed.py` — 2,400 flats, 28 towers, exact sample ground truth
 - `tests/test_d1_s3_auth.py` — OTP verification, replay prevention, IDOR denial, family permissions
