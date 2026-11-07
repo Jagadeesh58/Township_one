@@ -1,8 +1,61 @@
+import os
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from backend.app.core.config import settings
+from backend.app.core.database import Base, get_db, SessionLocal
+from backend.app.main import app
 from seed.seed_data import seed_database
+
+# STRICT DATABASE SEPARATION (Requirement 3.A)
+# Ensure test database URL is completely separate from the application/demo database.
+if settings.TEST_DATABASE_URL == settings.DATABASE_URL:
+    raise RuntimeError(
+        f"FATAL SAFETY ABORT: TEST_DATABASE_URL ({settings.TEST_DATABASE_URL}) "
+        f"cannot equal application DATABASE_URL ({settings.DATABASE_URL})! "
+        "Refusing to run tests against the demo database."
+    )
+
+if "township_one.db" in settings.TEST_DATABASE_URL and not settings.TEST_DATABASE_URL.endswith("township_one_test.db"):
+    raise RuntimeError(
+        f"FATAL SAFETY ABORT: TEST_DATABASE_URL ({settings.TEST_DATABASE_URL}) "
+        "cannot target the reviewer demo database 'township_one.db'."
+    )
+
+# Force test environment flag
+os.environ["TOWNSHIP_ENV"] = "test"
+
+# Dedicated Test Engine
+test_engine = create_engine(
+    settings.TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False} if settings.TEST_DATABASE_URL.startswith("sqlite") else {},
+    pool_pre_ping=True
+)
+TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+# Rebind global SessionLocal to test_engine during tests
+SessionLocal.configure(bind=test_engine)
+
+
+def override_get_db():
+    db = TestSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Wire dependency override across all FastAPI routes during test runs
+app.dependency_overrides[get_db] = override_get_db
 
 
 @pytest.fixture(scope="module", autouse=True)
-def ensure_clean_seeded_db_per_module():
-    """Seeds the database freshly before each test module so tests never bleed state."""
-    seed_database()
+def reset_test_db_per_module():
+    """Seeds the test database before each test module to ensure clean isolation without touching demo db."""
+    seed_database(target_engine=test_engine)
+
+
+@pytest.fixture(autouse=True)
+def isolate_test_state():
+    yield
