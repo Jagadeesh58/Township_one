@@ -42,6 +42,18 @@ class UserRoleAssignment(Base):
     user = relationship("User", back_populates="role_assignments")
 
 
+class RevokedToken(Base):
+    """Day 1 · D1-S3: Persistent token revocation store for multi-worker session security."""
+    __tablename__ = "revoked_tokens"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    token_jti = Column(String(100), unique=True, index=True, nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    revoked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime, nullable=False)
+
+
+
 class Tower(Base):
     __tablename__ = "towers"
 

@@ -1,8 +1,19 @@
+"""
+Day 1 · D1-S3 — Authentication and permissions
+Test suite verifying:
+- OTP generation, validation, one-time replay prevention, and rate limiting (request and verify)
+- Production security guards (demo_hint omitted when ENVIRONMENT="production")
+- JWT creation with unique JTI and persistent token revocation (in-memory + database)
+- Flat membership authorization and RBAC (Owner vs Family member vs Tenant vs Committee vs Guard)
+- Strict prevention of IDOR and Committee/Guard access to individual flat financial data
+"""
+
 import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
 from backend.app.core.database import SessionLocal
-from backend.app.models.entities import Flat, User
+from backend.app.core.config import settings
+from backend.app.models.entities import Flat, User, RevokedToken
 from backend.app.core.security import verify_flat_access
 from fastapi import HTTPException
 
@@ -162,3 +173,48 @@ def test_guard_access_to_finance_denied():
     resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers)
     assert resp.status_code == 403
     assert "Gate security staff do not have access" in resp.json()["error"]["message"]
+
+
+def test_demo_hint_hidden_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    resp = client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "demo_hint" not in data or data.get("demo_hint") is None
+
+
+def test_otp_request_rate_limiting():
+    phone = "9876543302"  # Rajesh Nair
+    # Clear prior challenges for clean rate test
+    from backend.app.core.security import OTP_STORE
+    OTP_STORE.pop(phone, None)
+    
+    # Fire 5 requests
+    for _ in range(5):
+        resp = client.post("/api/v1/auth/otp/request", json={"phone": phone})
+        assert resp.status_code == 200
+    
+    # 6th request within window must be rejected
+    rate_limited_resp = client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    assert rate_limited_resp.status_code == 429
+    assert "Too many OTP requests" in rate_limited_resp.json()["error"]["message"]
+
+
+def test_database_persisted_revoked_token():
+    client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
+    login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"}).json()
+    token = login["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    logout_resp = client.post("/api/v1/auth/logout", headers=headers)
+    assert logout_resp.status_code == 200
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.phone == "9876543210").first()
+        revoked_entry = db.query(RevokedToken).filter(RevokedToken.user_id == user.id).first()
+        assert revoked_entry is not None
+        assert revoked_entry.token_jti is not None
+    finally:
+        db.close()
+

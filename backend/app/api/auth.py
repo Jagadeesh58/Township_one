@@ -1,11 +1,25 @@
+"""
+Day 1 · D1-S3 — Authentication and Permissions: Auth API Endpoints.
+
+Responsibility:
+- OTP challenge creation with rate limiting and development hints.
+- OTP verification and cryptographically signed JWT token issuance.
+- Session revocation on logout persisted to database.
+- Authenticated user profile retrieval with active flat memberships and permissions.
+
+Related documentation:
+docs/day-1/D1-S3-authentication-and-permissions.md
+"""
+
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from typing import Optional
 
+from backend.app.core.config import settings
 from backend.app.core.database import get_db
 from backend.app.core.security import (
     create_otp_challenge, verify_otp_challenge, create_access_token,
-    get_current_user, REVOKED_TOKENS
+    get_current_user, revoke_token_persisted
 )
 from backend.app.models.entities import User, Flat
 from backend.app.schemas.auth import (
@@ -65,12 +79,17 @@ def request_otp(payload: OTPRequest, db: Session = Depends(get_db)):
         )
 
     otp = create_otp_challenge(phone)
-    return {
+    response_data = {
         "message": "OTP sent successfully to registered mobile number.",
         "phone": phone,
-        "demo_hint": f"Demo OTP is {otp}",
-        "expires_in_seconds": 300
+        "expires_in_seconds": settings.OTP_EXPIRY_SECONDS
     }
+
+    # Only include demo hint in non-production environments
+    if settings.APP_ENV.lower() != "production":
+        response_data["demo_hint"] = f"Demo OTP is {otp}"
+
+    return response_data
 
 
 @router.post("/otp/verify", response_model=TokenResponse)
@@ -105,9 +124,10 @@ def get_profile(
 @router.post("/logout")
 def logout(
     authorization: Optional[str] = Header(None),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     if authorization and authorization.startswith("Bearer "):
         token = authorization.split(" ")[1]
-        REVOKED_TOKENS.add(token)
+        revoke_token_persisted(token=token, user_id=current_user.id, db=db)
     return {"message": "Logged out successfully. Session revoked."}

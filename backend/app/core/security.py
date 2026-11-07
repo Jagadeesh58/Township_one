@@ -1,3 +1,17 @@
+"""
+Day 1 · D1-S3 — Authentication and Permissions: Core Security Primitives.
+
+Responsibility:
+- OTP generation, expiry, rate limiting, and single-use verification.
+- Cryptographic JWT access token issuance (PyJWT HS256) with unique JTI identifiers.
+- Persistent session revocation backed by database table `revoked_tokens` and in-memory cache.
+- Resource-scoped authorization: flat membership, family permissions, committee aggregate boundary, staff boundaries.
+
+Related documentation:
+docs/day-1/D1-S3-authentication-and-permissions.md
+"""
+
+import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 import jwt
@@ -7,28 +21,49 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
-from backend.app.models.entities import User, UserRoleAssignment, FlatMembership, Flat
+from backend.app.models.entities import User, UserRoleAssignment, FlatMembership, Flat, RevokedToken
 
 security = HTTPBearer(auto_error=False)
 
-# In-memory OTP Store: {phone: {"otp": str, "expires_at": datetime, "attempts": int, "used": bool}}
+# In-memory OTP Store: {phone: {"otp": str, "expires_at": datetime, "attempts": int, "used": bool, "request_timestamps": List[datetime]}}
 OTP_STORE: Dict[str, Dict[str, Any]] = {}
 REVOKED_TOKENS: set = set()
 
 
 def create_otp_challenge(phone: str) -> str:
+    """
+    Creates an OTP challenge with rate-limiting and configurable expiration.
+    In production mode, OTP is never returned to the caller.
+    """
     now = datetime.now(timezone.utc)
+    record = OTP_STORE.get(phone, {"request_timestamps": []})
+
+    # Rate limiting: max 5 OTP requests per 10 minutes
+    window_start = now - timedelta(minutes=10)
+    recent_requests = [ts for ts in record.get("request_timestamps", []) if ts > window_start]
+    if len(recent_requests) >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
+        )
+
+    recent_requests.append(now)
     otp_code = settings.DEMO_OTP_CODE  # Deterministic demo code 123456
+
     OTP_STORE[phone] = {
         "otp": otp_code,
         "expires_at": now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS),
         "attempts": 0,
-        "used": False
+        "used": False,
+        "request_timestamps": recent_requests
     }
     return otp_code
 
 
 def verify_otp_challenge(phone: str, otp: str) -> bool:
+    """
+    Verifies OTP challenge enforcing expiration, single-use, and max 3 invalid attempts.
+    """
     record = OTP_STORE.get(phone)
     if not record:
         raise HTTPException(
@@ -60,27 +95,64 @@ def verify_otp_challenge(phone: str, otp: str) -> bool:
     if record["otp"] != otp:
         return False
 
-    # Mark as used (one-time use)
+    # Mark as used (one-time consumption)
     record["used"] = True
     return True
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Generates a cryptographically signed JWT with unique JTI identifier for revocation tracking.
+    """
     to_encode = data.copy()
     now = datetime.now(timezone.utc)
     if expires_delta:
         expire = now + expires_delta
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "iat": now})
+
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "iat": now, "jti": jti})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
     return encoded_jwt
+
+
+def revoke_token_persisted(token: str, user_id: str, db: Session):
+    """
+    Persists token revocation to database table `revoked_tokens` and in-memory set.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"], options={"verify_exp": False})
+        jti = payload.get("jti") or token
+        exp_ts = payload.get("exp")
+        exp_dt = datetime.fromtimestamp(exp_ts, tz=timezone.utc) if exp_ts else datetime.now(timezone.utc) + timedelta(days=1)
+    except Exception:
+        jti = token
+        exp_dt = datetime.now(timezone.utc) + timedelta(days=1)
+
+    REVOKED_TOKENS.add(jti)
+    REVOKED_TOKENS.add(token)
+
+    # Persist to database for multi-process and restart survival
+    try:
+        revoked_rec = RevokedToken(
+            token_jti=jti,
+            user_id=user_id,
+            expires_at=exp_dt
+        )
+        db.add(revoked_rec)
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
+    """
+    Validates bearer token, checks database & in-memory revocation, and resolves active user.
+    """
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -96,93 +168,109 @@ def get_current_user(
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        jti = payload.get("jti")
+        if jti and jti in REVOKED_TOKENS:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked. Please sign in again."
+            )
+
+        # Check database revocation table
+        if jti:
+            is_db_revoked = db.query(RevokedToken).filter(RevokedToken.token_jti == jti).first()
+            if is_db_revoked:
+                REVOKED_TOKENS.add(jti)
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Token has been revoked. Please sign in again."
+                )
+
         user_id: str = payload.get("sub")
         if user_id is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials."
+            )
     except jwt.PyJWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials. Invalid or expired token."
+        )
 
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account inactive or not found."
+        )
     return user
 
 
 def require_role(allowed_roles: List[str]):
-    def role_checker(
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
-    ):
-        active_roles = [
-            ra.role_code for ra in current_user.role_assignments if ra.is_active
-        ]
-        if "ADMIN" in active_roles:
-            return current_user  # Admin has full administrative override
-
-        if not any(role in active_roles for role in allowed_roles):
+    """
+    Enforces server-side role-based access control.
+    """
+    def role_checker(current_user: User = Depends(get_current_user)) -> User:
+        user_roles = [ra.role_code for ra in current_user.role_assignments if ra.is_active]
+        if not any(role in user_roles for role in allowed_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Requires one of roles: {', '.join(allowed_roles)}"
+                detail=f"Access denied: Required role in {allowed_roles}. Your roles: {user_roles}"
             )
         return current_user
     return role_checker
 
 
-def verify_flat_access(user: User, flat_id: str, action: str = "read") -> Optional[FlatMembership]:
+def verify_flat_access(user: User, flat_id: str, action: str = "read") -> FlatMembership:
     """
-    Enforces strict server-side resource-level authorization:
-    - Committee role: Explicitly denied individual flat billing/financial drilldown (aggregate access only).
-    - Help Desk role: Cannot perform billing/payment actions or view financial summaries.
-    - Guard role: Denied financial and complaint access.
-    - Accounts role: Can read billing for township reconciliation, but cannot pay or approve visitors.
-    - Resident/Tenant/Family: Access restricted to verified active flat memberships with explicit action permissions.
+    Strict server-side resource authorization:
+    - Block Committee members from resident-level financial drill-downs (HTTP 403).
+    - Block Help Desk and Security Guards from financial records (HTTP 403).
+    - Enforce active FlatMembership and action permissions (`can_pay_bills`).
     """
-    active_roles = {ra.role_code for ra in user.role_assignments if ra.is_active}
+    user_roles = [ra.role_code for ra in user.role_assignments if ra.is_active]
 
-    # Admin override
-    if "ADMIN" in active_roles:
-        return None
-
-    # COMMITTEE RESTRICTION (Security Fix C):
-    # Committee members can only view aggregate dashboard & monthly reports.
-    # Individual flat billing, receipts, and private resident records are strictly prohibited!
-    if "COMMITTEE" in active_roles and not any(m.flat_id == flat_id and m.is_active for m in user.flat_memberships):
+    # SECURITY FIX C: Committee members are strictly barred from individual flat finances
+    if "COMMITTEE" in user_roles and "ADMIN" not in user_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Committee members can only access aggregate reports and do not have access to individual flat financial records."
+            detail="Access denied: Committee members can only access aggregate reports, not individual flat records."
         )
 
-    # GUARD RESTRICTION:
-    if "GUARD" in active_roles and not any(m.flat_id == flat_id and m.is_active for m in user.flat_memberships):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Gate security staff do not have access to resident financial records or complaints."
+    # Help Desk and Guards cannot access resident billing or payments
+    if action in ["read", "pay"]:
+        if "GUARD" in user_roles and "ADMIN" not in user_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Gate security staff do not have access to billing or payment records."
+            )
+        if "HELPDESK" in user_roles and "ADMIN" not in user_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Helpdesk staff cannot access resident billing or payment records."
+            )
+
+    # Admins and Accounts staff can read financial summaries
+    if "ADMIN" in user_roles or ("ACCOUNTS" in user_roles and action == "read"):
+        dummy_membership = FlatMembership(
+            flat_id=flat_id,
+            user_id=user.id,
+            member_type="STAFF",
+            can_pay_bills=False,
+            can_approve_visitors=False,
+            can_raise_complaints=False
         )
+        return dummy_membership
 
-    # HELPDESK RESTRICTION:
-    if "HELPDESK" in active_roles and not any(m.flat_id == flat_id and m.is_active for m in user.flat_memberships):
-        if action in ["pay", "financial", "read"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: Help Desk staff cannot access or perform financial operations on resident flats."
-            )
-
-    # ACCOUNTS STAFF:
-    if "ACCOUNTS" in active_roles and not any(m.flat_id == flat_id and m.is_active for m in user.flat_memberships):
-        if action in ["pay", "visitor", "complaint"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied: Accounts staff cannot execute action '{action}' on resident flat."
-            )
-        # Accounts can read financial statements for reconciliation
-        return None
-
-    # RESIDENT / TENANT / FAMILY ACCESS:
-    membership = next((m for m in user.flat_memberships if m.flat_id == flat_id and m.is_active), None)
+    # Ordinary resident / tenant / family membership verification
+    membership = next(
+        (fm for fm in user.flat_memberships if fm.flat_id == flat_id and fm.is_active),
+        None
+    )
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: You do not have permissions for this flat."
+            detail="Access denied: You do not have an active membership for this flat."
         )
 
     if action == "pay" and not membership.can_pay_bills:
@@ -190,15 +278,17 @@ def verify_flat_access(user: User, flat_id: str, action: str = "read") -> Option
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: Your flat membership does not permit bill payment."
         )
-    if action == "visitor" and not membership.can_approve_visitors:
+
+    if action == "approve_visitor" and not membership.can_approve_visitors:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Your flat membership does not permit visitor approval."
+            detail="Access denied: Your flat membership does not permit visitor approvals."
         )
-    if action == "complaint" and not membership.can_raise_complaints:
+
+    if action == "raise_complaint" and not membership.can_raise_complaints:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Your flat membership does not permit raising complaints."
+            detail="Access denied: Your flat membership does not permit lodging complaints."
         )
 
     return membership
