@@ -12,7 +12,10 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "types": ["@testing-library/jest-dom/vitest"],
+    "types": [
+      "@testing-library/jest-dom/vitest",
+      "vite/client"
+    ],
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
