@@ -17,16 +17,22 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
     ]
 
-    # Database
+    # Database URLs
     DATABASE_URL: str = "sqlite:///./township_one.db"
+    TEST_DATABASE_URL: str = "sqlite:///./township_one_test.db"
+
+    # Reference Date for Date Consistency across UI, API, Seed & Tests
+    DEMO_AS_OF_DATE: str = "2026-11-06T00:00:00Z"
 
     # Auth & Tokens
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     OTP_EXPIRY_SECONDS: int = 300
     DEMO_OTP_CODE: str = "123456"
 
-    # Maintenance Billing
+    # Maintenance Billing Defaults
     MAINTENANCE_RATE_PER_SQFT: float = 6.50
+    DEFAULT_GRACE_PERIOD_DAYS: int = 5
+    DEMO_LATE_FEE_PERCENTAGE_PA: float = 18.00
 
     model_config = SettingsConfigDict(
         env_file=".env",
