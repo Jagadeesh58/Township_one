@@ -1,3 +1,4 @@
+# Day 1 · D1-S1 — Foundation and Environment: Python Project Configuration
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -5,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "township-one"
 version = "1.0.0"
-description = "Gated Township Resident & Operations Platform (Brief 2)"
+description = "Township One — Gated Township Resident & Operations Platform (Brief 2)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,10 +16,12 @@ dependencies = [
     "alembic>=1.13.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
-    "python-jose>=3.3.0",
+    "pyjwt>=2.8.0",
     "passlib>=1.7.4",
     "bcrypt>=4.0.1",
     "python-multipart>=0.0.12",
+    "psycopg[binary]>=3.1.0",
+    "pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]

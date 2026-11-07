@@ -1,3 +1,16 @@
+"""
+Day 1 · D1-S1 — Foundation and Environment: Application Configuration.
+
+Responsibility:
+- Centrally load, validate, and provide application settings from environment.
+- Guard production environment: reject default insecure secret keys in production.
+- Define isolated database URLs for demo (`DATABASE_URL`) and testing (`TEST_DATABASE_URL`).
+- Provide consistent demo reference date (`DEMO_AS_OF_DATE`) across all modules.
+
+Related documentation:
+docs/day-1/D1-S1-foundation-and-environment.md
+"""
+
 import os
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,5 +53,15 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
+    def validate_production_guards(self):
+        """Fail-closed guard: ensure default development secret key is never used in production."""
+        if self.APP_ENV.lower() == "production":
+            if "super-secret" in self.SECRET_KEY or len(self.SECRET_KEY) < 32:
+                raise RuntimeError(
+                    "FATAL SECURITY VIOLATION: Production deployment cannot use the default or insecure SECRET_KEY. "
+                    "Please configure a strong, random 32+ character SECRET_KEY in production."
+                )
+
 
 settings = Settings()
+settings.validate_production_guards()

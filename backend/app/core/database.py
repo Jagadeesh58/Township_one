@@ -1,7 +1,21 @@
+"""
+Day 1 · D1-S1 — Foundation and Environment: Database Engine & Session Management.
+
+Responsibility:
+- Configure thread-safe, pool-verified SQLAlchemy engine.
+- Isolate test database (`TEST_DATABASE_URL`) from reviewer demo database (`DATABASE_URL`).
+- Provide request-scoped database sessions with automatic closure.
+- Support both SQLite and PostgreSQL without code alteration.
+
+Related documentation:
+docs/day-1/D1-S1-foundation-and-environment.md
+"""
+
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from backend.app.core.config import settings
+
 
 def get_engine(custom_url: str = None):
     url = custom_url
@@ -18,6 +32,7 @@ def get_engine(custom_url: str = None):
         connect_args=connect_args,
         pool_pre_ping=True
     )
+
 
 engine = get_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
