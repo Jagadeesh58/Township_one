@@ -1,3 +1,13 @@
+"""
+Day 1 · D1-S4 — Maintenance billing and ledger
+Test suite verifying:
+- Precise area-based principal calculations
+- Grace period boundaries (due on 15th, grace ends 20th, interest starts 21st)
+- Multi-bill outstanding balance aggregation (unpaid_bills and total_outstanding_due)
+- IDOR access denial across flats
+- Duplicate bill prevention for the same period
+"""
+
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 import pytest

@@ -1,3 +1,13 @@
+"""
+Day 1 · D1-S4 — Maintenance billing and ledger
+Service functions for:
+- Deterministic 2-decimal currency rounding using Decimal (half up)
+- Flat maintenance calculation (area_sqft * rate_per_sqft)
+- Grace period boundaries (due on 15th, 5-day grace until 20th, interest starts 21st)
+- Illustrative demo late fee calculation (18% p.a. simple interest pending federation approval)
+- Bill generation, line items, and dual-entry ledger bookkeeping (DEBIT on bill issue)
+"""
+
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple

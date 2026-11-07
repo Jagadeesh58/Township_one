@@ -1,3 +1,12 @@
+"""
+Day 1 · D1-S4 — Maintenance billing and ledger
+Endpoints for:
+- Flat billing summaries with multi-bill unpaid aggregation (total_outstanding_due, unpaid_bills)
+- Strict server-side RBAC denying Committee and Security Guard access to individual flat records
+- Committee aggregate reports (total billed, collected, outstanding across township)
+- Bill retrieval, bill details, and flat ledger entries
+"""
+
 from decimal import Decimal
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
