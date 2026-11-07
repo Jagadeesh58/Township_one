@@ -19,6 +19,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const [testOutcome, setTestOutcome] = useState<'SUCCESS' | 'PENDING' | 'FAILED' | 'EXPIRED'>('SUCCESS');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Stable idempotency key for this payment modal session; preserved across retries
+  const [idempotencyKey] = useState<string>(() => `idem-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`);
 
   const billId = summary.latest_bill?.id;
   const dueAmount = summary.current_due;
@@ -33,6 +35,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         bill_id: billId,
         amount: dueAmount,
         test_outcome: testOutcome,
+        idempotency_key: idempotencyKey,
       });
 
       if (res.status === 'SUCCESS' && res.receipt) {

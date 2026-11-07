@@ -1,23 +1,29 @@
 {
   "name": "Township One",
   "short_name": "TownshipOne",
-  "description": "Gated township resident app for maintenance, complaints and visitors",
+  "description": "Gated township resident and operations portal for maintenance, complaints and visitors",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#1e293b",
   "icons": [
     {
-      "src": "/vite.svg",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/vite.svg",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

@@ -144,6 +144,7 @@ export const api = {
     amount: number;
     payment_method?: string;
     test_outcome?: string;
+    idempotency_key?: string;
   }) {
     const token = api.getAuthToken();
     const res = await fetch(`${API_BASE}/payments/checkout`, {

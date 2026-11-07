@@ -2,7 +2,11 @@ const CACHE_NAME = 'township-one-shell-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon.svg',
+  '/favicon.ico'
 ];
 
 self.addEventListener('install', (event) => {
