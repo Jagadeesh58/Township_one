@@ -9,7 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.core.config import settings
 from backend.app.core.database import Base, engine
-from backend.app.api import health, auth, billing, payments
+from backend.app.api import health, auth, billing, payments, bank, complaints, notifications
 
 # Create DB tables
 Base.metadata.create_all(bind=engine)
@@ -61,21 +61,23 @@ async def csrf_protect_middleware(request: Request, call_next):
             "/openapi.json",
         }
         if path not in exempt_paths:
-            csrf_cookie = request.cookies.get("township_csrf")
-            csrf_header = request.headers.get("X-CSRF-Token")
+            session_cookie = request.cookies.get("township_session")
+            if session_cookie:
+                csrf_cookie = request.cookies.get("township_csrf")
+                csrf_header = request.headers.get("X-CSRF-Token")
 
-            # Sessions are strictly cookie-based. CSRF token validation is mandatory for all mutating requests.
-            if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
-                return JSONResponse(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    content={
-                        "error": {
-                            "code": "CSRF_ERROR",
-                            "message": "CSRF token missing or invalid",
-                            "request_id": getattr(request.state, "request_id", None),
+                # Sessions are strictly cookie-based. CSRF token validation is mandatory for all mutating requests.
+                if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+                    return JSONResponse(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        content={
+                            "error": {
+                                "code": "CSRF_ERROR",
+                                "message": "CSRF token missing or invalid",
+                                "request_id": getattr(request.state, "request_id", None),
+                            }
                         }
-                    }
-                )
+                    )
 
     response = await call_next(request)
     return response
@@ -117,6 +119,9 @@ app.include_router(health.router)
 app.include_router(auth.router, prefix=settings.API_PREFIX)
 app.include_router(billing.router, prefix=settings.API_PREFIX)
 app.include_router(payments.router, prefix=settings.API_PREFIX)
+app.include_router(bank.router, prefix=settings.API_PREFIX)
+app.include_router(complaints.router, prefix=settings.API_PREFIX)
+app.include_router(notifications.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/")

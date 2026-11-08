@@ -27,7 +27,9 @@ from backend.app.core.database import engine as default_engine, Base
 from backend.app.models.entities import (
     User, UserRoleAssignment, Tower, Flat, FlatMembership,
     StaffMember, Gate, BillingRule, Bill, BillLine, Payment,
-    PaymentIdempotencyRecord, FlatLedgerEntry, Receipt, Complaint, Notice, Amenity
+    PaymentIdempotencyRecord, FlatLedgerEntry, Receipt, Complaint, Notice, Amenity,
+    BankAccount, RegisteredUPI, StaffTeam, StaffShift, ComplaintEvent, ClassificationDecision,
+    SafetyEvent, IncidentGroup, IncidentGroupMember, BankRow, BankImportFile, AuditEvent
 )
 
 
@@ -288,6 +290,13 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         db.add(UserRoleAssignment(user_id=u_family.id, role_code="RESIDENT", scope_type="FLAT", scope_id=flats_dict["T07-1203"].id))
         db.add(FlatMembership(user_id=u_family.id, flat_id=flats_dict["T07-1203"].id, member_type="FAMILY", can_pay_bills=False, can_approve_visitors=True, can_raise_complaints=True))
 
+        # 5. Priya Sharma (Owner of T03-0201)
+        u_priya = User(phone="9876543214", name="Priya Sharma", email="priya.sharma@township.demo")
+        db.add(u_priya)
+        db.flush()
+        db.add(UserRoleAssignment(user_id=u_priya.id, role_code="RESIDENT", scope_type="FLAT", scope_id=flats_dict["T03-0201"].id))
+        db.add(FlatMembership(user_id=u_priya.id, flat_id=flats_dict["T03-0201"].id, member_type="OWNER", can_pay_bills=True, can_approve_visitors=True, can_raise_complaints=True))
+
         # 5. Help Desk Staff (Ramesh Patil)
         u_helpdesk = User(phone="9876543220", name="Ramesh Patil", email="ramesh.helpdesk@township.demo")
         db.add(u_helpdesk)
@@ -457,6 +466,30 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         db.add(r3)
         db.add(FlatLedgerEntry(flat_id=f3.id, entry_type="CREDIT", amount=Decimal("5000.00"), balance_after=Decimal("5660.00"), description="Partial payment received - NetBanking", reference_id=p3.transaction_reference, created_at=p3.paid_at))
 
+        # 4) T03-0201: 1,640 sqft, Monthly Bill ₹10,660, Unpaid (₹0 paid), Due Nov 15
+        f4 = flats_dict["T03-0201"]
+        bill4 = Bill(
+            flat_id=f4.id,
+            billing_rule_id=rule.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, 0, 0, tzinfo=timezone.utc),
+            due_date=datetime(2026, 11, 15, 0, 0, tzinfo=timezone.utc),
+            area_sqft=Decimal("1640.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=Decimal("10660.00"),
+            late_fee_amount=Decimal("0.00"),
+            total_amount=Decimal("10660.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("10660.00"),
+            status="ISSUED"
+        )
+        db.add(bill4)
+        db.flush()
+        db.add(BillLine(bill_id=bill4.id, line_type="PRINCIPAL", description="Monthly Maintenance (1,640 sq ft @ ₹6.50/sq ft)", amount=Decimal("10660.00")))
+        db.add(FlatLedgerEntry(flat_id=f4.id, entry_type="DEBIT", amount=Decimal("10660.00"), balance_after=Decimal("10660.00"), description="Maintenance Bill - Nov 2026", reference_id=bill4.id, created_at=bill4.issue_date))
+
         db.flush()
 
         print("8. Seeding Sample Complaints & Ten Linked Lift Incidents with 10 Distinct Reporters...")
@@ -464,6 +497,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         c1 = Complaint(
             ticket_number="CMP-2026-1001",
             flat_id=f2.id,
+            tower_id=f2.tower_id,
             user_id=u_swati.id,
             title="Severe bathroom ceiling water seepage",
             description="Continuous water dripping from the flat above into the master bathroom. Causing ceiling paint damage.",
@@ -471,15 +505,31 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             urgency="HIGH",
             status="IN_PROGRESS",
             assigned_staff_id=staff_list[0].id,
+            assigned_team="Plumbing Team",
             created_at=datetime(2026, 11, 4, 9, 15, tzinfo=timezone.utc),
             first_response_at=datetime(2026, 11, 4, 9, 35, tzinfo=timezone.utc)
         )
         db.add(c1)
+        db.flush()
+        db.add(ComplaintEvent(complaint_id=c1.id, actor_user_id=u_swati.id, actor_role="RESIDENT", event_type="CREATED", to_status="SUBMITTED", notes="Water leak complaint submitted", created_at=c1.created_at))
+        db.add(ComplaintEvent(complaint_id=c1.id, actor_user_id=staff_list[0].user_id, actor_role="HELPDESK", event_type="STATUS_CHANGED", from_status="SUBMITTED", to_status="IN_PROGRESS", notes="Assigned to senior technician; inspection scheduled", created_at=c1.first_response_at))
 
-        # 2. Lift outage primary complaint in Tower 7 (Reported by Neeraj Kulkarni)
+        # 2. Lift outage primary incident group in Tower 7
+        grp_lift = IncidentGroup(
+            tower_id=f1.tower_id,
+            category="LIFT",
+            title="Tower 7 Passenger Lift #2 Malfunction",
+            status="ACTIVE",
+            created_at=datetime(2026, 11, 5, 8, 20, tzinfo=timezone.utc)
+        )
+        db.add(grp_lift)
+        db.flush()
+
+        # Lift outage primary complaint in Tower 7 (Reported by Neeraj Kulkarni)
         c_lift_primary = Complaint(
             ticket_number="CMP-2026-1002",
             flat_id=f1.id,
+            tower_id=f1.tower_id,
             user_id=u_neeraj.id,
             title="Tower 7 Passenger Lift #2 not stopping on 12th floor",
             description="Passenger lift #2 skips floor 12 and makes a loud grinding vibration when descending.",
@@ -487,11 +537,14 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             urgency="MEDIUM",
             status="ASSIGNED",
             assigned_staff_id=staff_list[31].id,
+            assigned_team="Lift Maintenance Team",
+            incident_group_id=grp_lift.id,
             created_at=datetime(2026, 11, 5, 8, 20, tzinfo=timezone.utc),
             first_response_at=datetime(2026, 11, 5, 8, 45, tzinfo=timezone.utc)
         )
         db.add(c_lift_primary)
         db.flush()
+        db.add(IncidentGroupMember(incident_group_id=grp_lift.id, complaint_id=c_lift_primary.id, linked_by_user_id=u_admin.id))
 
         # 10 Distinct synthetic residents for 10 separate lift complaints across 10 flats in Tower 7
         lift_reporter_names = [
@@ -519,6 +572,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             c_lift_dup = Complaint(
                 ticket_number=t_num,
                 flat_id=t7_flat.id,
+                tower_id=t7_flat.tower_id,
                 user_id=u_reporter.id,  # Distinct reporter identity!
                 title=f"Tower 7 Lift Fault reported by {r_name} ({t7_flat.flat_number})",
                 description=f"Resident {r_name} from {t7_flat.flat_number} reports passenger lift #2 is malfunctioning and vibrating.",
@@ -526,15 +580,20 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
                 urgency="MEDIUM",
                 status="IN_PROGRESS",
                 assigned_staff_id=staff_list[31].id,
-                duplicate_of_id=c_lift_primary.id,  # Linked to primary incident group, individually open!
+                assigned_team="Lift Maintenance Team",
+                duplicate_of_id=c_lift_primary.id,
+                incident_group_id=grp_lift.id,
                 created_at=datetime(2026, 11, 5, 8, 0, tzinfo=timezone.utc) + timedelta(minutes=30 + idx_l * 2)
             )
             db.add(c_lift_dup)
+            db.flush()
+            db.add(IncidentGroupMember(incident_group_id=grp_lift.id, complaint_id=c_lift_dup.id, linked_by_user_id=u_admin.id))
 
         # 3. Safety escalation incident (Cooking gas odor in Tower 12)
         c_safety = Complaint(
             ticket_number="CMP-2026-1003",
             flat_id=flats_dict["T12-0401"].id,
+            tower_id=flats_dict["T12-0401"].tower_id,
             user_id=u_admin.id,
             title="Strong LPG gas leak smell near corridor shaft",
             description="LPG gas smell detected near pipeline shaft on 4th floor corridor outside 0401.",
@@ -543,21 +602,34 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             status="IN_PROGRESS",
             is_safety_escalation=True,
             assigned_staff_id=staff_list[60].id,
+            assigned_team="Security & Safety Team",
             created_at=datetime(2026, 11, 6, 7, 10, tzinfo=timezone.utc),
             first_response_at=datetime(2026, 11, 6, 7, 13, tzinfo=timezone.utc)
         )
         db.add(c_safety)
+        db.flush()
+        db.add(SafetyEvent(
+            complaint_id=c_safety.id,
+            trigger_pattern="gas leak|lpg gas",
+            matched_text="Strong LPG gas leak smell near corridor shaft",
+            language="en",
+            duty_manager_notified=True,
+            notification_sent_at=c_safety.created_at,
+            status="ACTIVE"
+        ))
 
         # 4. Electrical issue (Corridor lighting)
         c_elec = Complaint(
             ticket_number="CMP-2026-1025",
             flat_id=flats_dict["T12-0402"].id,
+            tower_id=flats_dict["T12-0402"].tower_id,
             user_id=u_admin.id,
             title="Corridor emergency lights flickering in Tower 12",
             description="Corridor light fixture humming and flickering intermittently on the 4th floor.",
             category="ELECTRICAL",
             urgency="LOW",
             status="SUBMITTED",
+            assigned_team="Electrical Team",
             created_at=datetime(2026, 11, 5, 14, 0, tzinfo=timezone.utc)
         )
         db.add(c_elec)
@@ -566,6 +638,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
         c_house = Complaint(
             ticket_number="CMP-2026-1026",
             flat_id=flats_dict["T21-1602"].id,
+            tower_id=flats_dict["T21-1602"].tower_id,
             user_id=u_admin.id,
             title="Garbage chute blockage on 16th floor",
             description="Waste chute intake door jammed shut with cardboard box.",
@@ -573,11 +646,46 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             urgency="MEDIUM",
             status="ASSIGNED",
             assigned_staff_id=staff_list[110].id,
+            assigned_team="Housekeeping Team",
             created_at=datetime(2026, 11, 6, 8, 0, tzinfo=timezone.utc)
         )
         db.add(c_house)
 
-        print("9. Seeding Community Notices & Amenities...")
+        print("9. Seeding Bank Account & Registered UPI Mappings...")
+        bank_acc = BankAccount(
+            account_no="98765432100012",
+            bank_name="HDFC Bank - Township One Operations",
+            ifsc_code="HDFC0001234",
+            is_active=True,
+            created_at=datetime(2026, 10, 1, 0, 0, tzinfo=timezone.utc)
+        )
+        db.add(bank_acc)
+
+        # Registered UPIs for persona flats
+        db.add(RegisteredUPI(flat_id=f2.id, upi_id="swati.joshi@okaxis", is_verified=True))
+        db.add(RegisteredUPI(flat_id=f1.id, upi_id="neeraj.k@okhdfcbank", is_verified=True))
+        db.add(RegisteredUPI(flat_id=f3.id, upi_id="aamir.shaikh@icici", is_verified=True))
+        db.add(RegisteredUPI(flat_id=f4.id, upi_id="priya.sharma@okaxis", is_verified=True))
+
+        print("10. Seeding Staff Teams & On-Duty Shifts...")
+        teams_data = [
+            ("Plumbing Team", "PLUMBING"),
+            ("Electrical Team", "ELECTRICAL"),
+            ("Lift Maintenance Team", "LIFT"),
+            ("Housekeeping Team", "CLEANLINESS"),
+            ("Water Supply Team", "WATER_SUPPLY"),
+            ("Security & Safety Team", "SECURITY"),
+            ("Common Area Team", "COMMON_AREA"),
+            ("General Maintenance Team", "GENERAL"),
+        ]
+        for t_name, t_cat in teams_data:
+            db.add(StaffTeam(name=t_name, category=t_cat))
+
+        for idx, staff in enumerate(staff_list):
+            s_name = "Morning" if idx % 3 == 0 else ("Evening" if idx % 3 == 1 else "Night")
+            db.add(StaffShift(staff_id=staff.id, shift_name=s_name, is_on_duty=True))
+
+        print("11. Seeding Community Notices & Amenities...")
         n1 = Notice(
             title="Tower 7 Lift #2 Maintenance Underway",
             content="Technicians from Otis are attending to passenger lift #2 in Tower 7. Estimated restoration by 6:00 PM today.",

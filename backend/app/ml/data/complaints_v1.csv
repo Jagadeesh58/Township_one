@@ -1,0 +1,361 @@
+text,category,urgency,language,incident_family
+"Main water pipe in kitchen ceiling burst suddenly, massive water cascade flooding entire flat!",PLUMBING,CRITICAL,en,pipe_burst_leakage
+Severe pipe leakage in bathroom wall seepage spreading into electrical conduit rapidly.,PLUMBING,CRITICAL,en,pipe_burst_leakage
+Balcony drainage pipe has a major fracture leaking dirty runoff water onto downstairs neighbor.,PLUMBING,HIGH,en,pipe_burst_leakage
+किचन की मुख्य सप्लाई पाइप फट गई है और पूरे घर में तेजी से पानी भर रहा है तुरंत प्लंबर भेजें।,PLUMBING,CRITICAL,hi,pipe_burst_leakage
+"रसोई की सीलिंग से बहुत भारी पानी का रिसाव हो रहा है, फर्नीचर खराब हो रहा है।",PLUMBING,HIGH,hi,pipe_burst_leakage
+Main pipeline phat gayi hai bathroom me paani floor par overflow ho raha hai emergency plumber bhejo.,PLUMBING,CRITICAL,hi,pipe_burst_leakage
+स्वयंपाकघरातील मुख्य पाण्याची पाईप अचानक फुटली असून घरात सर्वत्र पाणी साचले आहे तातडीने मदत हवी.,PLUMBING,CRITICAL,mr,pipe_burst_leakage
+बाथरूमच्या छतावरून पाण्याचा सतत मोठा प्रवाह गळत आहे आणि भिंती खराब झाल्या आहेत.,PLUMBING,HIGH,mr,pipe_burst_leakage
+Kitchen chi main pipe futli ahe aani paani hall madhe yet ahe emergency plumber lavkar pathva.,PLUMBING,CRITICAL,mr,pipe_burst_leakage
+Kitchen sink mixer tap handle is loose and dripping constantly when shut off.,PLUMBING,LOW,en,tap_damage
+Master bedroom washbasin faucet is jammed and does not turn fully to hot water.,PLUMBING,MEDIUM,en,tap_damage
+Guest bathroom tap thread is stripped and spraying mist under high pressure around vanity.,PLUMBING,HIGH,en,tap_damage
+वॉश बेसिन का नल ढीला हो गया है और बंद करने के बाद भी लगातार बूंद-बूंद टपक रहा है।,PLUMBING,LOW,hi,tap_damage
+बाथरूम का मुख्य नल अटक गया है और पानी का प्रेशर कंट्रोल नहीं हो रहा है।,PLUMBING,MEDIUM,hi,tap_damage
+Kitchen sink ka tap tut gaya hai handle alag ho gaya continuous paani beh raha hai band nahi ho raha.,PLUMBING,HIGH,hi,tap_damage
+वॉश बेसिनचा नळ सैल झाला असून तो बंद केला तरी सतत पाणी गळत राहते.,PLUMBING,LOW,mr,tap_damage
+बाथरूमचा नळ जाम झाला आहे आणि उघडताना खूप आवाज करतो कृपया बदलून द्या.,PLUMBING,MEDIUM,mr,tap_damage
+Washbasin cha tap loose ahe aani continuous paani thibaktay plumber la pathva.,PLUMBING,LOW,mr,tap_damage
+Shower floor drain is completely blocked with stagnant dirty water backing up into bathroom.,PLUMBING,HIGH,en,drainage_blockage
+Kitchen sink drain is draining extremely slowly causing greasy foul-smelling buildup.,PLUMBING,MEDIUM,en,drainage_blockage
+Utility balcony washing machine drain line is clogged and overflowing during rinse cycles.,PLUMBING,HIGH,en,drainage_blockage
+बाथरूम की नाली पूरी तरह जाम है और नहाने के बाद गंदा पानी घंटों तक भरा रहता है।,PLUMBING,HIGH,hi,drainage_blockage
+"किचन सिंक का ड्रेन चोक हो गया है, बर्तन धोने का गंदा पानी धीरे-धीरे निकल रहा है।",PLUMBING,MEDIUM,hi,drainage_blockage
+Shower drain bilkul block ho gaya hai paani bahar bathroom me phail raha hai.,PLUMBING,HIGH,hi,drainage_blockage
+बाथरूममधील पाण्याचा निचरा होणारी मोरी तुंबली असून दुर्गंधीयुक्त पाणी साचून राहत आहे.,PLUMBING,HIGH,mr,drainage_blockage
+"स्वयंपाकघरातील सिंकची ड्रेनेज पाईप चोक झाली आहे, पाणी खूप हळू वाहत आहे.",PLUMBING,MEDIUM,mr,drainage_blockage
+Bathroom chya mori madhe kachra adakun drainage block zala ahe cleaning garjeche ahe.,PLUMBING,MEDIUM,mr,drainage_blockage
+Toilet flush tank button is stuck depressed and water is running down the pan nonstop.,PLUMBING,MEDIUM,en,flush_cistern_fault
+Commode flush tank inlet valve does not refill automatically unless manually wiggled.,PLUMBING,LOW,en,flush_cistern_fault
+Flush valve seal is deteriorated causing constant faint hissing sound and water waste.,PLUMBING,LOW,en,flush_cistern_fault
+टॉयलेट का फ्लश टैंक बटन अटक गया है और फ्लश में लगातार पानी बहता जा रहा है।,PLUMBING,MEDIUM,hi,flush_cistern_fault
+कमोड की टंकी में पानी भरने वाला वाल्व खराब है और भरता ही नहीं है।,PLUMBING,LOW,hi,flush_cistern_fault
+Flush tank ka button dabane ke baad wapas nahi aata paani waste ho raha hai continuously.,PLUMBING,MEDIUM,hi,flush_cistern_fault
+टॉयलेट फ्लश टँकचे बटण अडकले असून फ्लशमधून न थांबता पाणी वाहत आहे.,PLUMBING,MEDIUM,mr,flush_cistern_fault
+कमोडच्या फ्लश टँकमध्ये पाणी भरत नसून इनलेट पाईपमधून पाणी जोरात गळत आहे.,PLUMBING,HIGH,mr,flush_cistern_fault
+Flush cistern madhun satat paani wahat ahe button dable tari leak hot ahe.,PLUMBING,LOW,mr,flush_cistern_fault
+Raw sewage blackwater is backing up out of the ground floor toilet commode into bathroom!,PLUMBING,CRITICAL,en,sewage_backflow
+Severe sewage odor and black sludge bubbling up through kitchen floor gully trap.,PLUMBING,CRITICAL,en,sewage_backflow
+External sewage chamber near building entrance is overflowing with foul sludge.,PLUMBING,HIGH,en,sewage_backflow
+ग्राउंड फ्लोर के टॉयलेट से गटर का गंदा सीवेज पानी उल्टा बहकर घर में आ रहा है!,PLUMBING,CRITICAL,hi,sewage_backflow
+सीवर लाइन जाम होने से नाली से गंदा बदबूदार कीचड़ बाहर निकल रहा है भारी दुर्गंध है।,PLUMBING,HIGH,hi,sewage_backflow
+Toilet se gutter ka badbudaar paani backflow ho raha hai bahut gandagi fail rahi hai.,PLUMBING,CRITICAL,hi,sewage_backflow
+तळमजल्यावरील टॉयलेटमधून गटाराचे दुर्गंधीयुक्त घाण पाणी उलटे वर येत आहे त्वरित प्लंबर पाठवा!,PLUMBING,CRITICAL,mr,sewage_backflow
+ड्रेनेज चेंबर तुंबल्यामुळे इमारतीच्या प्रवेशद्वाराजवळ सांडपाणी साचले असून दुर्गंधी पसरली आहे.,PLUMBING,HIGH,mr,sewage_backflow
+Commode madhun gutter che kaale paani baher yet ahe flat madhe saachle ahe urgent cleaning.,PLUMBING,CRITICAL,mr,sewage_backflow
+Electrical switchboard in bedroom is actively sparking with loud crackling and burning plastic smell!,ELECTRICAL,CRITICAL,en,sparking_switchboard
+"Corridor main distribution board throwing visible sparks and smoking, fire risk imminent!",ELECTRICAL,CRITICAL,en,sparking_switchboard
+Living room light switch sparks intermittently when flipped on and feels hot to touch.,ELECTRICAL,HIGH,en,sparking_switchboard
+बेडरूम के स्विचबोर्ड से तेज चिंगारियां निकल रही हैं और तार जलने की गंध आ रही है तुरंत बिजली काटें!,ELECTRICAL,CRITICAL,hi,sparking_switchboard
+मीटर बॉक्स के अंदर शॉर्ट सर्किट होकर स्पार्किंग हो रही है आग लगने का गंभीर खतरा है।,ELECTRICAL,CRITICAL,hi,sparking_switchboard
+Switch board me se spark aur chingari nikal rahi hai aur plastic smell aa rahi hai jaldi electrician bhejo.,ELECTRICAL,CRITICAL,hi,sparking_switchboard
+मीटर रूममधील स्विचबोर्डमधून मोठ्या ठिणग्या उडत असून वायर जळण्याचा वास येत आहे तातडीने मदत पाठवा!,ELECTRICAL,CRITICAL,mr,sparking_switchboard
+हॉलमधील मुख्य बोर्डवर स्पार्किंग होत आहे आणि बटण गरम झाले आहे शॉर्ट सर्किटची भीती आहे.,ELECTRICAL,HIGH,mr,sparking_switchboard
+Switchboard madhun heavy sparks aani dhur yet ahe emergency electrician la bolva fire hazard ahe.,ELECTRICAL,CRITICAL,mr,sparking_switchboard
+Bathroom geyser gave mild electric shock when resident touched the metallic braided hose pipe!,ELECTRICAL,CRITICAL,en,geyser_short_circuit
+Water heater trip switch burned out with loud pop and sparks flew from power socket.,ELECTRICAL,HIGH,en,geyser_short_circuit
+Geyser heating light turns on but water pipe carries noticeable electric tingling sensation.,ELECTRICAL,CRITICAL,en,geyser_short_circuit
+"बाथरूम के गीजर का पाइप छूने पर करंट लगा है, गीजर में अर्थिंग की समस्या है तुरंत जांचें!",ELECTRICAL,CRITICAL,hi,geyser_short_circuit
+वॉटर हीटर चालू करते ही जोर की आवाज के साथ धुआं निकला और पावर सॉकेट काला हो गया।,ELECTRICAL,HIGH,hi,geyser_short_circuit
+Geyser on karne par tap me current aa raha hai hath lagaya toh electric shock laga jaldi dekho.,ELECTRICAL,CRITICAL,hi,geyser_short_circuit
+बाथरूममधील गिझर सुरू असताना नळाला स्पर्श केल्यावर जोरदार विजेचा धक्का बसला तातडीने दुरुस्ती करा!,ELECTRICAL,CRITICAL,mr,geyser_short_circuit
+वॉटर हीटरच्या सॉकेटमधून ठिणग्या निघाल्या असून गिझरचे प्लग जळाले आहे.,ELECTRICAL,HIGH,mr,geyser_short_circuit
+Geyser pipe la hath lavlyavar current basla ahe earthing problem ahe electrician pathva.,ELECTRICAL,HIGH,mr,geyser_short_circuit
+"One complete supply line is down in Flat 804, AC and refrigerator sockets have no power.",ELECTRICAL,MEDIUM,en,power_outage_partial
+"Entire 12th floor corridor has no lighting, complete dark hallway creating safety hazard.",ELECTRICAL,HIGH,en,power_outage_partial
+Partial power failure across three apartments in Tower 4 after voltage fluctuation.,ELECTRICAL,MEDIUM,en,power_outage_partial
+"फ्लैट में एक फेज की बिजली गुल है, फ्रिज और गीजर के प्लग में करंट नहीं आ रहा है।",ELECTRICAL,MEDIUM,hi,power_outage_partial
+9वीं मंजिल की पूरी लॉबी में लाइट बंद है और अंधेरे में लोगों को आने-जाने में परेशानी हो रही है।,ELECTRICAL,HIGH,hi,power_outage_partial
+"Ghar ke aadhe kamro me light nahi hai, single line fuse udd gaya hai fuse check karo.",ELECTRICAL,MEDIUM,hi,power_outage_partial
+फ्लॅटमधील एका फेजचा वीजपुरवठा खंडित झाला असून एसी आणि फ्रिजचे सॉकेट बंद पडले आहेत.,ELECTRICAL,MEDIUM,mr,power_outage_partial
+सातव्या मजल्यावरील कॉरिडॉरची संपूर्ण वीज गेली असून अंधार पसरला आहे कृपया दिवा लावा.,ELECTRICAL,HIGH,mr,power_outage_partial
+Flat madhye partial power cut ahe hall chi light chalat nahi supply line geley vatate.,ELECTRICAL,MEDIUM,mr,power_outage_partial
+Ceiling light tube outside flat 302 has fused and is flickering continuously.,ELECTRICAL,LOW,en,corridor_light_fused
+Emergency stairwell light on 5th floor landing is blown and pitch black stairs fall risk.,ELECTRICAL,HIGH,en,corridor_light_fused
+Tower entrance foyer decorative LED panel light is dim and making a buzzing noise.,ELECTRICAL,LOW,en,corridor_light_fused
+फ्लैट 501 के सामने की सीलिंग लाइट फ्यूज हो गई है और लॉबी में मंद रोशनी है।,ELECTRICAL,LOW,hi,corridor_light_fused
+सीढ़ियों की 3 ट्यूबलाइट बंद पड़ी हैं अंधेरे में लोग ठोकर खाकर गिर रहे हैं तुरंत बदलें।,ELECTRICAL,HIGH,hi,corridor_light_fused
+Corridor ki tube light fuse ho gayi hai blink kar rahi hai replacement chahiye.,ELECTRICAL,LOW,hi,corridor_light_fused
+तिसऱ्या मजल्यावरील जिन्यावरील दिवा निकामी झाला असून नवीन बल्ब लावणे आवश्यक आहे.,ELECTRICAL,LOW,mr,corridor_light_fused
+फ्लॅटच्या समोरील कॉरिडॉरची ट्यूबलाईट सतत लुकलुकत आहे व डोळ्यांना त्रास होत आहे.,ELECTRICAL,LOW,mr,corridor_light_fused
+Floor chya passage madhla bulb fuse zala ahe andhar ahe bulb change kara.,ELECTRICAL,LOW,mr,corridor_light_fused
+Distribution board main MCB trips every time kitchen microwave and kettle are on simultaneously.,ELECTRICAL,MEDIUM,en,circuit_breaker_tripping
+Sub-circuit breaker trips randomly twice a day without any high power appliance running.,ELECTRICAL,LOW,en,circuit_breaker_tripping
+Master bedroom MCB switch is loose inside board with burned terminal and smells heated.,ELECTRICAL,HIGH,en,circuit_breaker_tripping
+रसोई में ओवन चालू करते ही एमसीबी बार-बार ट्रिप हो रही है लोड चेक करें।,ELECTRICAL,MEDIUM,hi,circuit_breaker_tripping
+बिजली का मुख्य कट-आउट स्विच बहुत ढीला हो गया है और अपने आप नीचे गिर जाता है।,ELECTRICAL,LOW,hi,circuit_breaker_tripping
+MCB bar bar trip ho raha hai bina kisi heavy appliance ke wiring check karwao.,ELECTRICAL,MEDIUM,hi,circuit_breaker_tripping
+किचनमध्ये मिक्सर सुरू करताच मेन एमसीबी वारंवार ट्रिप होत आहे वायरिंग तपासावी.,ELECTRICAL,MEDIUM,mr,circuit_breaker_tripping
+एमसीबी बॉक्समधील एक स्वीच सैल झाला असून विद्युत पुरवठा वारंवार खंडित होतो.,ELECTRICAL,LOW,mr,circuit_breaker_tripping
+Board cha MCB thodya velane trip hotoy fuse madhe problem vatato.,ELECTRICAL,LOW,mr,circuit_breaker_tripping
+Passenger elevator stuck between 14th and 15th floors with four residents trapped inside!,LIFT,CRITICAL,en,lift_stuck_with_passengers
+"Tower 6 Lift A stopped abruptly mid-shaft, pregnant woman trapped inside calling for emergency help!",LIFT,CRITICAL,en,lift_stuck_with_passengers
+"Service lift stopped between basement and ground floor, maintenance worker trapped inside with heavy load.",LIFT,CRITICAL,en,lift_stuck_with_passengers
+"टावर 8 की लिफ्ट 9वें और 10वें फ्लोर के बीच अटक गई है, अंदर बुजुर्ग और बच्चे फंसे हैं जल्दी निकालो!",LIFT,CRITICAL,hi,lift_stuck_with_passengers
+लिफ्ट अचानक बीच में रुक गई है पंखा बंद हो गया है और 3 लोग अंदर फंसे हुए घबरा रहे हैं।,LIFT,CRITICAL,hi,lift_stuck_with_passengers
+Tower B lift beech me band ho gayi hai family andar phasi hui hai bachao jaldi emergency technician bhejo.,LIFT,CRITICAL,hi,lift_stuck_with_passengers
+टावर ३ ची लिफ्ट सहाव्या मजल्यावर अडकली असून आत ४ नागरिक अडकले आहेत तातडीने मदत पाठवा!,LIFT,CRITICAL,mr,lift_stuck_with_passengers
+"लिफ्ट अचानक बंद पडली आहे आणि प्रवासी आत अडकले आहेत, आतील फॅनही बंद झाला आहे.",LIFT,CRITICAL,mr,lift_stuck_with_passengers
+Lift number 2 madhe lok adakle ahet gate ughadat nahi emergency service team la lavkar bolva.,LIFT,CRITICAL,mr,lift_stuck_with_passengers
+Lift outer door is jammed half open on 7th floor with exposed elevator shaft hazard!,LIFT,CRITICAL,en,lift_door_jammed
+Lift door repeatedly closes violently with excessive force without retracting when sensor blocked.,LIFT,HIGH,en,lift_door_jammed
+"Lift door safety infrared sensor is defective, trapping passengers' arms upon closing.",LIFT,HIGH,en,lift_door_jammed
+7वीं मंजिल पर लिफ्ट का दरवाजा आधा खुला अटक गया है और नीचे का शाफ्ट खुला दिख रहा है बेहद खतरनाक है!,LIFT,CRITICAL,hi,lift_door_jammed
+"लिफ्ट का दरवाजा बहुत जोर से बंद हो रहा है, सेंसर काम नहीं कर रहा किसी को चोट लग सकती है।",LIFT,HIGH,hi,lift_door_jammed
+Lift ka gate jam ho gaya hai floor par nahi khul raha log bahar nahi aa pa rahe the.,LIFT,HIGH,hi,lift_door_jammed
+पाचव्या मजल्यावर लिफ्टचे दार उघडेच अडकले असून लिफ्टची पोकळी उघडी दिसत आहे मोठा अपघात होऊ शकतो!,LIFT,CRITICAL,mr,lift_door_jammed
+लिफ्टचा सेन्सर खराब झाला असून दार अचानक आणि जोरात आपटत बंद होत आहे.,LIFT,HIGH,mr,lift_door_jammed
+Lift cha door jam zala ahe aani jorat band hotoy sensors check kara safety risk ahe.,LIFT,HIGH,mr,lift_door_jammed
+Lift produces violent jerking motions and grinding metallic screeching during descent between floors 10 and 6.,LIFT,HIGH,en,lift_jerking_noise
+Heavy vibrations and shuddering felt inside lift car when carrying more than 3 people.,LIFT,MEDIUM,en,lift_jerking_noise
+Elevator cables emit rhythmic clanking sound during motion causing alarm among residents.,LIFT,MEDIUM,en,lift_jerking_noise
+लिफ्ट नीचे आते समय बहुत जोर से झटके खा रही है और लोहे की घिसने जैसी डरावनी आवाज आ रही है।,LIFT,HIGH,hi,lift_jerking_noise
+"लिफ्ट चलने पर बहुत ज्यादा कंपन और आवाज होती है, केबल की जांच करवाई जाए।",LIFT,MEDIUM,hi,lift_jerking_noise
+Lift me chalte waqt achanak jhatke lag rahe hai aur ajeeb sound aa raha hai safety check karo.,LIFT,HIGH,hi,lift_jerking_noise
+लिफ्ट वर-खाली जाताना प्रचंड हादरे बसत आहेत आणि लोखंड घासण्याचा विचित्र आवाज येत आहे.,LIFT,HIGH,mr,lift_jerking_noise
+"लिफ्टच्या केबिनमध्ये खूप कंपन जाणवते आहे, रोप किंवा मोटरची तपासणी करणे गरजेचे आहे.",LIFT,MEDIUM,mr,lift_jerking_noise
+Lift chalताना khup mothe jhatke det ahe aani aawaz yetoy technician pathva.,LIFT,MEDIUM,mr,lift_jerking_noise
+Floor buttons for 8th and 9th floor inside Lift 1 do not illuminate or register trapping passengers from reaching floor.,LIFT,HIGH,en,lift_button_unresponsive
+External landing call button on 11th floor is physically broken pushed into the wall socket.,LIFT,MEDIUM,en,lift_button_unresponsive
+Alarm and fan buttons inside lift cabin are unresponsive when pressed.,LIFT,MEDIUM,en,lift_button_unresponsive
+"लिफ्ट के अंदर 4 और 5 नंबर का बटन काम नहीं कर रहा है, दबाने पर लाइट नहीं जलती।",LIFT,LOW,hi,lift_button_unresponsive
+तीसरी मंजिल पर बाहर लगा लिफ्ट का अप-बटन टूट गया है और अंदर धंस गया है।,LIFT,MEDIUM,hi,lift_button_unresponsive
+Lift ka calling button floor 6 par press karne par respond nahi kar raha floor skip ho raha hai.,LIFT,HIGH,hi,lift_button_unresponsive
+"लिफ्टमधील आठव्या मजल्याचे बटण चालत नाहीये, दाबल्यावर प्रतिसाद मिळत नाही.",LIFT,LOW,mr,lift_button_unresponsive
+दुसऱ्या मजल्यावरील लिफ्ट बोलवण्याचे बाहेरील बटण तुटून आत गेले आहे दुरुस्त करा.,LIFT,MEDIUM,mr,lift_button_unresponsive
+Lift cabin che button dabun pan light lagat nahi floor select hot nahi.,LIFT,LOW,mr,lift_button_unresponsive
+Digital floor indicator inside lift car is flickering rapidly showing erroneous inverted characters.,LIFT,LOW,en,lift_display_error
+Ground floor outside lift position display shows floor 18 permanently while lift moves normally.,LIFT,LOW,en,lift_display_error
+Direction arrow LED display inside lift car is unlit during upward motion.,LIFT,LOW,en,lift_display_error
+लिफ्ट की डिजिटल स्क्रीन पर गलत फ्लोर नंबर दिख रहा है और डिस्प्ले लगातार ब्लिंक कर रहा है।,LIFT,LOW,hi,lift_display_error
+भूतल पर लिफ्ट का इंडिकेटर बंद पड़ा है जिससे पता नहीं चलता लिफ्ट कहां है।,LIFT,LOW,hi,lift_display_error
+Lift display screen par arrow ulta dikh raha hai indicator reset karne ki zaroorat hai.,LIFT,LOW,hi,lift_display_error
+लिफ्टच्या आतील मजला दर्शवणारा डिजिटल डिस्प्ले बंद पडला असून मजला समजत नाही.,LIFT,MEDIUM,mr,lift_display_error
+तळमजल्यावरील लिफ्टच्या फलकावर सतत चुकीचा मजला क्रमांक दाखवत आहे.,LIFT,LOW,mr,lift_display_error
+Lift display panel blink hot ahe floor number neat disat nahi reset kara.,LIFT,MEDIUM,mr,lift_display_error
+Huge heap of decomposing organic waste and garbage bags dumped on 3rd floor staircase spreading foul odor.,CLEANLINESS,HIGH,en,garbage_pile_corridor
+Maggots and toxic rot observed from leaking garbage pile abandoned in lobby corridor for 4 days!,CLEANLINESS,CRITICAL,en,garbage_pile_corridor
+Multiple overflowing trash bags blocking emergency fire exit passage completely on 12th floor!,CLEANLINESS,CRITICAL,en,garbage_pile_corridor
+"तीसरी मंजिल की लॉबी में सड़ा हुआ कचरा पड़ा है, कीड़े रेंग रहे हैं और भयानक बदबू फैल रही है!",CLEANLINESS,CRITICAL,hi,garbage_pile_corridor
+सीढ़ियों के पास कूड़े का ढेर लगा है जिससे पूरा फ्लोर बदबू से भर गया है तुरंत सफाई कराएं।,CLEANLINESS,HIGH,hi,garbage_pile_corridor
+Lobby me 3 din se garbage bags pade hue hai smell bohot gandi aa rahi hai health risk hai.,CLEANLINESS,HIGH,hi,garbage_pile_corridor
+चौथ्या मजल्यावरील जिन्यामध्ये सडलेल्या कचऱ्याचे ढीग साचले असून भयानक दुर्गंधी व कीडे झाले आहेत!,CLEANLINESS,CRITICAL,mr,garbage_pile_corridor
+कॉरिडॉरमध्ये कचऱ्याच्या पिशव्यांचा ढीग पडला असून आपत्कालीन दरवाजा बंद झाला आहे तातडीने उचला!,CLEANLINESS,CRITICAL,mr,garbage_pile_corridor
+Staircase javal kachra jama zala ahe aani gand yet ahe housekeeping team la pathva.,CLEANLINESS,HIGH,mr,garbage_pile_corridor
+Severe German cockroach infestation swarming out of garbage chute duct into 5th floor flats.,CLEANLINESS,HIGH,en,cockroach_pest_infestation
+Aggressive sewer rats infesting podium lobby biting electrical cables and posing rabies hazard!,CLEANLINESS,CRITICAL,en,cockroach_pest_infestation
+Common hallway has visible cockroach clusters near duct covers requiring pest control spraying.,CLEANLINESS,MEDIUM,en,cockroach_pest_infestation
+गारबेज डक्ट से सैकड़ों कॉकरोच निकलकर घरों में घुस रहे हैं तत्काल पेस्ट कंट्रोल करवाएं।,CLEANLINESS,HIGH,hi,cockroach_pest_infestation
+सीढ़ियों पर बड़े सीवर के चूहे बच्चों पर झपट रहे हैं और तार काट रहे हैं जानलेवा खतरा है!,CLEANLINESS,CRITICAL,hi,cockroach_pest_infestation
+Floor duct ke paas cockroaches aur pest kaafi badh gaye hai pest control spray karwana hai.,CLEANLINESS,MEDIUM,hi,cockroach_pest_infestation
+कचरा डक्टमधून शेकडो झुरळे बाहेर पडून फ्लॅट्समध्ये शिरत आहेत तातडीने औषध फवारणी करा.,CLEANLINESS,HIGH,mr,cockroach_pest_infestation
+इमारतीच्या कॉरिडॉरमध्ये विषारी किटक आणि मोठे उंदीर फिरत असून नागरिकांच्या आरोग्यास गंभीर धोका आहे!,CLEANLINESS,CRITICAL,mr,cockroach_pest_infestation
+Lobby madhe zural aani kidyanchi sankhya waadhli ahe pest control treatment lavkar karave.,CLEANLINESS,MEDIUM,mr,cockroach_pest_infestation
+Stray dog feces and urine on 2nd floor elevator entrance tiles left uncleaned since morning.,CLEANLINESS,MEDIUM,en,stray_dog_poop
+Cat urine stains on podium lobby doormat causing irritating pungent smell.,CLEANLINESS,LOW,en,stray_dog_poop
+Animal droppings found near basement parking pillar B4 need disinfectant washing.,CLEANLINESS,LOW,en,stray_dog_poop
+"लिफ्ट के बाहर कुत्ते की गंदगी पड़ी है, लोग फिसल सकते हैं फिनाइल से पोछा लगवाएं।",CLEANLINESS,MEDIUM,hi,stray_dog_poop
+पार्किंग क्षेत्र में बिल्ली का मल पड़ा है सफाई कर्मचारी को भेजें।,CLEANLINESS,LOW,hi,stray_dog_poop
+Lift ke aage dog poop pada hai morning se kisi ne saaf nahi kiya smell aa rahi hai.,CLEANLINESS,MEDIUM,hi,stray_dog_poop
+लिफ्टच्या प्रवेशद्वारासमोर भटक्या कुत्र्याची घाण पडली असून फिनाईलने साफ करणे आवश्यक आहे.,CLEANLINESS,MEDIUM,mr,stray_dog_poop
+पार्किंग परिसरात प्राण्यांची विष्ठा पडली असून दुर्गंधी येत आहे सफाई कामगारास पाठवा.,CLEANLINESS,LOW,mr,stray_dog_poop
+Basement madhe dog feces ahe uncleaned ahe housekeeping la bolo disinfectant marayla.,CLEANLINESS,LOW,mr,stray_dog_poop
+Sticky syrup and oil spill along 4th floor staircase stairs causing slippery hazard for residents.,CLEANLINESS,MEDIUM,en,staircase_spill_stain
+Heavy industrial chemical lubricant spilled in staircase landing causing residents dizziness and nausea!,CLEANLINESS,CRITICAL,en,staircase_spill_stain
+Dust and construction debris coating corridor floor tiles outside flat 903.,CLEANLINESS,LOW,en,staircase_spill_stain
+सीढ़ियों पर तेल गिर गया है जिससे फिसलन हो रही है किसी का पैर फिसल सकता है।,CLEANLINESS,MEDIUM,hi,staircase_spill_stain
+"दीवारों पर गुटखा और पान की पीक थूकी हुई है, दीवारों को साफ कराया जाए।",CLEANLINESS,LOW,hi,staircase_spill_stain
+Staircase par oil gira hua hai slip hone ka khatra hai jaldi mopping karwao.,CLEANLINESS,MEDIUM,hi,staircase_spill_stain
+जिन्यावरील पायऱ्यांवर तेल सांडले असून घसरून पडण्याचा धोका निर्माण झाला आहे.,CLEANLINESS,MEDIUM,mr,staircase_spill_stain
+जिन्याच्या पायऱ्यांवर रासायनिक तेलाची गळती झाल्याने विषारी धूर व वास येत आहे तातडीने मदत पाठवा!,CLEANLINESS,CRITICAL,mr,staircase_spill_stain
+Stairs var tel saandla ahe floor slippery zala ahe housekeeping la pocha marayla sanga.,CLEANLINESS,MEDIUM,mr,staircase_spill_stain
+"Plumbing shaft bottom filled with combustible scrap paper, plastics and smoldering cigarette butts fire risk!",CLEANLINESS,CRITICAL,en,duct_waste_dumping
+Bottom of plumbing duct filled with stagnant rotting garbage causing foul stench and heavy mosquito breeding.,CLEANLINESS,HIGH,en,duct_waste_dumping
+Accumulation of pigeon droppings and dry feathers choking open utility shaft sill spreading allergy risk.,CLEANLINESS,HIGH,en,duct_waste_dumping
+डक्ट में ज्वलनशील कचरा और सिगरेट के टुकड़े फेंके गए हैं आग का बड़ा खतरा है तुरंत हटाएं!,CLEANLINESS,CRITICAL,hi,duct_waste_dumping
+प्लंबिंग शाफ्ट के नीचे सूखा कचरा जमा हो गया है सफाई कराएं।,CLEANLINESS,LOW,hi,duct_waste_dumping
+Duct me kachra aur bottle phenki hui hai niche deposit ho gaya hai safai karwao.,CLEANLINESS,LOW,hi,duct_waste_dumping
+प्लंबिंग डक्टमध्ये नागरिकांनी कचरा फेकला असून तिथे घाण साचली आहे साफ करावी.,CLEANLINESS,LOW,mr,duct_waste_dumping
+शाफ्टच्या खिडकीवर कबुतरांची विष्ठा आणि पिसे साचली असून अस्वच्छता पसरली आहे.,CLEANLINESS,LOW,mr,duct_waste_dumping
+Duct shaft madhe bottle aani plastic kachra saachla ahe safai kamgar pathva.,CLEANLINESS,MEDIUM,mr,duct_waste_dumping
+"Total water outage across all 80 flats in Tower 11 since morning, dry taps and no drinking water!",WATER_SUPPLY,CRITICAL,en,no_water_tower
+"Complete water failure throughout entire wing, emergency tanker delivery required immediately!",WATER_SUPPLY,CRITICAL,en,no_water_tower
+Both domestic and flushing water lines bone dry across high rise floors 15 through 20.,WATER_SUPPLY,CRITICAL,en,no_water_tower
+"टावर 11 में सुबह 6 बजे से एक बूंद पानी नहीं आ रहा है, सभी फ्लैट में पानी खत्म हो गया है तुरंत टैंकर भेजो!",WATER_SUPPLY,CRITICAL,hi,no_water_tower
+"पूरी बिल्डिंग में पानी की सप्लाई बंद है, पीने और टॉयलेट के लिए पानी नहीं बचा है।",WATER_SUPPLY,CRITICAL,hi,no_water_tower
+"Tower 9 me bilkul paani nahi hai subah se, tanki poori khali hai emergency water tanker chahiye.",WATER_SUPPLY,CRITICAL,hi,no_water_tower
+टावर १२ मध्ये सकाळपासून पाणीपुरवठा पूर्णपणे बंद झाला असून सर्व नळ कोरडे पडले आहेत तातडीने टँकर पाठवा!,WATER_SUPPLY,CRITICAL,mr,no_water_tower
+"संपूर्ण विंगमध्ये पाणी नाही, पिण्याच्या पाण्याचे मोठे दुर्भिक्ष निर्माण झाले आहे.",WATER_SUPPLY,CRITICAL,mr,no_water_tower
+"Building madhe paani bilkul nahi ahe, taps dry ahet emergency water supply chalu kara.",WATER_SUPPLY,CRITICAL,mr,no_water_tower
+"Water pressure in kitchen faucet is barely a trickle, taking 10 minutes to fill a cooking pot.",WATER_SUPPLY,MEDIUM,en,low_water_pressure
+Bathroom shower water pressure is too low to trigger geyser heating mechanism.,WATER_SUPPLY,MEDIUM,en,low_water_pressure
+Mild drop in water pressure noticed during evening peak hours in master bathroom.,WATER_SUPPLY,LOW,en,low_water_pressure
+"रसोई के नल में पानी का दबाव बहुत कम है, एक बाल्टी भरने में आधा घंटा लग रहा है।",WATER_SUPPLY,MEDIUM,hi,low_water_pressure
+"शाम के समय पानी का प्रेशर कम हो जाता है, प्रेशर पंप चालू करें।",WATER_SUPPLY,LOW,hi,low_water_pressure
+"Washbasin me paani ka flow bohot slow hai, geyser chalu nahi ho pa raha pressure badhao.",WATER_SUPPLY,MEDIUM,hi,low_water_pressure
+स्वयंपाकघरातील नळात पाण्याचा दाब अत्यंत कमी असून भांडी धुण्यासाठी पाणी पुरेसे येत नाही.,WATER_SUPPLY,MEDIUM,mr,low_water_pressure
+"संध्याकाळी पाण्याच्या दाबात घट होते, बूस्टर पंप व्यवस्थित सुरू आहे का तपासावे.",WATER_SUPPLY,LOW,mr,low_water_pressure
+Bathroom madhe paani cha pressure kami ahe barik dhaar yet ahe booster pump check kara.,WATER_SUPPLY,LOW,mr,low_water_pressure
+Taps are discharging dark brownish muddy water with heavy sediment unfit for bathing or washing.,WATER_SUPPLY,HIGH,en,dirty_muddy_water
+Drinking water supply contaminated with severe sewage odor and toxic oil sheen health catastrophe!,WATER_SUPPLY,CRITICAL,en,dirty_muddy_water
+Black particulate sediment accumulating at bottom of water filter inlet every hour.,WATER_SUPPLY,HIGH,en,dirty_muddy_water
+"नलों से मटमैला गंदा भूरा पानी आ रहा है, कपड़े धोने और नहाने लायक भी नहीं है।",WATER_SUPPLY,HIGH,hi,dirty_muddy_water
+"पीने के पानी में सीवर का पानी मिल गया है, बदबूदार जहरीला पानी आ रहा है तुरंत सप्लाई बंद करें!",WATER_SUPPLY,CRITICAL,hi,dirty_muddy_water
+Taps se muddy brown paani aa raha hai ganda paani supplies me mix ho gaya hai.,WATER_SUPPLY,HIGH,hi,dirty_muddy_water
+नळातून चिखलमिश्रित तपकिरी घाण पाणी येत असून ते वापरण्यायोग्य नाही तातडीने टाकी स्वच्छ करा.,WATER_SUPPLY,HIGH,mr,dirty_muddy_water
+पिण्याच्या पाण्यात गटाराचे पाणी मिसळले असून विषबाधा होण्याची भीती आहे त्वरित कारवाई करा!,WATER_SUPPLY,CRITICAL,mr,dirty_muddy_water
+Nalatun ghaan maati mishrit paani yet ahe tank cleaning urgent ahe water sample test kara.,WATER_SUPPLY,HIGH,mr,dirty_muddy_water
+"Overhead rooftop water tank is overflowing massively, cascades pouring down exterior building facade.",WATER_SUPPLY,HIGH,en,overhead_tank_overflow
+"Rooftop water tank sensor failed, thousands of liters of clean water wasting down storm drain.",WATER_SUPPLY,HIGH,en,overhead_tank_overflow
+Water pump automation controller not shutting down when storage tank reaches 100 percent.,WATER_SUPPLY,MEDIUM,en,overhead_tank_overflow
+छत पर रखी पानी की टंकी ओवरफ्लो होकर लगातार बह रही है और हजारों लीटर पानी बर्बाद हो रहा है!,WATER_SUPPLY,HIGH,hi,overhead_tank_overflow
+वाटर पंप बंद नहीं हो रहा है और छत से पानी झरने की तरह नीचे गिर रहा है मोटर बंद कराएं।,WATER_SUPPLY,HIGH,hi,overhead_tank_overflow
+Terrace tanki overflow ho rahi hai paani building ke bahar gir raha hai motor switch off karo.,WATER_SUPPLY,HIGH,hi,overhead_tank_overflow
+छतावरील पाण्याची टाकी ओव्हरफ्लो होऊन हजारो लिटर पाणी वाया जात आहे मोटर त्वरित बंद करा!,WATER_SUPPLY,HIGH,mr,overhead_tank_overflow
+टाकीचा स्वयंचलित सेन्सर बंद पडल्यामुळे पाणी इमारतीच्या बाहेरील भिंतीवरून वाहत आहे.,WATER_SUPPLY,HIGH,mr,overhead_tank_overflow
+Terrace varil paani tanki overflow hot ahe pump operator la sangun motor band kara.,WATER_SUPPLY,MEDIUM,mr,overhead_tank_overflow
+Central solar hot water line is completely cold at 7:00 AM on cold winter morning.,WATER_SUPPLY,MEDIUM,en,hot_water_line_empty
+Solar hot water pipeline airlock causing cold water output in master bathroom.,WATER_SUPPLY,LOW,en,hot_water_line_empty
+Kitchen utility hot water line has negligible warmth despite sunny day.,WATER_SUPPLY,LOW,en,hot_water_line_empty
+"सुबह से सोलर का गरम पानी नहीं आ रहा है, नल से बर्फ जैसा ठंडा पानी निकल रहा है।",WATER_SUPPLY,MEDIUM,hi,hot_water_line_empty
+सोलर पाइपलाइन में एयरलॉक लग गया है गरम पानी का प्रेशर नहीं बन रहा है।,WATER_SUPPLY,LOW,hi,hot_water_line_empty
+Solar hot water bilkul thanda aa raha hai subah se system check karwao.,WATER_SUPPLY,MEDIUM,hi,hot_water_line_empty
+सकाळच्या वेळी सोलरचे गरम पाणी अजिबात येत नसून गार पाणी येत आहे सोलर पॅनल तपासा.,WATER_SUPPLY,MEDIUM,mr,hot_water_line_empty
+"सोलर गरम पाण्याच्या पाईपमध्ये एअर लॉक झाला असावा, पाणी खूप संथ येत आहे.",WATER_SUPPLY,LOW,mr,hot_water_line_empty
+Solar paani thanda ahe garm paani pipeline blockage mule yet nahi ahe urgent check kara.,WATER_SUPPLY,HIGH,mr,hot_water_line_empty
+Unknown aggressive male entered Tower 3 lobby without gate security register entry or resident approval!,SECURITY,CRITICAL,en,unauthorized_visitor_entry
+Suspicious trespassers roaming 14th floor corridor late at night trying door latches!,SECURITY,CRITICAL,en,unauthorized_visitor_entry
+Delivery riders tailgating through boom barrier without OTP verification or luggage scanning.,SECURITY,HIGH,en,unauthorized_visitor_entry
+एक अज्ञात संदिग्ध व्यक्ति बिना किसी एंट्री के टावर 5 में घुस गया और फ्लैट्स के दरवाजे खटखटा रहा है तुरंत गार्ड भेजें!,SECURITY,CRITICAL,hi,unauthorized_visitor_entry
+"रात को दो अजनबी बेसमेंट पार्किंग में गाड़ियों की रेकी कर रहे थे, सुरक्षा में भारी चूक है।",SECURITY,HIGH,hi,unauthorized_visitor_entry
+Gate par koi checking nahi hai unverified delivery boy building me ghoom raha hai security dispatch karo.,SECURITY,CRITICAL,hi,unauthorized_visitor_entry
+संशयास्पद अज्ञात व्यक्ती विनापरवानगी इमारतीत शिरली असून फ्लॅटचे कडे वाजवत फिरत आहे तातडीने सुरक्षा रक्षक पाठवा!,SECURITY,CRITICAL,mr,unauthorized_visitor_entry
+"मुख्य गेटवरून कोणतीही नोंद न करता अनोळखी व्यक्ती थेट लिफ्टमध्ये गेली, सुरक्षेत गंभीर त्रुटी आहे.",SECURITY,HIGH,mr,unauthorized_visitor_entry
+Unknown person lobby madhe firat ahe verification zale nahi ahe security alert pathva.,SECURITY,CRITICAL,mr,unauthorized_visitor_entry
+Night shift security guard at North Gate was found sound asleep on a chair with open gate unattended.,SECURITY,HIGH,en,guard_sleeping_gate
+"Gate 2 security post completely abandoned during evening peak rush hours, no guard present.",SECURITY,HIGH,en,guard_sleeping_gate
+Security guard physically drunk and verbally abusing residents at main entry gate!,SECURITY,CRITICAL,en,guard_sleeping_gate
+रात में गेट नंबर 2 पर गार्ड गहरी नींद में सो रहा था और बैरियर खुला पड़ा था भारी लापरवाही है।,SECURITY,HIGH,hi,guard_sleeping_gate
+शाम के समय मेन गेट पर कोई गार्ड मौजूद नहीं था और गाड़ियां बिना रोक-टोक आ रही थीं।,SECURITY,HIGH,hi,guard_sleeping_gate
+मेन गेट पर सुरक्षा गार्ड शराब के नशे में धुत होकर निवासियों से मारपीट पर उतारू है तुरंत पुलिस बुलाएं!,SECURITY,CRITICAL,hi,guard_sleeping_gate
+रात्रीच्या वेळी उत्तर गेटवरील सुरक्षा रक्षक खुर्चीवर झोपलेला आढळला आणि गेट उघडेच होते सुरक्षेचा मोठा प्रश्न आहे.,SECURITY,HIGH,mr,guard_sleeping_gate
+गेट क्रमांक १ वर सुरक्षा रक्षक दारू पिऊन नागरिकांशी वाद घालत असून मारहाण करत आहे तात्काळ मदत पाठवा!,SECURITY,CRITICAL,mr,guard_sleeping_gate
+Security guard phone var video baghat basla hota visitors kade laksha navhte complaint note kara.,SECURITY,MEDIUM,mr,guard_sleeping_gate
+"Tower 7 lobby CCTV camera feed is completely black on security monitor, blind spot created.",SECURITY,HIGH,en,cctv_camera_offline
+Basement 2 parking camera is hanging by its wire loose and misaligned from ceiling.,SECURITY,MEDIUM,en,cctv_camera_offline
+Main perimeter wall CCTV infrared night vision LED is defective causing unmonitored dark zone.,SECURITY,HIGH,en,cctv_camera_offline
+टावर 7 की लॉबी का सीसीटीवी कैमरा बंद पड़ा है स्क्रीन पर कोई फुटेज नहीं आ रही है।,SECURITY,HIGH,hi,cctv_camera_offline
+बेसमेंट का कैमरा तार से लटक रहा है और उसकी दिशा गलत हो गई है तुरंत ठीक करवाएं।,SECURITY,MEDIUM,hi,cctv_camera_offline
+Boundary wall ka CCTV camera offline hai security desk monitor pe no signal aa raha.,SECURITY,HIGH,hi,cctv_camera_offline
+टावर ७ च्या प्रवेशद्वारावरील सीसीटीव्ही कॅमेरा बंद पडला असून सुरक्षा कक्षात डिस्प्ले येत नाहीये.,SECURITY,HIGH,mr,cctv_camera_offline
+तळघरातील सीसीटीव्ही कॅमेऱ्याची दिशा बदलली असून वायर लटकत आहे दुरुस्ती करावी.,SECURITY,MEDIUM,mr,cctv_camera_offline
+Main gate CCTV camera offline ahe footage record hot nahi security technician pathva.,SECURITY,HIGH,mr,cctv_camera_offline
+Flat intercom audio is crackling loudly and security gate cannot connect for visitor authorization.,SECURITY,MEDIUM,en,intercom_system_down
+"Intercom handset has no dial tone, gate guards unable to confirm visitor entry.",SECURITY,MEDIUM,en,intercom_system_down
+Intercom buzzer rings continuously even when handset is on hook.,SECURITY,LOW,en,intercom_system_down
+"फ्लैट का इंटरकॉम खराब है, गेट से कोई आवाज सुनाई नहीं देती और विजिटर खड़े रहते हैं।",SECURITY,MEDIUM,hi,intercom_system_down
+"इंटरकॉम में डायल टोन नहीं आ रहा है, सुरक्षा गार्ड से संपर्क नहीं हो पा रहा।",SECURITY,MEDIUM,hi,intercom_system_down
+Intercom handset dead hai gate se visitor call connect nahi ho raha check karwao.,SECURITY,LOW,hi,intercom_system_down
+फ्लॅटमधील इंटरकॉम बंद पडल्यामुळे मुख्य प्रवेशद्वारावरून सुरक्षारक्षकांचे फोन येत नाहीत.,SECURITY,MEDIUM,mr,intercom_system_down
+इंटरकॉममध्ये प्रचंड खरखर आवाज येत असून संवाद साधणे अशक्य झाले आहे.,SECURITY,MEDIUM,mr,intercom_system_down
+Intercom chi wire loose zali ahe gate varun visitor approval sathi ring yet nahi.,SECURITY,LOW,mr,intercom_system_down
+Vehicle exit boom barrier arm is bent and stuck in halfway raised position causing vehicle delays.,SECURITY,MEDIUM,en,boom_barrier_damaged
+RFID tag scanner at entry boom barrier taking over 30 seconds per car causing traffic jam.,SECURITY,LOW,en,boom_barrier_damaged
+Boom barrier reflective warning stickers peeled off and safety rubber strip missing.,SECURITY,LOW,en,boom_barrier_damaged
+गेट का बूम बैरियर आधा टूटकर अटक गया है और गाड़ियों की लंबी कतार लग गई है।,SECURITY,MEDIUM,hi,boom_barrier_damaged
+आरएफआईडी स्कैनर काम नहीं कर रहा और बैरियर अपने आप नहीं खुल रहा है।,SECURITY,LOW,hi,boom_barrier_damaged
+Exit gate boom barrier crash hokar tut gaya hai entrance blocked ho gaya hai emergency!,SECURITY,CRITICAL,hi,boom_barrier_damaged
+वाहनांच्या मुख्य प्रवेशद्वारावरील बूम बॅरिअर मोडून पडले असून गेटवर वाहनांचा मार्ग पूर्णपणे ठप्प झाला आहे!,SECURITY,CRITICAL,mr,boom_barrier_damaged
+फाटकावरील फास्टॅग/आरएफआयडी स्कॅनर अत्यंत धीमे चालत असल्याने वाहतूक कोंडी होत आहे.,SECURITY,LOW,mr,boom_barrier_damaged
+Boom barrier sensor read karat nahi achanak barrier gaadi var padla ahe emergency repair kara!,SECURITY,CRITICAL,mr,boom_barrier_damaged
+"Children park big swing iron chain snapped while toddler was swinging, child suffered bruising and heavy steel link exposed!",COMMON_AREA,CRITICAL,en,children_park_swing_broken
+"Toddler slide has cracked sharp plastic edge that cut a child's leg, urgent cordoning off needed!",COMMON_AREA,CRITICAL,en,children_park_swing_broken
+"See-saw pivot joint has lost its retaining bolt, wobbling noticeably when kids play.",COMMON_AREA,MEDIUM,en,children_park_swing_broken
+बच्चों के पार्क का झूला टूट गया है और लोहे की नुकीली पत्ती बाहर निकली है तुरंत बंद कराएं बड़ा हादसा हो सकता है!,COMMON_AREA,CRITICAL,hi,children_park_swing_broken
+फिसलपट्टी की सीढ़ी टूटी हुई है और बच्चे गिर सकते हैं मरम्मत करवाएं।,COMMON_AREA,HIGH,hi,children_park_swing_broken
+Children playground swing ki chain toot gayi hai dangerous hai bacho ko chot lag sakti hai jaldi repair karo.,COMMON_AREA,CRITICAL,hi,children_park_swing_broken
+लहान मुलांच्या बागेतील झोपाळ्याची लोखंडी साखळी तुटली असून टोकेरी भाग उघडा पडला आहे मोठा अपघात होऊ शकतो तातडीने दुरुस्त करा!,COMMON_AREA,CRITICAL,mr,children_park_swing_broken
+घसरगुंडीच्या पायऱ्या सैल झाल्या असून लहान मुलांना खेळताना तोल जाण्याची भीती आहे.,COMMON_AREA,MEDIUM,mr,children_park_swing_broken
+Playground swing chain tutli ahe kids sathi dangerous ahe park equipment repair technician pathva.,COMMON_AREA,HIGH,mr,children_park_swing_broken
+Live underwater pool light detached with exposed 230V live wire submerged in pool water extreme electrocution hazard!,COMMON_AREA,CRITICAL,en,swimming_pool_dirty
+Pool filtration pump has been shut down for 3 days and dead insects floating on surface.,COMMON_AREA,HIGH,en,swimming_pool_dirty
+Chlorine smell in pool area is overpoweringly noxious causing eye burning and coughing.,COMMON_AREA,MEDIUM,en,swimming_pool_dirty
+स्विमिंग पूल में अंडरवाटर बिजली की नंगी तार पानी में डूबी है करंट लगने का भयानक खतरा है!,COMMON_AREA,CRITICAL,hi,swimming_pool_dirty
+"स्विमिंग पूल का पानी हरा हो गया है और नीचे काई जम गई है, बच्चों की स्किन में रैशेज हो रहे हैं।",COMMON_AREA,HIGH,hi,swimming_pool_dirty
+Swimming pool ka paani bohot dirty aur green ho gaya hai chlorine treatment aur filtration chahiye.,COMMON_AREA,MEDIUM,hi,swimming_pool_dirty
+जलतरण तलावातील अंडरवॉटर दिव्याची वायर उघडी पडून पाण्यात विजेचा प्रवाह उतरला आहे जीवघेणा धोका आहे!,COMMON_AREA,CRITICAL,mr,swimming_pool_dirty
+स्विमिंग पूलचा फिल्टर पंप बंद असून पाण्यावर अस्वच्छता पसरली आहे स्वच्छता करावी.,COMMON_AREA,HIGH,mr,swimming_pool_dirty
+Pool che paani khup ghaan zala ahe green algae ahe filtration system chalu kara.,COMMON_AREA,MEDIUM,mr,swimming_pool_dirty
+Main cardio treadmill belt slips severely at speeds above 6 kmph throwing users off balance.,COMMON_AREA,MEDIUM,en,gym_equipment_broken
+Cable crossover machine heavy cast iron weight stack guide rod sheared off falling dangerously!,COMMON_AREA,CRITICAL,en,gym_equipment_broken
+Adjustable bench pin is missing preventing angle locking mechanism.,COMMON_AREA,LOW,en,gym_equipment_broken
+जिम की ट्रेडमिल का बेल्ट चलते-चलते स्लिप हो रहा है कोई भी गिरकर घायल हो सकता है।,COMMON_AREA,MEDIUM,hi,gym_equipment_broken
+डंबल रैक का स्टैंड टेढ़ा हो गया है और वजन फर्श पर गिर रहे हैं।,COMMON_AREA,LOW,hi,gym_equipment_broken
+Clubhouse gym ka cross trainer machine jam ho gaya hai noise kar raha hai service technician bhejo.,COMMON_AREA,MEDIUM,hi,gym_equipment_broken
+सोसायटीच्या व्यायामशाळेतील ट्रेडमिलचा बेल्ट अचानक अडकतो आणि कसरत करताना तोल जातो.,COMMON_AREA,MEDIUM,mr,gym_equipment_broken
+जिममधील डंबेलचे स्टँड तुटले असून वजने खाली पडत आहेत दुरुस्ती करणे आवश्यक आहे.,COMMON_AREA,LOW,mr,gym_equipment_broken
+Gym machine chi wire fray zali ahe servicing karavi lagel gym equipment repair required.,COMMON_AREA,LOW,mr,gym_equipment_broken
+Clubhouse party hall split AC is leaking continuous water stream over the wooden dance flooring.,COMMON_AREA,MEDIUM,en,clubhouse_ac_leaking
+Clubhouse indoor badminton court AC is not cooling during booked tournament slots.,COMMON_AREA,LOW,en,clubhouse_ac_leaking
+Society office air conditioner outdoor condenser unit making rattling fan vibration.,COMMON_AREA,LOW,en,clubhouse_ac_leaking
+क्लबहाउस के एसी से बहुत पानी टपक रहा है और नीचे की लकड़ी का फर्श फूल कर खराब हो रहा है।,COMMON_AREA,MEDIUM,hi,clubhouse_ac_leaking
+कम्युनिटी हॉल का एसी कूलिंग नहीं कर रहा है सिर्फ हवा फेंक रहा है गैस चेक कराएं।,COMMON_AREA,LOW,hi,clubhouse_ac_leaking
+Clubhouse AC water drop kar raha hai wooden floor par slippery ho raha hai repair karwao.,COMMON_AREA,MEDIUM,hi,clubhouse_ac_leaking
+क्लबहाऊसमधील वातानुकूलन यंत्रातून (एसी) सतत पाणी गळत असून लाकडी मजला खराब होत आहे.,COMMON_AREA,MEDIUM,mr,clubhouse_ac_leaking
+सोसायटीच्या सभागृहातील एसी थंड हवा देत नसून गॅस संपला असावा सर्व्हिसिंग करावी.,COMMON_AREA,LOW,mr,clubhouse_ac_leaking
+Clubhouse hall AC leak hot ahe paani floor var saachle ahe AC repair technician pathva.,COMMON_AREA,LOW,mr,clubhouse_ac_leaking
+Indoor badminton court center net is torn from tension cable and sagging to the ground.,COMMON_AREA,LOW,en,badminton_court_net_torn
+Tennis court perimeter fence net has huge gaping holes allowing balls onto internal road.,COMMON_AREA,LOW,en,badminton_court_net_torn
+Table tennis table corner edge veneer chipped off during tournament play.,COMMON_AREA,LOW,en,badminton_court_net_torn
+बैडमिंटन कोर्ट की नेट बीच से फट गई है और जमीन पर लटक रही है नई नेट लगवाएं।,COMMON_AREA,LOW,hi,badminton_court_net_torn
+टेनिस कोर्ट की जाली फटी हुई है और गेंदें बार-बार सड़क पर जा रही हैं।,COMMON_AREA,LOW,hi,badminton_court_net_torn
+Badminton court ki net phati hui hai khelne me problem aa rahi hai replace it.,COMMON_AREA,LOW,hi,badminton_court_net_torn
+बॅडमिंटन कोर्टची जाळी मध्यभागी फाटली असून ती खाली लोंबकळत आहे नवीन जाळी बसवावी.,COMMON_AREA,LOW,mr,badminton_court_net_torn
+टेबल टेनिस टेबलचा कोपरा तुटला असून खेळताना चेंडू उसळत नाही दुरुस्त करा.,COMMON_AREA,LOW,mr,badminton_court_net_torn
+Sports arena net phatli ahe badminton play karta yet nahi navin net basva.,COMMON_AREA,MEDIUM,mr,badminton_court_net_torn
+Flat 1204 playing deafening bass amplified party music continuously at 2:30 AM on weekday despite guard visits!,GENERAL,CRITICAL,en,late_night_loud_music
+Brawl and screaming physical altercation in 9th floor corridor at 1:00 AM terrifying elderly neighbors!,GENERAL,CRITICAL,en,late_night_loud_music
+Violent banging on communal doors and unruly loud shouting late at night in Tower 8.,GENERAL,HIGH,en,late_night_loud_music
+"फ्लैट 1204 में रात के 2:30 बजे बेहद तेज आवाज में डीजे म्यूजिक बज रहा है, मना करने पर झगड़ा कर रहे हैं तुरंत पुलिस या सुरक्षा भेजें!",GENERAL,CRITICAL,hi,late_night_loud_music
+"रात को लॉबी में कुछ लोग चिल्ला रहे हैं और दरवाजा पीट रहे हैं, सोसायटी की शांति भंग हो रही है।",GENERAL,HIGH,hi,late_night_loud_music
+Raat ko 2 baje flat 802 me high volume sound baj raha hai patients so nahi pa rahe action lo.,GENERAL,CRITICAL,hi,late_night_loud_music
+शेजारच्या फ्लॅटमध्ये मध्यरात्री अडीच वाजता अतिशय मोठ्या आवाजात संगीत सुरू असून विचारणा केल्यावर शिवीगाळ करत आहेत तातडीने हस्तक्षेप करा!,GENERAL,CRITICAL,mr,late_night_loud_music
+मध्यरात्री कॉरिडॉरमध्ये काही लोकांचे मोठे भांडण सुरू असून आरडाओरड होत आहे शांतता धोक्यात आली आहे.,GENERAL,HIGH,mr,late_night_loud_music
+Raatri 2 vajta loud DJ music chalu ahe flat 504 madhe complaint karun pan band karat nahit urgent guard pathva.,GENERAL,CRITICAL,mr,late_night_loud_music
+Unauthorized SUV illegally parked in my allocated covered parking bay B-104 refusing to move.,GENERAL,HIGH,en,visitor_parking_encroachment
+Commercial delivery truck completely blocking emergency fire tender driveway and ambulance access!,GENERAL,CRITICAL,en,visitor_parking_encroachment
+Visitor vehicle parked over two reserved resident slots without displaying guest pass.,GENERAL,MEDIUM,en,visitor_parking_encroachment
+मेरी अलॉटेड पार्किंग में किसी अज्ञात व्यक्ति ने अपनी गाड़ी लगा दी है और फोन नहीं उठा रहा तुरंत हटवाएं।,GENERAL,HIGH,hi,visitor_parking_encroachment
+फायर ब्रिगेड और एम्बुलेंस का मुख्य रास्ता अज्ञात भारी वाहन ने पूरी तरह ब्लॉक कर दिया है जानलेवा खतरा है!,GENERAL,CRITICAL,hi,visitor_parking_encroachment
+Mera parking slot B-45 kisi aur car ne block kar diya hai security guard ko bolkar car tow karwao.,GENERAL,MEDIUM,hi,visitor_parking_encroachment
+माझ्या हक्काच्या पार्किंग जागेत अज्ञात व्यक्तीने गाडी उभी केली असून गाडी काढण्यास नकार देत आहे तातडीने सुरक्षा रक्षक पाठवा.,GENERAL,HIGH,mr,visitor_parking_encroachment
+अग्निशामक दलाचा आपत्कालीन मार्ग अज्ञात वाहनाने अडवला असून रुग्णवाहिका येण्यास मार्ग नाही त्वरित वाहन हटवा!,GENERAL,CRITICAL,mr,visitor_parking_encroachment
+Majhya parking bay madhe dusri gadi park keli ahe number plate track kara gadi kadhayla sanga.,GENERAL,MEDIUM,mr,visitor_parking_encroachment
+Paid monthly maintenance fee of Rs 7475 via UPI last Monday but payment receipt is not reflected in account portal.,GENERAL,MEDIUM,en,maintenance_receipt_delay
+Discrepancy in previous quarter ledger statement showing incorrect penalty charge of Rs 250.,GENERAL,LOW,en,maintenance_receipt_delay
+Annual audited maintenance statement requested two weeks ago has not been emailed by society office.,GENERAL,LOW,en,maintenance_receipt_delay
+मैंने पिछले हफ्ते मेंटेनेंस का 7475 रुपये यूपीआई से भुगतान किया था लेकिन पोर्टल पर अभी भी पेंडिंग दिख रहा है रसीद दें।,GENERAL,MEDIUM,hi,maintenance_receipt_delay
+मेंटेनेंस बिल में 200 रुपये का गलत लेट फाइन लगा दिया गया है कृपया लेजर में सुधार करें।,GENERAL,LOW,hi,maintenance_receipt_delay
+Maintenance bill payment receipt portal par update nahi hui bank se paise cut ho gaye hai update ledger.,GENERAL,LOW,hi,maintenance_receipt_delay
+गेल्या आठवड्यात मेंटेनन्स बिलाचे ७४७५ रुपये भरले असून अद्याप पावती जनरेट झालेली नाही खात्यांची पडताळणी करावी.,GENERAL,MEDIUM,mr,maintenance_receipt_delay
+सोसायटीच्या खात्यावर दंड म्हणून चुकीची रक्कम लावण्यात आली आहे लेजर दुरुस्त करून मिळावे.,GENERAL,LOW,mr,maintenance_receipt_delay
+Maintenance receipt ajun bhetli nahi bank txn id share kela ahe accounts team la confirm karayla sanga.,GENERAL,LOW,mr,maintenance_receipt_delay
+Large aggressive unleashed dog roaming corridor without muzzle lunging at passing school children.,GENERAL,HIGH,en,pet_policy_violation
+Resident allowing pet dog to bark incessantly on balcony for 6 hours straight during working hours.,GENERAL,LOW,en,pet_policy_violation
+Pet owner walking dog in designated children play sandbox violating society bylaws.,GENERAL,MEDIUM,en,pet_policy_violation
+पड़ोसी अपने बड़े कुत्ते को बिना पट्टे के लॉबी में खुला छोड़ देते हैं जिससे बच्चों में डर बैठ गया है।,GENERAL,HIGH,hi,pet_policy_violation
+बालकनी में कुत्ता पिछले 4 घंटे से लगातार भौंक रहा है वर्क फ्रॉम होम में भारी परेशानी हो रही है।,GENERAL,LOW,hi,pet_policy_violation
+Unleashed pet dog corridor me ghum raha hai bina lease ke bacho ko darr lag raha hai notice bhejo owner ko.,GENERAL,MEDIUM,hi,pet_policy_violation
+शेजारी आपल्या पाळीव कुत्र्याला पट्ट्याशिवाय कॉरिडॉरमध्ये मोकळे सोडत असल्याने लहान मुलांमध्ये घबराट पसरली आहे.,GENERAL,HIGH,mr,pet_policy_violation
+सकाळपासून बाल्कनीमध्ये कुत्रा भुंकत असल्यामुळे आजारी व्यक्तींना शांत झोप घेता येत नाही.,GENERAL,LOW,mr,pet_policy_violation
+Pet dog leash shivay lobby madhe firavtat society rules follow karayla owner la warning dya.,GENERAL,MEDIUM,mr,pet_policy_violation
+Flat renovation NOC application submitted 10 days ago awaiting society manager approval stamp.,GENERAL,LOW,en,renovation_noc_request
+Interior carpenter work requested permission for drilling between 10 AM and 1 PM tomorrow.,GENERAL,LOW,en,renovation_noc_request
+Requesting security gate pass clearance for modular kitchen material delivery truck.,GENERAL,LOW,en,renovation_noc_request
+"फ्लैट रिनोवेशन की एनओसी के लिए 10 दिन पहले आवेदन किया था, अभी तक अनुमति पत्र नहीं मिला।",GENERAL,LOW,hi,renovation_noc_request
+कल सुबह किचन के फर्नीचर काम के लिए बढ़ई का गेट पास स्वीकृत किया जाए।,GENERAL,LOW,hi,renovation_noc_request
+Renovation NOC request form submit kiya tha status update karke approval issue karo.,GENERAL,LOW,hi,renovation_noc_request
+फ्लॅटच्या नूतनीकरणासाठी ना-हरकत प्रमाणपत्राचा (NOC) अर्ज सादर केला असून अद्याप स्वाक्षरी मिळालेली नाही.,GENERAL,LOW,mr,renovation_noc_request
+घरातील सुतारकामासाठी उद्या सकाळी साहित्याची गाडी आणण्यास सुरक्षारक्षकांकडे परवानगी द्यावी.,GENERAL,LOW,mr,renovation_noc_request
+Flat renovation permission letter approve karun dya carpenter team ready ahe NOC pass dya.,GENERAL,LOW,mr,renovation_noc_request

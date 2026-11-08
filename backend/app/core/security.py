@@ -347,3 +347,24 @@ def verify_flat_access(user: User, flat_id: str, action: str = "read") -> FlatMe
         )
 
     return membership
+
+
+def verify_csrf(request: Request):
+    """
+    Validates CSRF token using double-submit cookie pattern.
+    Compares `X-CSRF-Token` header against `township_csrf` cookie.
+    Safe methods (GET, HEAD, OPTIONS) bypass CSRF check.
+    """
+    if request.method in ["GET", "HEAD", "OPTIONS"]:
+        return
+    session_cookie = request.cookies.get("township_session")
+    if not session_cookie:
+        return
+    csrf_cookie = request.cookies.get("township_csrf")
+    csrf_header = request.headers.get("x-csrf-token") or request.headers.get("X-CSRF-Token")
+    if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token validation failed. Missing or invalid X-CSRF-Token header."
+        )
+
