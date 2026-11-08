@@ -51,7 +51,7 @@ Raw OTPs are never stored in memory or database state in plaintext:
 
 ---
 
-## 3. Role-Based Access Control Matrix
+## 3. Role-Based Access Control Permissions Framework
 
 Server-side authorization is verified using dependency injection guards (`verify_flat_access`, `require_role`):
 

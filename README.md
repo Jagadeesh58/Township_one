@@ -29,7 +29,7 @@ Comprehensive architecture specifications, data schemas, security models, and ve
 | [`docs/architecture.md`](docs/architecture.md) | High-level system architecture, component topology, and technology stack. |
 | [`docs/data-model.md`](docs/data-model.md) | Entity-relationship diagrams, schema tables, constraints, and data dictionaries. |
 | [`docs/database-and-seed-data.md`](docs/database-and-seed-data.md) | 2,400 flats, 28 towers, 180 staff, 4 gates, and ground truth sample personas. |
-| [`docs/authentication-and-access-control.md`](docs/authentication-and-access-control.md) | Salted SHA-256 OTP authentication, persistent JWT revocation, and RBAC matrix. |
+| [`docs/authentication-and-access-control.md`](docs/authentication-and-access-control.md) | Salted SHA-256 OTP authentication, persistent JWT revocation, and RBAC permissions model. |
 | [`docs/maintenance-billing.md`](docs/maintenance-billing.md) | Area-rate billing (₹6.50/sq ft), grace period boundaries, leap year support, and ledger bookkeeping. |
 | [`docs/payments-and-receipts.md`](docs/payments-and-receipts.md) | Idempotency locking, state machine retry lifecycle, test payment modes, and vouchers. |
 | [`docs/resident-experience-and-pwa.md`](docs/resident-experience-and-pwa.md) | 2-tap payment CTA, multi-bill selection, service worker caching, and trilingual i18n. |

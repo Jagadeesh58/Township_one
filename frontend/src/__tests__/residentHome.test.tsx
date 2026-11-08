@@ -5,7 +5,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ResidentHomePage } from '../pages/ResidentHomePage';
 import { api, UserProfile, BillingSummary } from '../api/client';
 
-describe('ResidentHomePage UI Acceptance & State Transitions', () => {
+describe('ResidentHomePage UI Integration & State Transitions', () => {
   const mockUser: UserProfile = {
     id: 'user-swati-uuid',
     phone: '9876543211',

@@ -7,7 +7,7 @@
 
 ---
 
-## 1. Idempotency Key Replay Matrix
+## 1. Idempotency Key Replay Scenarios & Outcomes
 
 | Scenario | Client Action | Server Handling | Result Status | Information Leaked? |
 |---|---|---|---|---|
