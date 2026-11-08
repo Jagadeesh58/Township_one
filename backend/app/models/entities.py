@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import (
-    Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, JSON, Float
+    Column, String, Integer, Numeric, Boolean, DateTime, Date, Time, ForeignKey, Text, UniqueConstraint, JSON, Float
 )
 from sqlalchemy.orm import relationship
 from backend.app.core.database import Base
@@ -580,8 +580,48 @@ class Notice(Base):
     target_audience = Column(String(20), default="ALL")  # ALL, TOWER
     target_tower_id = Column(String(36), ForeignKey("towers.id"), nullable=True)
     priority = Column(String(20), default="NORMAL")  # NORMAL, URGENT
+    status = Column(String(20), nullable=False, default="PUBLISHED")  # DRAFT, PUBLISHED, WITHDRAWN
+    current_revision_id = Column(String(36), nullable=True)
     published_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime, nullable=True)
+
+    revisions = relationship("NoticeRevision", back_populates="notice", cascade="all, delete-orphan")
+
+
+class NoticeRevision(Base):
+    __tablename__ = "notice_revisions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    notice_id = Column(String(36), ForeignKey("notices.id"), nullable=False)
+    revision_number = Column(Integer, nullable=False, default=1)
+    title = Column(String(200), nullable=False)
+    body_en = Column(Text, nullable=False)
+    body_hi = Column(Text, nullable=True)
+    body_mr = Column(Text, nullable=True)
+    publish_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime, nullable=True)
+    audience = Column(String(20), nullable=False, default="ALL")  # ALL, TOWER
+    tower_id = Column(String(36), ForeignKey("towers.id"), nullable=True)
+    severity = Column(String(20), nullable=False, default="NORMAL")  # NORMAL, CRITICAL
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    notice = relationship("Notice", back_populates="revisions")
+    tower = relationship("Tower")
+    created_by = relationship("User")
+    reads = relationship("NoticeRead", back_populates="revision", cascade="all, delete-orphan")
+
+
+class NoticeRead(Base):
+    __tablename__ = "notice_reads"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    notice_revision_id = Column(String(36), ForeignKey("notice_revisions.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    read_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    revision = relationship("NoticeRevision", back_populates="reads")
+    user = relationship("User")
 
 
 class Visitor(Base):
@@ -600,6 +640,110 @@ class Visitor(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class VisitorPhoto(Base):
+    __tablename__ = "visitor_photos"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    storage_key = Column(String(255), nullable=True)  # nulled on 90-day retention purge
+    sha256 = Column(String(64), nullable=False)
+    capture_time = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    content_type = Column(String(50), nullable=False, default="image/jpeg")
+    size = Column(Integer, nullable=False)
+    retention_expires_at = Column(DateTime, nullable=False)
+    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    entries = relationship("VisitorEntry", back_populates="photo")
+
+
+class PreApproval(Base):
+    __tablename__ = "pre_approvals"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    flat_id = Column(String(36), ForeignKey("flats.id"), nullable=False)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    guest_name = Column(String(100), nullable=False)
+    phone = Column(String(20), nullable=True)
+    purpose = Column(String(100), nullable=False)
+    gate_id = Column(String(36), ForeignKey("gates.id"), nullable=True)
+    valid_from = Column(DateTime, nullable=False)
+    valid_until = Column(DateTime, nullable=False)
+    max_uses = Column(Integer, nullable=False, default=1)
+    used_count = Column(Integer, nullable=False, default=0)
+    code_hash = Column(String(128), nullable=False)  # Salted SHA-256 verifier
+    credential_jwt = Column(Text, nullable=True)  # Compact ECDSA P-256 signed offline credential
+    is_revoked = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    flat = relationship("Flat")
+    created_by = relationship("User")
+    gate = relationship("Gate")
+    entries = relationship("VisitorEntry", back_populates="pre_approval")
+
+
+class VisitorEntry(Base):
+    __tablename__ = "visitor_entries"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    gate_id = Column(String(36), ForeignKey("gates.id"), nullable=False)
+    flat_id = Column(String(36), ForeignKey("flats.id"), nullable=False)
+    visitor_name = Column(String(100), nullable=False)
+    phone = Column(String(20), nullable=True)
+    purpose = Column(String(100), nullable=False)
+    status = Column(String(30), nullable=False, default="AWAITING_APPROVAL")
+    # Statuses: AWAITING_APPROVAL, APPROVED, REJECTED, ADMITTED, EXITED, EXPIRED, OVERRIDDEN_ADMIT
+    created_by_guard = Column(String(36), ForeignKey("users.id"), nullable=True)
+    approval_decided_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    approval_decided_at = Column(DateTime, nullable=True)
+    admitted_at = Column(DateTime, nullable=True)
+    exited_at = Column(DateTime, nullable=True)
+    photo_id = Column(String(36), ForeignKey("visitor_photos.id"), nullable=True)
+    pre_approval_id = Column(String(36), ForeignKey("pre_approvals.id"), nullable=True)
+    source = Column(String(20), nullable=False, default="ONLINE")  # ONLINE, OFFLINE_SYNC
+    client_event_id = Column(String(64), unique=True, nullable=True)
+    version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    gate = relationship("Gate")
+    flat = relationship("Flat")
+    photo = relationship("VisitorPhoto", back_populates="entries")
+    pre_approval = relationship("PreApproval", back_populates="entries")
+    events = relationship("VisitorEvent", back_populates="visitor_entry", cascade="all, delete-orphan")
+    overrides = relationship("SupervisorOverride", back_populates="visitor_entry", cascade="all, delete-orphan")
+
+
+class VisitorEvent(Base):
+    __tablename__ = "visitor_events"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    visitor_entry_id = Column(String(36), ForeignKey("visitor_entries.id"), nullable=False)
+    actor_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    actor_role = Column(String(50), nullable=False)
+    event_type = Column(String(50), nullable=False)
+    from_status = Column(String(30), nullable=True)
+    to_status = Column(String(30), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    visitor_entry = relationship("VisitorEntry", back_populates="events")
+    actor = relationship("User")
+
+
+class SupervisorOverride(Base):
+    __tablename__ = "supervisor_overrides"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    visitor_entry_id = Column(String(36), ForeignKey("visitor_entries.id"), nullable=False)
+    actor_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    reason = Column(Text, nullable=False)
+    override_type = Column(String(50), nullable=False, default="OVERRIDDEN_ADMIT")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    visitor_entry = relationship("VisitorEntry", back_populates="overrides")
+    actor = relationship("User")
+
+
 class Amenity(Base):
     __tablename__ = "amenities"
 
@@ -609,6 +753,73 @@ class Amenity(Base):
     hourly_fee = Column(Numeric(10, 2), default=Decimal("0.00"))
     capacity = Column(Integer, default=10)
     rules = Column(Text, nullable=True)
+
+    slots = relationship("AmenitySlot", back_populates="amenity", cascade="all, delete-orphan")
+    amenity_rules = relationship("AmenityRule", back_populates="amenity", cascade="all, delete-orphan")
+    closures = relationship("AmenityClosure", back_populates="amenity", cascade="all, delete-orphan")
+
+
+class AmenitySlot(Base):
+    __tablename__ = "amenity_slots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    amenity_id = Column(String(36), ForeignKey("amenities.id"), nullable=False)
+    slot_date = Column(Date, nullable=False)
+    start_time = Column(Time, nullable=False)
+    end_time = Column(Time, nullable=False)
+    capacity = Column(Integer, nullable=False, default=1)
+    booked_count = Column(Integer, nullable=False, default=0)
+    version = Column(Integer, nullable=False, default=1)
+
+    amenity = relationship("Amenity", back_populates="slots")
+    bookings = relationship("AmenityBooking", back_populates="slot")
+
+
+class AmenityRule(Base):
+    __tablename__ = "amenity_rules"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    amenity_id = Column(String(36), ForeignKey("amenities.id"), nullable=False)
+    booking_window_days = Column(Integer, nullable=False, default=7)
+    max_daily_slots_per_flat = Column(Integer, nullable=False, default=1)
+    cancellation_cutoff_hours = Column(Integer, nullable=False, default=2)
+
+    amenity = relationship("Amenity", back_populates="amenity_rules")
+
+
+class AmenityClosure(Base):
+    __tablename__ = "amenity_closures"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    amenity_id = Column(String(36), ForeignKey("amenities.id"), nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    reason = Column(Text, nullable=False)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    amenity = relationship("Amenity", back_populates="closures")
+    created_by = relationship("User")
+
+
+class AmenityBooking(Base):
+    __tablename__ = "amenity_bookings"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    flat_id = Column(String(36), ForeignKey("flats.id"), nullable=False)
+    slot_id = Column(String(36), ForeignKey("amenity_slots.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    status = Column(String(30), nullable=False, default="CONFIRMED")  # CONFIRMED, CANCELLED
+    fee = Column(Numeric(10, 2), nullable=False, default=Decimal("0.00"))
+    fee_status = Column(String(30), nullable=False, default="PAID_TEST")  # PAID_TEST, PENDING, CANCELLED
+    idempotency_key = Column(String(64), unique=True, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    cancelled_at = Column(DateTime, nullable=True)
+
+    flat = relationship("Flat")
+    slot = relationship("AmenitySlot", back_populates="bookings")
+    user = relationship("User")
 
 
 class OTPChallenge(Base):
