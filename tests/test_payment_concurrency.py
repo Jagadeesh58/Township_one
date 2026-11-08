@@ -47,14 +47,32 @@ def test_concurrent_identical_idempotency_requests():
     flat_id = user["flats"][0]["flat_id"]
     headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
-    summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
-    unpaid = summary.get("unpaid_bills") or [summary["latest_bill"]]
-    target_bill = unpaid[0]
-    bill_id = target_bill["id"]
-    balance = float(target_bill["balance_amount"])
-
-    if balance <= 0:
-        pytest.skip("Bill is already paid")
+    db = SessionLocal()
+    try:
+        now_utc = datetime.now(timezone.utc)
+        test_bill = Bill(
+            id=str(uuid.uuid4()),
+            flat_id=flat_id,
+            billing_rule_version="v1.0-demo",
+            period_month=10,
+            period_year=2097,
+            issue_date=now_utc,
+            due_date=now_utc + timedelta(days=15),
+            area_sqft=Decimal("1200.00"),
+            rate_per_sqft=Decimal("5.00"),
+            principal_amount=Decimal("3500.00"),
+            late_fee_amount=Decimal("0.00"),
+            total_amount=Decimal("3500.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("3500.00"),
+            status="ISSUED"
+        )
+        db.add(test_bill)
+        db.commit()
+        bill_id = test_bill.id
+        balance = 3500.0
+    finally:
+        db.close()
 
     pay_amount = min(100.0, balance)
     concurrent_key = f"IDEM-CONC-RACE-{uuid.uuid4()}"
@@ -102,25 +120,46 @@ def test_sequential_over_allocation_prevented():
     flat_id = user["flats"][0]["flat_id"]
     headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
-    summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
-    target_bill = summary.get("latest_bill")
-    bill_id = target_bill["id"]
-    balance = float(target_bill["balance_amount"])
-
-    if balance > 0:
-        # First payment: pay entire balance -> succeeds (200)
-        p1 = client.post(
-            "/api/v1/payments/checkout",
-            headers=headers,
-            json={
-                "flat_id": flat_id,
-                "bill_id": bill_id,
-                "amount": balance,
-                "test_outcome": "SUCCESS",
-                "idempotency_key": f"IDEM-SEQ-1-{uuid.uuid4()}"
-            }
+    db = SessionLocal()
+    try:
+        now_utc = datetime.now(timezone.utc)
+        test_bill = Bill(
+            id=str(uuid.uuid4()),
+            flat_id=flat_id,
+            billing_rule_version="v1.0-demo",
+            period_month=9,
+            period_year=2097,
+            issue_date=now_utc,
+            due_date=now_utc + timedelta(days=15),
+            area_sqft=Decimal("1600.00"),
+            rate_per_sqft=Decimal("5.00"),
+            principal_amount=Decimal("4500.00"),
+            late_fee_amount=Decimal("0.00"),
+            total_amount=Decimal("4500.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("4500.00"),
+            status="ISSUED"
         )
-        assert p1.status_code == 200
+        db.add(test_bill)
+        db.commit()
+        bill_id = test_bill.id
+        balance = 4500.0
+    finally:
+        db.close()
+
+    # First payment: pay entire balance -> succeeds (200)
+    p1 = client.post(
+        "/api/v1/payments/checkout",
+        headers=headers,
+        json={
+            "flat_id": flat_id,
+            "bill_id": bill_id,
+            "amount": balance,
+            "test_outcome": "SUCCESS",
+            "idempotency_key": f"IDEM-SEQ-1-{uuid.uuid4()}"
+        }
+    )
+    assert p1.status_code == 200
 
     # Second payment on the now fully-paid bill -> rejected (400)
     p2 = client.post(
@@ -138,8 +177,12 @@ def test_sequential_over_allocation_prevented():
     assert "already fully paid" in p2.json()["error"]["message"]
 
     # Verify balance is zero and never negative
-    updated_summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
-    assert float(updated_summary["latest_bill"]["balance_amount"]) == 0.0
+    db_verify = SessionLocal()
+    try:
+        verified_bill = db_verify.query(Bill).filter(Bill.id == bill_id).first()
+        assert float(verified_bill.balance_amount) == 0.0
+    finally:
+        db_verify.close()
 
 
 @pytest.mark.skipif(not os.environ.get("PG_DATABASE_URL"), reason="needs PostgreSQL row locks")
@@ -149,13 +192,32 @@ def test_concurrent_payments_prevent_over_allocation():
     flat_id = user["flats"][0]["flat_id"]
     headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
-    summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
-    target_bill = summary["latest_bill"]
-    bill_id = target_bill["id"]
-    balance = float(target_bill["balance_amount"])
-
-    if balance <= 0:
-        pytest.skip("Bill is already paid")
+    db = SessionLocal()
+    try:
+        now_utc = datetime.now(timezone.utc)
+        test_bill = Bill(
+            id=str(uuid.uuid4()),
+            flat_id=flat_id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2097,
+            issue_date=now_utc,
+            due_date=now_utc + timedelta(days=15),
+            area_sqft=Decimal("1500.00"),
+            rate_per_sqft=Decimal("5.00"),
+            principal_amount=Decimal("4000.00"),
+            late_fee_amount=Decimal("0.00"),
+            total_amount=Decimal("4000.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("4000.00"),
+            status="ISSUED"
+        )
+        db.add(test_bill)
+        db.commit()
+        bill_id = test_bill.id
+        balance = 4000.0
+    finally:
+        db.close()
 
     # Each thread attempts to pay the ENTIRE remaining balance with distinct keys
     def make_competing_payment(i: int):
