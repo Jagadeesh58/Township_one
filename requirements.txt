@@ -17,3 +17,5 @@ psycopg==3.3.6
 psycopg-binary==3.3.6
 scikit-learn>=1.5.0
 joblib>=1.4.0
+cryptography>=42.0.0
+reportlab>=4.0.0
