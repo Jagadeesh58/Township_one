@@ -225,6 +225,179 @@ class TestClassifier(unittest.TestCase):
         self.assertEqual(res["provider"], "local_nb")
         self.assertTrue(res["fallback_used"])
 
+    @patch("backend.app.ml.classifier.time.sleep")
+    @patch("httpx.Client.post")
+    def test_groq_429_rate_limit_backoff_and_retry(self, mock_post, mock_sleep):
+        """Groq 429 rate limit triggers backoff sleep and retries once."""
+        resp_429 = MagicMock(status_code=429, headers={"retry-after": "1.5"})
+        resp_200 = MagicMock(
+            status_code=200,
+            json=lambda: {"choices": [{"message": {"content": '{"category": "PLUMBING", "urgency": "HIGH"}'}}]}
+        )
+        mock_post.side_effect = [resp_429, resp_200]
+        res = predict_category_and_urgency(
+            "Kitchen pipe leaking under sink",
+            groq_api_key="gsk_test_key_429"
+        )
+        self.assertEqual(res["provider"], "groq")
+        self.assertEqual(res["category"], "PLUMBING")
+        self.assertEqual(res["urgency"], "HIGH")
+        mock_sleep.assert_called_with(1.5)
+
+    @patch("httpx.Client.post")
+    def test_groq_timeout_triggers_local_fallback(self, mock_post):
+        """Groq timeout triggers clean fallback to local scikit-learn model."""
+        import httpx
+        mock_post.side_effect = httpx.TimeoutException("Read timeout after 5.0s")
+        res = predict_category_and_urgency(
+            "Main water pipe burst flooding kitchen",
+            groq_api_key="gsk_test_key_timeout"
+        )
+        self.assertEqual(res["provider"], "local_nb")
+        self.assertTrue(res["fallback_used"])
+        self.assertEqual(res["category"], "PLUMBING")
+
+    @patch("httpx.Client.post")
+    def test_groq_5xx_server_error_triggers_local_fallback(self, mock_post):
+        """Groq 500/503 server error triggers clean fallback to local model."""
+        mock_post.return_value = MagicMock(status_code=503, text="Service Unavailable")
+        res = predict_category_and_urgency(
+            "Main water pipe burst flooding kitchen",
+            groq_api_key="gsk_test_key_503"
+        )
+        self.assertEqual(res["provider"], "local_nb")
+        self.assertTrue(res["fallback_used"])
+        self.assertEqual(res["category"], "PLUMBING")
+
+    @patch("httpx.Client.post")
+    def test_groq_malformed_json_triggers_local_fallback(self, mock_post):
+        """Groq response with broken JSON triggers clean fallback to local model."""
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"choices": [{"message": {"content": "INVALID_JSON_NO_BRACKETS"}}]}
+        )
+        res = predict_category_and_urgency(
+            "Main water pipe burst flooding kitchen",
+            groq_api_key="gsk_test_key_broken_json"
+        )
+        self.assertEqual(res["provider"], "local_nb")
+        self.assertTrue(res["fallback_used"])
+        self.assertEqual(res["category"], "PLUMBING")
+
+    @patch("httpx.Client.post")
+    def test_groq_invalid_category_triggers_local_fallback(self, mock_post):
+        """Groq response with invalid category triggers local fallback."""
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"choices": [{"message": {"content": '{"category": "ASTRONOMY", "urgency": "HIGH"}'}}]}
+        )
+        res = predict_category_and_urgency(
+            "Main water pipe burst flooding kitchen",
+            groq_api_key="gsk_test_key_invalid_cat"
+        )
+        self.assertEqual(res["provider"], "local_nb")
+        self.assertTrue(res["fallback_used"])
+        self.assertEqual(res["category"], "PLUMBING")
+
+    @patch("httpx.Client.post")
+    def test_groq_missing_key_triggers_local_fallback(self, mock_post):
+        """Groq response missing urgency key triggers local fallback."""
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"choices": [{"message": {"content": '{"category": "PLUMBING"}'}}]}
+        )
+        res = predict_category_and_urgency(
+            "Main water pipe burst flooding kitchen",
+            groq_api_key="gsk_test_key_missing_key"
+        )
+        self.assertEqual(res["provider"], "local_nb")
+        self.assertTrue(res["fallback_used"])
+        self.assertEqual(res["category"], "PLUMBING")
+
+    def test_emergency_escalation_when_provider_down_or_returns_low(self):
+        """
+        Emergency rule engine overrides and escalates even if AI provider is down or returns LOW.
+        Deterministic safety invariant: Life safety phrases must NEVER be downgraded.
+        """
+        emergency_text = "Severe fire breaking out on floor 5 lobby, people trapped!"
+        em_res = detect_emergency(emergency_text)
+        self.assertTrue(em_res["is_emergency"])
+        self.assertEqual(em_res["trigger"], "FIRE")
+
+        mock_ai_output = {"category": "GENERAL", "urgency": "LOW"}
+        effective_urgency = "CRITICAL" if em_res["is_emergency"] else mock_ai_output["urgency"]
+        self.assertEqual(effective_urgency, "CRITICAL")
+
+    def test_human_correction_beating_late_ai(self):
+        """
+        Simulate human help desk correction beating late AI classification via version locking.
+        Human correction increments version to 2; stale AI update with version 1 is rejected.
+        """
+        from fastapi import HTTPException
+        from backend.app.services.complaints import correct_classification
+        from backend.app.models.entities import Complaint, User, Flat
+        from backend.app.core.database import SessionLocal
+        import uuid
+
+        db = SessionLocal()
+        try:
+            admin = db.query(User).filter(User.phone == "9876543200").first()
+            self.assertIsNotNone(admin)
+            flat = db.query(Flat).first()
+            self.assertIsNotNone(flat)
+
+            comp = Complaint(
+                ticket_number=f"CMP-TEST-{uuid.uuid4().hex[:6].upper()}",
+                flat_id=flat.id,
+                tower_id=flat.tower_id,
+                user_id=admin.id,
+                title="Sparking wire",
+                description="Wires sparking in switchboard",
+                category="GENERAL",
+                urgency="LOW",
+                status="SUBMITTED",
+                version=1
+            )
+            db.add(comp)
+            db.commit()
+
+            # 1. Human reviewer corrects classification to ELECTRICAL / HIGH
+            correct_classification(
+                db=db,
+                complaint=comp,
+                new_category="ELECTRICAL",
+                new_urgency="HIGH",
+                reason="Verified sparking wires hazard",
+                expected_version=1,
+                actor_user=admin,
+                actor_role="HELPDESK"
+            )
+            db.commit()
+            db.refresh(comp)
+            self.assertEqual(comp.version, 2)
+            self.assertEqual(comp.category, "ELECTRICAL")
+
+            # 2. Late AI returns and attempts to apply update with expected_version=1
+            with self.assertRaises(HTTPException) as ctx:
+                correct_classification(
+                    db=db,
+                    complaint=comp,
+                    new_category="COMMON_AREA",
+                    new_urgency="LOW",
+                    reason="Late AI inference result",
+                    expected_version=1,
+                    actor_user=admin,
+                    actor_role="HELPDESK"
+                )
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertIn("optimistic lock conflict", ctx.exception.detail.lower())
+            # Complaint remains as corrected by human
+            db.refresh(comp)
+            self.assertEqual(comp.category, "ELECTRICAL")
+            self.assertEqual(comp.version, 2)
+        finally:
+            db.close()
+
 
 class TestDuplicateDetector(unittest.TestCase):
     """Verifies character n-gram cosine similarity candidate discovery."""
