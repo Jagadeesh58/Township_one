@@ -45,7 +45,7 @@ def test_full_resident_billing_and_payment_journey():
     login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543211", "otp": "123456"})
     assert login_resp.status_code == 200
     login_data = login_resp.json()
-    token = login_data["access_token"]
+    assert "access_token" not in login_data
     user = login_data["user"]
     assert user["name"] == "Swati Joshi"
     assert len(user["flats"]) == 1

@@ -42,9 +42,10 @@ def get_auth_token(phone: str) -> tuple[str, dict]:
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     csrf = res.cookies.get("township_csrf", "")
+    token = res.cookies.get("township_session", "")
     client.headers["X-CSRF-Token"] = csrf
     data = res.json()
-    return data["access_token"], data["user"]
+    return token, data["user"]
 
 
 # ------------------------------------------------------------------------------

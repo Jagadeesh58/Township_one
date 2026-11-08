@@ -19,7 +19,7 @@ from backend.app.core.security import (
 )
 from backend.app.models.entities import User, Flat
 from backend.app.schemas.auth import (
-    OTPRequest, OTPVerify, TokenResponse, UserProfileResponse,
+    OTPRequest, OTPVerify, AuthResponse, UserProfileResponse,
     RoleAssignmentResponse, FlatMembershipResponse
 )
 
@@ -93,7 +93,7 @@ def request_otp(
     return response_data
 
 
-@router.post("/otp/verify", response_model=TokenResponse)
+@router.post("/otp/verify", response_model=AuthResponse)
 def verify_otp(
     payload: OTPVerify,
     response: Response,
@@ -135,9 +135,7 @@ def verify_otp(
 
     profile = build_user_profile(user, db)
 
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
+    return AuthResponse(
         user=profile
     )
 

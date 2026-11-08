@@ -35,9 +35,10 @@ def get_auth_token(phone: str) -> tuple[str, dict]:
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     csrf = res.cookies.get("township_csrf", "")
+    token = res.cookies.get("township_session", "")
     client.headers["X-CSRF-Token"] = csrf
     data = res.json()
-    return data["access_token"], data["user"]
+    return token, data["user"]
 
 
 def test_concurrent_identical_idempotency_requests():
@@ -95,6 +96,53 @@ def test_concurrent_identical_idempotency_requests():
         db.close()
 
 
+def test_sequential_over_allocation_prevented():
+    """SQLite-safe test proving that a second payment on a paid bill is rejected (400) and balance is never negative."""
+    token, user = get_auth_token("9876543212")  # Aamir (T21-1601)
+    flat_id = user["flats"][0]["flat_id"]
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
+
+    summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
+    target_bill = summary.get("latest_bill")
+    bill_id = target_bill["id"]
+    balance = float(target_bill["balance_amount"])
+
+    if balance > 0:
+        # First payment: pay entire balance -> succeeds (200)
+        p1 = client.post(
+            "/api/v1/payments/checkout",
+            headers=headers,
+            json={
+                "flat_id": flat_id,
+                "bill_id": bill_id,
+                "amount": balance,
+                "test_outcome": "SUCCESS",
+                "idempotency_key": f"IDEM-SEQ-1-{uuid.uuid4()}"
+            }
+        )
+        assert p1.status_code == 200
+
+    # Second payment on the now fully-paid bill -> rejected (400)
+    p2 = client.post(
+        "/api/v1/payments/checkout",
+        headers=headers,
+        json={
+            "flat_id": flat_id,
+            "bill_id": bill_id,
+            "amount": 1000.0,
+            "test_outcome": "SUCCESS",
+            "idempotency_key": f"IDEM-SEQ-2-{uuid.uuid4()}"
+        }
+    )
+    assert p2.status_code == 400
+    assert "already fully paid" in p2.json()["error"]["message"]
+
+    # Verify balance is zero and never negative
+    updated_summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
+    assert float(updated_summary["latest_bill"]["balance_amount"]) == 0.0
+
+
+@pytest.mark.skipif(not os.environ.get("PG_DATABASE_URL"), reason="needs PostgreSQL row locks")
 def test_concurrent_payments_prevent_over_allocation():
     """Verify that multiple concurrent threads attempting to over-consume a bill balance are bounded."""
     token, user = get_auth_token("9876543212")  # Aamir (T21-1601)
@@ -146,6 +194,7 @@ def test_concurrent_payments_prevent_over_allocation():
         db.close()
 
 
+@pytest.mark.skipif(not os.environ.get("PG_DATABASE_URL"), reason="needs PostgreSQL row locks")
 def test_postgresql_with_for_update_row_locking():
     """
     Validates PostgreSQL row locking (SELECT ... FOR UPDATE) against a live PostgreSQL database

@@ -4,19 +4,18 @@ title = "Township One Gitleaks Configuration"
 useDefault = true
 
 [allowlist]
-description = "Allowlist for synthetic test fixtures and documentation placeholders"
+description = "Strict allowlist for development template placeholders and local defaults"
 regexes = [
+    # Safe CI pipeline and local development test placeholders
     '''(?i)ci-test-secret-key''',
     '''(?i)township_dev_password''',
     '''(?i)replace-with-a-strong-random''',
-    '''(?i)test-sms-key''',
     '''(?i)CHANGE_ME''',
     '''(?i)test-secret''',
 ]
 paths = [
-    '''^tests/''',
-    '''^docs/''',
-    '''^\.env\.example''',
-    '''^deployment\.md''',
-    '''^docker-compose\.yml''',
+    # Safe example environment template containing dummy variable placeholders
+    '''^\.env\.example$''',
+    # Safe local Docker Compose configuration with development credentials
+    '''^docker-compose\.yml$''',
 ]

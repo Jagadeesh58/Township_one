@@ -9,6 +9,7 @@ Test suite verifying:
 - Strict prevention of IDOR and Committee/Guard access to individual flat financial data
 """
 
+import secrets
 import pytest
 from fastapi.testclient import TestClient
 from backend.app.main import app
@@ -52,7 +53,8 @@ def test_verify_otp_valid():
     response = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
     assert response.status_code == 200
     data = response.json()
-    assert "access_token" in data
+    assert "access_token" not in data
+    assert "township_session" in response.cookies
     assert data["user"]["name"] == "Neeraj Kulkarni"
     assert len(data["user"]["flats"]) == 1
     assert data["user"]["flats"][0]["flat_number"] == "T07-1203"
@@ -89,7 +91,7 @@ def test_verify_otp_rate_limiting():
 def test_logout_and_revocation():
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
     login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
-    token = login_resp.json()["access_token"]
+    token = login_resp.cookies.get("township_session")
     csrf_token = login_resp.cookies.get("township_csrf")
     headers = {"X-CSRF-Token": csrf_token}
 
@@ -128,9 +130,7 @@ def test_cross_flat_access_idor_denied():
 def test_committee_individual_flat_access_strictly_denied():
     # Login as Vikram Sardesai (Committee Member: 9876543250)
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543250"})
-    login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"}).json()
-    token = login["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"})
 
     db = SessionLocal()
     try:
@@ -140,12 +140,12 @@ def test_committee_individual_flat_access_strictly_denied():
         db.close()
 
     # Committee member attempts to view Swati's individual billing summary
-    resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers)
+    resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary")
     assert resp.status_code == 403
     assert "Committee members can only access aggregate reports" in resp.json()["error"]["message"]
 
     # Committee member views authorized aggregate report -> ALLOWED
-    agg_resp = client.get("/api/v1/billing/committee/aggregate", headers=headers)
+    agg_resp = client.get("/api/v1/billing/committee/aggregate")
     assert agg_resp.status_code == 200
     agg_data = agg_resp.json()
     assert agg_data["scope"] == "TOWNSHIP_AGGREGATE"
@@ -156,12 +156,10 @@ def test_family_member_permission_enforcement():
     # Login as Ananya Kulkarni (Family member of T07-1203: 9876543213)
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543213"})
     login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543213", "otp": "123456"}).json()
-    token = login["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
     flat_id = login["user"]["flats"][0]["flat_id"]
 
     # Can read flat billing summary
-    resp_read = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers)
+    resp_read = client.get(f"/api/v1/billing/flats/{flat_id}/summary")
     assert resp_read.status_code == 200
 
     db = SessionLocal()
@@ -179,9 +177,7 @@ def test_family_member_permission_enforcement():
 def test_guard_access_to_finance_denied():
     # Login as Suresh Shinde (Guard: 9876543230)
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543230"})
-    login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543230", "otp": "123456"}).json()
-    token = login["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    client.post("/api/v1/auth/otp/verify", json={"phone": "9876543230", "otp": "123456"})
 
     db = SessionLocal()
     try:
@@ -190,14 +186,14 @@ def test_guard_access_to_finance_denied():
     finally:
         db.close()
 
-    resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers)
+    resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary")
     assert resp.status_code == 403
     assert "Gate security staff do not have access" in resp.json()["error"]["message"]
 
 
 def test_demo_hint_hidden_in_production(monkeypatch):
     monkeypatch.setattr(settings, "APP_ENV", "production")
-    monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", "test-sms-key")
+    monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", f"test-sms-key-{secrets.token_urlsafe(32)}")
     resp = client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
     assert resp.status_code == 200
     data = resp.json()
@@ -232,7 +228,7 @@ def test_database_persisted_revoked_token():
 
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
-    token = login_resp.json()["access_token"]
+    token = login_resp.cookies.get("township_session")
     csrf_token = login_resp.cookies.get("township_csrf")
     headers = {"X-CSRF-Token": csrf_token}
 
@@ -293,7 +289,7 @@ def test_production_sms_provider_succeeds_with_configured_credentials(monkeypatc
     from backend.app.services.sms import get_sms_provider
 
     monkeypatch.setattr(settings, "APP_ENV", "production")
-    monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", "test-sms-key")
+    monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", f"test-sms-key-{secrets.token_urlsafe(32)}")
 
     provider = get_sms_provider()
     assert provider is not None
@@ -466,7 +462,8 @@ def test_server_restart_survival_otp_persisted():
     post_reload_client = TestClient(app)
     post_reload_resp = post_reload_client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     assert post_reload_resp.status_code == 200
-    assert "access_token" in post_reload_resp.json()
+    assert "access_token" not in post_reload_resp.json()
+    assert "township_session" in post_reload_resp.cookies
     assert post_reload_resp.json()["user"]["name"] == "Ramesh Patil"
 
 
@@ -495,22 +492,10 @@ def test_ip_rate_limiting_exceeded():
 
 def test_bearer_only_request_rejected():
     """Verify that requests providing only Authorization: Bearer without session cookie are rejected with 401."""
-    phone = "9876543210"
-    db = SessionLocal()
-    try:
-        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
-        db.commit()
-    finally:
-        db.close()
-    client.post("/api/v1/auth/otp/request", json={"phone": phone})
-    login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
-    assert login_resp.status_code == 200
-    token = login_resp.json()["access_token"]
-
     unauth_client = TestClient(app)
     resp = unauth_client.get(
         "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": "Bearer sample-token-for-test"}
     )
     assert resp.status_code == 401
-    assert "Bearer authentication is disabled" in resp.json()["error"]["message"]
+    assert "Authentication required" in resp.json()["error"]["message"]

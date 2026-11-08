@@ -38,9 +38,10 @@ def get_auth_token(phone: str) -> tuple[str, dict]:
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     csrf = res.cookies.get("township_csrf", "")
+    token = res.cookies.get("township_session", "")
     client.headers["X-CSRF-Token"] = csrf
     data = res.json()
-    return data["access_token"], data["user"]
+    return token, data["user"]
 
 
 def test_mandatory_idempotency_key_enforcement():
@@ -428,6 +429,7 @@ def test_payment_exceeding_balance_rejected():
     assert "cannot exceed current outstanding balance" in resp.json()["error"]["message"]
 
 
+@pytest.mark.skipif(not os.environ.get("PG_DATABASE_URL"), reason="needs PostgreSQL row locks")
 def test_postgresql_row_locking_in_payments():
     """
     Validates PostgreSQL row locking (SELECT ... FOR UPDATE) against a live PostgreSQL database

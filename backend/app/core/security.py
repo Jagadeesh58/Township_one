@@ -19,15 +19,12 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 import jwt
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
 from backend.app.models.entities import User, UserRoleAssignment, FlatMembership, Flat, RevokedToken, OTPChallenge
 from backend.app.services.sms import get_sms_provider
-
-security = HTTPBearer(auto_error=False)
 
 REVOKED_TOKENS: set = set()
 
@@ -206,19 +203,12 @@ def get_current_user(
 ) -> User:
     """
     Validates token from HttpOnly session cookie.
-    Sessions are cookie-only. Bearer fallback is disabled.
+    Sessions are cookie-only.
     Checks database & in-memory revocation, and resolves active user.
     """
     token = request.cookies.get("township_session") if request else None
 
     if not token:
-        if request is not None:
-            auth_hdr = request.headers.get("Authorization", "")
-            if auth_hdr.startswith("Bearer "):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Bearer authentication is disabled. Cookie-based session authentication is required."
-                )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Please provide a session cookie."

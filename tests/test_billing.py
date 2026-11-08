@@ -129,10 +129,7 @@ def test_billing_summary_aggregates_multiple_unpaid_bills():
     # Login as Swati (T12-0408)
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543211"})
     login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543211", "otp": "123456"}).json()
-    token = login["access_token"]
     flat_id = login["user"]["flats"][0]["flat_id"]
-
-    headers = {"Authorization": f"Bearer {token}"}
     
     # Generate a second bill for a previous month (August 2026) for Swati's flat
     db = SessionLocal()
@@ -159,7 +156,7 @@ def test_billing_summary_aggregates_multiple_unpaid_bills():
         db.close()
 
     # Now verify summary aggregates BOTH bills: 6370 (Sept) + 6370 (Aug) = 12740.0
-    resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers)
+    resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary")
     assert resp.status_code == 200
     data = resp.json()
     assert data["flat_number"] == "T12-0408"
@@ -169,8 +166,7 @@ def test_billing_summary_aggregates_multiple_unpaid_bills():
 
 def test_billing_cross_flat_idor_denied():
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
-    neeraj_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"}).json()
-    neeraj_token = neeraj_login["access_token"]
+    client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
 
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543211"})
     swati_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543211", "otp": "123456"}).json()
