@@ -337,6 +337,24 @@ class BankRow(Base):
     matched_payment = relationship("Payment", back_populates="matched_bank_rows")
 
 
+class BankPosting(Base):
+    __tablename__ = "bank_postings"
+    __table_args__ = (
+        UniqueConstraint("bank_account_id", "utr", name="uq_bank_postings_account_utr"),
+    )
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    bank_account_id = Column(String(36), ForeignKey("bank_accounts.id"), nullable=False)
+    utr = Column(String(100), nullable=False, index=True)
+    bank_row_id = Column(String(36), ForeignKey("bank_rows.id"), nullable=False)
+    payment_id = Column(String(36), ForeignKey("payments.id"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    bank_account = relationship("BankAccount")
+    bank_row = relationship("BankRow")
+    payment = relationship("Payment")
+
+
 class RegisteredUPI(Base):
     __tablename__ = "registered_upi_ids"
 

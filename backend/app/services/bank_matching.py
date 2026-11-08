@@ -21,9 +21,10 @@ from typing import Optional, Union, Dict, Any, List
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.models.entities import (
-    BankAccount, BankImportFile, BankRow, Flat, Bill, Payment,
+    BankAccount, BankImportFile, BankRow, BankPosting, Flat, Bill, Payment,
     FlatLedgerEntry, Receipt, RegisteredUPI, AuditEvent, User
 )
 from backend.app.schemas.bank import BankMatchReason
@@ -621,15 +622,16 @@ def commit_bank_statement(
                 if open_bill:
                     db.add(bank_row)
                     db.flush()
-                    post_bank_payment(
+                    post_res = post_bank_payment(
                         db=db,
                         bank_row=bank_row,
                         bill=open_bill,
                         user_id=uploaded_by_user_id,
                         actor_role="SYSTEM"
                     )
-                    bank_row.review_status = "AUTO_POSTED"
-                    bank_row.next_action = "APPROVE"
+                    if post_res:
+                        bank_row.review_status = "AUTO_POSTED"
+                        bank_row.next_action = "APPROVE"
                 else:
                     # Defensive fallback: if bill balance shifted, hold for review
                     bank_row.decision = "REVIEW"
@@ -772,6 +774,58 @@ def post_bank_payment(
         )
         db.add(receipt)
 
+    # 2b. Database-level unique constraint guard for (bank_account_id, utr)
+    if bank_row.utr and not already_settled:
+        try:
+            with db.begin_nested():
+                posting = BankPosting(
+                    id=str(uuid.uuid4()),
+                    bank_account_id=bank_row.bank_account_id,
+                    utr=bank_row.utr,
+                    bank_row_id=bank_row.id,
+                    payment_id=payment.id,
+                    created_at=now_dt
+                )
+                db.add(posting)
+                db.flush()
+        except IntegrityError:
+            existing_posting = db.query(BankPosting).filter(
+                BankPosting.bank_account_id == bank_row.bank_account_id,
+                BankPosting.utr == bank_row.utr
+            ).first()
+            prev_row = db.query(BankRow).filter(BankRow.id == existing_posting.bank_row_id).first() if existing_posting else None
+            prev_flat = prev_row.flat_ref.upper() if (prev_row and prev_row.flat_ref) else ""
+            prev_amt = f"{prev_row.amount:.2f}" if (prev_row and prev_row.amount) else ""
+            curr_flat = bank_row.flat_ref.upper() if bank_row.flat_ref else ""
+            curr_amt = f"{bank_row.amount:.2f}" if bank_row.amount else ""
+            if prev_flat == curr_flat and prev_amt == curr_amt:
+                bank_row.decision = "DUPLICATE_NO_OP"
+                bank_row.decision_reason = BankMatchReason.DUPLICATE_UTR_IDENTICAL_EVIDENCE.value
+                bank_row.next_action = "NO_ACTION"
+                bank_row.review_status = "PENDING"
+            else:
+                bank_row.decision = "REVIEW"
+                bank_row.decision_reason = BankMatchReason.UTR_CONFLICT_DIFFERENT_EVIDENCE.value
+                bank_row.next_action = "HOLD"
+                bank_row.review_status = "HELD"
+            return None
+    elif bank_row.utr and already_settled:
+        existing_posting = db.query(BankPosting).filter(
+            BankPosting.bank_account_id == bank_row.bank_account_id,
+            BankPosting.utr == bank_row.utr
+        ).first()
+        if not existing_posting:
+            posting = BankPosting(
+                id=str(uuid.uuid4()),
+                bank_account_id=bank_row.bank_account_id,
+                utr=bank_row.utr,
+                bank_row_id=bank_row.id,
+                payment_id=payment.id,
+                created_at=now_dt
+            )
+            db.add(posting)
+            db.flush()
+
     if not already_settled:
         # 3. Update Bill balances
         locked_bill.paid_amount = round_currency(locked_bill.paid_amount + payment_amount)
@@ -907,17 +961,18 @@ def handle_review_action(
             raise ValueError(f"Cannot approve overpayment of {bank_row.amount} which exceeds open bill balance of {target_bill.balance_amount}. Row remains HELD.")
 
         # Execute posting logic
-        post_bank_payment(
+        post_res = post_bank_payment(
             db=db,
             bank_row=bank_row,
             bill=target_bill,
             user_id=reviewer_user_id,
             actor_role="ACCOUNTS"
         )
-        bank_row.review_status = "APPROVED"
-        bank_row.reviewed_by_user_id = reviewer_user_id
-        bank_row.reviewed_at = now_dt
-        bank_row.correction_reason = reason or "Manually approved by accounts staff"
+        if post_res:
+            bank_row.review_status = "APPROVED"
+            bank_row.reviewed_by_user_id = reviewer_user_id
+            bank_row.reviewed_at = now_dt
+            bank_row.correction_reason = reason or "Manually approved by accounts staff"
 
     elif action == "REJECT":
         bank_row.review_status = "REJECTED"

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.database import SessionLocal
 from backend.app.models.entities import (
-    BankAccount, BankImportFile, BankRow, Flat, Bill, BillLine,
+    BankAccount, BankImportFile, BankRow, BankPosting, Flat, Bill, BillLine,
     Payment, FlatLedgerEntry, RegisteredUPI, User
 )
 from backend.app.services.bank_matching import (
@@ -60,6 +60,7 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
     test_towers = ["T01-", "T02-", "T03-", "T04-", "T05-", "T06-"]
     target_flat_ids = [f.id for f_num, f in flats.items() if any(f_num.startswith(tw) for tw in test_towers)]
 
+    db.query(BankPosting).delete(synchronize_session=False)
     db.query(BankRow).delete(synchronize_session=False)
     db.query(BankImportFile).delete(synchronize_session=False)
     db.query(FlatLedgerEntry).filter(FlatLedgerEntry.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
@@ -787,4 +788,128 @@ def test_partial_payment_approval_path_and_overpayment_held():
         assert db.query(Payment).filter(Payment.transaction_reference == "UTROVERPAY002").count() == 0
     finally:
         db.close()
+
+
+def test_concurrent_import_and_approval_duplicate_prevention():
+    """
+    Concurrency test verifying database-level duplicate protection:
+    - Two threads concurrently import the same statement file -> exactly 1 BankPosting and 1 ledger entry.
+    - Two threads concurrently approve the same held bank row -> exactly 1 BankPosting and 1 ledger entry.
+    """
+    import time
+    db = SessionLocal()
+    try:
+        provision_corpus_environment(db)
+        admin = db.query(User).filter(User.phone == "9876543200").first()
+        assert admin is not None
+
+        # 1. Concurrent import of the exact same statement file
+        import_csv = (
+            "account_no,txn_date,value_date,narration,direction,amount,currency,utr,payer_upi,flat_ref\n"
+            "98765432100012,2026-11-08 16:00:00,2026-11-08,UPI/CONCUR/T01-0101,CREDIT,10660.00,INR,UTRCONCURRIMP01,resident.t01.0101@okhdfcbank,T01-0101\n"
+        )
+
+        def worker_import(idx: int):
+            for attempt in range(5):
+                worker_db = SessionLocal()
+                try:
+                    res = commit_bank_statement(
+                        db=worker_db,
+                        content=import_csv,
+                        filename="concurrent_import.csv",
+                        uploaded_by_user_id=admin.id
+                    )
+                    return res["status"]
+                except Exception as e:
+                    if "locked" in str(e).lower() and attempt < 4:
+                        time.sleep(0.05 * (attempt + 1))
+                        continue
+                    return str(e)
+                finally:
+                    worker_db.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            f1 = executor.submit(worker_import, 1)
+            f2 = executor.submit(worker_import, 2)
+            res1 = f1.result()
+            res2 = f2.result()
+
+        # Database state: exactly ONE posting, ONE payment, and ONE ledger entry
+        postings = db.query(BankPosting).filter(BankPosting.utr == "UTRCONCURRIMP01").all()
+        assert len(postings) == 1, f"Expected 1 BankPosting, got {len(postings)}"
+
+        payments = db.query(Payment).filter(Payment.transaction_reference == "UTRCONCURRIMP01").all()
+        assert len(payments) == 1, f"Expected 1 Payment, got {len(payments)}"
+
+        ledgers = db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == payments[0].id).all()
+        assert len(ledgers) == 1, f"Expected 1 FlatLedgerEntry, got {len(ledgers)}"
+
+        # 2. Concurrent approval of the same held bank row
+        held_csv = (
+            "account_no,txn_date,value_date,narration,direction,amount,currency,utr,payer_upi,flat_ref\n"
+            "98765432100012,2026-11-08 17:00:00,2026-11-08,UPI/CONCUR_APPR/T01-0102,CREDIT,9230.00,INR,UTRCONCURRAPPR01,resident.t01.0102@okaxis,T01-0102\n"
+        )
+        res_held = commit_bank_statement(db, held_csv, "held_concur.csv", admin.id)
+        held_row = db.query(BankRow).filter(BankRow.import_file_id == res_held["import_file_id"]).first()
+        assert held_row is not None
+        held_row_id = held_row.id
+
+        def worker_approve(idx: int):
+            for attempt in range(5):
+                worker_db = SessionLocal()
+                try:
+                    handle_review_action(
+                        db=worker_db,
+                        bank_row_id=held_row_id,
+                        action="APPROVE",
+                        reviewer_user_id=admin.id,
+                        reason=f"Approved by concurrent worker {idx}"
+                    )
+                    return True
+                except Exception as e:
+                    if "locked" in str(e).lower() and attempt < 4:
+                        time.sleep(0.05 * (attempt + 1))
+                        continue
+                    return str(e)
+                finally:
+                    worker_db.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            fa1 = executor.submit(worker_approve, 1)
+            fa2 = executor.submit(worker_approve, 2)
+            ra1 = fa1.result()
+            ra2 = fa2.result()
+
+        # Database state: exactly ONE posting, ONE payment, and ONE ledger entry
+        postings_appr = db.query(BankPosting).filter(BankPosting.utr == "UTRCONCURRAPPR01").all()
+        assert len(postings_appr) == 1, f"Expected 1 BankPosting, got {len(postings_appr)}"
+
+        payments_appr = db.query(Payment).filter(Payment.transaction_reference == "UTRCONCURRAPPR01").all()
+        assert len(payments_appr) == 1, f"Expected 1 Payment, got {len(payments_appr)}"
+
+        ledgers_appr = db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == payments_appr[0].id).all()
+        assert len(ledgers_appr) == 1, f"Expected 1 FlatLedgerEntry, got {len(ledgers_appr)}"
+    finally:
+        db.close()
+
+
+def test_alembic_bank_postings_upgrade_and_downgrade():
+    """Verify clean upgrade and downgrade cycle for the bank_postings migration."""
+    import subprocess
+    import sys
+
+    # Downgrade 1 step
+    res_down = subprocess.run(
+        [sys.executable, "-m", "alembic", "downgrade", "-1"],
+        capture_output=True, text=True
+    )
+    assert res_down.returncode == 0, f"Alembic downgrade failed: {res_down.stderr}"
+
+    # Upgrade back to head
+    res_up = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        capture_output=True, text=True
+    )
+    assert res_up.returncode == 0, f"Alembic upgrade failed: {res_up.stderr}"
+
 
