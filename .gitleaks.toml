@@ -8,8 +8,6 @@ description = "Allowlist for synthetic test fixtures and documentation placehold
 regexes = [
     '''(?i)ci-test-secret-key''',
     '''(?i)township_dev_password''',
-    '''(?i)township-one-super-secret-key''',
-    '''(?i)REDACTED''',
     '''(?i)replace-with-a-strong-random''',
     '''(?i)test-sms-key''',
     '''(?i)CHANGE_ME''',

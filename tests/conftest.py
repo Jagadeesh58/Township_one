@@ -27,9 +27,19 @@ if "township_one.db" in settings.TEST_DATABASE_URL and not settings.TEST_DATABAS
 os.environ["TOWNSHIP_ENV"] = "test"
 
 # Dedicated Test Engine
+test_db_url = settings.TEST_DATABASE_URL
+if test_db_url.startswith("postgresql") and not os.environ.get("TEST_DATABASE_URL"):
+    try:
+        temp_engine = create_engine(test_db_url, pool_pre_ping=True)
+        with temp_engine.connect():
+            pass
+        temp_engine.dispose()
+    except Exception:
+        test_db_url = "sqlite:///./township_one_test.db"
+
 test_engine = create_engine(
-    settings.TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False} if settings.TEST_DATABASE_URL.startswith("sqlite") else {},
+    test_db_url,
+    connect_args={"check_same_thread": False} if test_db_url.startswith("sqlite") else {},
     pool_pre_ping=True
 )
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)

@@ -52,7 +52,7 @@ def test_production_guard_rejects_default_secret():
     """Verify production mode rejects default or insecure secret key."""
     prod_settings = Settings(
         APP_ENV="production",
-        SECRET_KEY="REDACTED"
+        SECRET_KEY="placeholder-insecure-secret-key-32chars"
     )
     with pytest.raises(RuntimeError) as exc_info:
         prod_settings.validate_production_guards()
