@@ -323,7 +323,7 @@ def test_corpus_processing_and_zero_false_automatic_postings():
             exp_decision = expected["expected_decision"]
             actual_decision = b_row.decision
 
-            # ASSERTION A: ZERO FALSE AUTOMATIC POSTINGS
+            # ASSERTION A: ZERO FALSE AUTOMATIC POSTINGS & EXACT POSTINGS
             if actual_decision == "AUTO_MATCH" or b_row.review_status == "AUTO_POSTED":
                 assert exp_decision == "AUTO_MATCH", (
                     f"CRITICAL SAFETY VIOLATION: Row #{b_row.original_row_number} (category: {expected.get('category')}) "
@@ -335,15 +335,23 @@ def test_corpus_processing_and_zero_false_automatic_postings():
                 assert b_row.matched_bill_id is not None
                 assert b_row.matched_payment_id is not None
 
-            # ASSERTION B: EVERY HELD ROW HAS NON-EMPTY REASON
+                # Every AUTO row creates exactly 1 payment and 1 ledger entry
+                payment_count = db.query(Payment).filter(Payment.id == b_row.matched_payment_id).count()
+                assert payment_count == 1, f"Row #{b_row.original_row_number} expected 1 payment, got {payment_count}"
+                ledger_count = db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == b_row.matched_payment_id).count()
+                assert ledger_count == 1, f"Row #{b_row.original_row_number} expected 1 ledger entry, got {ledger_count}"
+
+            # ASSERTION B: EVERY NON-AUTO ROW HAS ZERO POSTINGS & NON-EMPTY REASON
             if actual_decision in ["REVIEW", "DUPLICATE_NO_OP", "INVALID"]:
                 held_count += 1
+                assert b_row.matched_payment_id is None, f"Non-auto row #{b_row.original_row_number} has matched_payment_id!"
+                assert b_row.review_status != "AUTO_POSTED"
                 assert b_row.decision_reason is not None and len(b_row.decision_reason.strip()) > 0, (
                     f"Held row #{b_row.original_row_number} has an empty reason!"
                 )
 
         # Coverage Calculation & Reporting
-        coverage_pct = (Decimal(auto_matched_count) / Decimal(total_rows_evaluated)) * Decimal("100.00")
+        coverage_pct = round_currency((Decimal(auto_matched_count) / Decimal(total_rows_evaluated)) * Decimal("100.00"))
         print("\n=======================================================")
         print(f"AUTO-MATCH COVERAGE: {coverage_pct:.2f}%")
         print(f"Auto-matched rows: {auto_matched_count} / {total_rows_evaluated}")
@@ -351,7 +359,8 @@ def test_corpus_processing_and_zero_false_automatic_postings():
         print("Zero false automatic postings verified: PASS")
         print("=======================================================\n")
 
-        assert auto_matched_count > 0, "Expected at least some auto-matches in valid corpus"
+        assert auto_matched_count == 60, f"Expected exactly 60 auto-matches, got {auto_matched_count}"
+        assert coverage_pct == Decimal("15.58"), f"Expected coverage 15.58%, got {coverage_pct}%"
     finally:
         db.close()
 
@@ -602,6 +611,180 @@ def test_settle_existing_checkout_without_duplicate_payment():
         db.refresh(pending_payment)
         assert pending_payment.status == "SUCCESS"
         assert pending_payment.payment_method == "BANK_MATCHED"
+    finally:
+        db.close()
+
+
+def test_upi_only_rows_never_auto_post():
+    """Verify that rows with registered UPI but missing flat_ref never auto-post, even when amount matches open bill."""
+    db = SessionLocal()
+    try:
+        provision_corpus_environment(db)
+        admin = db.query(User).filter(User.phone == "9876543200").first()
+        assert admin is not None
+
+        # T01-0101 has open balance 10660.00 and registered UPI resident.t01.0101@okhdfcbank
+        # Provide valid registered UPI, but empty flat_ref
+        csv_payload = (
+            "account_no,txn_date,value_date,narration,direction,amount,currency,utr,payer_upi,flat_ref\n"
+            "98765432100012,2026-11-08 10:00:00,2026-11-08,UPI/PAYMENT FROM RESIDENT,CREDIT,10660.00,INR,UTRUPIONLY001,resident.t01.0101@okhdfcbank,\n"
+        )
+        res = commit_bank_statement(db, csv_payload, "test_upi_only.csv", admin.id)
+        row = db.query(BankRow).filter(BankRow.import_file_id == res["import_file_id"]).first()
+        assert row is not None
+
+        # Assert row goes to REVIEW with reason UPI_ONLY_REVIEW
+        assert row.decision == "REVIEW"
+        assert row.decision_reason == "UPI_ONLY_REVIEW"
+        assert row.review_status == "PENDING"
+        assert row.matched_payment_id is None
+
+        # Suggested flat is populated for accounts staff review
+        flat = db.query(Flat).filter(Flat.flat_number == "T01-0101").first()
+        assert row.matched_flat_id == flat.id
+
+        # ZERO payments and ZERO ledger entries created
+        payments = db.query(Payment).filter(Payment.transaction_reference == "UTRUPIONLY001").all()
+        assert len(payments) == 0
+
+        bill = db.query(Bill).filter(Bill.flat_id == flat.id).first()
+        assert bill.balance_amount == Decimal("10660.00")
+        assert bill.status == "ISSUED"
+    finally:
+        db.close()
+
+
+def test_flat_ref_only_rows_never_auto_post():
+    """Verify that rows with flat_ref (or flat parsed from narration) but missing/unregistered UPI never auto-post."""
+    db = SessionLocal()
+    try:
+        provision_corpus_environment(db)
+        admin = db.query(User).filter(User.phone == "9876543200").first()
+        assert admin is not None
+
+        # Test both explicit flat_ref and narration-parsed flat
+        csv_payload = (
+            "account_no,txn_date,value_date,narration,direction,amount,currency,utr,payer_upi,flat_ref\n"
+            "98765432100012,2026-11-08 11:00:00,2026-11-08,NEFT/DUES/T01-0102,CREDIT,9230.00,INR,UTRFLATREF001,,T01-0102\n"
+            "98765432100012,2026-11-08 12:00:00,2026-11-08,IMPS FROM BANK FOR T01-0103 MAINTENANCE,CREDIT,7475.00,INR,UTRNARRREF002,,\n"
+        )
+        res = commit_bank_statement(db, csv_payload, "test_flat_ref_only.csv", admin.id)
+        rows = db.query(BankRow).filter(BankRow.import_file_id == res["import_file_id"]).order_by(BankRow.original_row_number.asc()).all()
+        assert len(rows) == 2
+
+        # Row 1: Explicit flat_ref only
+        r1 = rows[0]
+        assert r1.decision == "REVIEW"
+        assert r1.decision_reason == "FLAT_REF_ONLY_REVIEW"
+        assert r1.review_status == "PENDING"
+        assert r1.matched_payment_id is None
+
+        # Row 2: Narration parsed flat only
+        r2 = rows[1]
+        assert r2.decision == "REVIEW"
+        assert r2.decision_reason == "FLAT_REF_ONLY_REVIEW"
+        assert r2.review_status == "PENDING"
+        assert r2.matched_payment_id is None
+
+        # ZERO payments created for either row
+        assert db.query(Payment).filter(Payment.transaction_reference.in_(["UTRFLATREF001", "UTRNARRREF002"])).count() == 0
+    finally:
+        db.close()
+
+
+def test_partial_payment_approval_path_and_overpayment_held():
+    """
+    Verify accounts approval path for partial payment and overpayment:
+    - Partial payment approval posts once, bill becomes PARTIALLY_PAID, ledger credit equals paid amount.
+    - Overpayment approval is rejected and remains HELD.
+    """
+    db = SessionLocal()
+    try:
+        provision_corpus_environment(db)
+        admin = db.query(User).filter(User.phone == "9876543200").first()
+        assert admin is not None
+
+        # T05-0101 has open balance 10660.00
+        # Row 1: Partial payment of 4000.00
+        # Row 2: Overpayment of 15000.00 (against T05-0102 with balance 9230.00)
+        csv_payload = (
+            "account_no,txn_date,value_date,narration,direction,amount,currency,utr,payer_upi,flat_ref\n"
+            "98765432100012,2026-11-08 14:00:00,2026-11-08,UPI/PARTIAL/T05-0101,CREDIT,4000.00,INR,UTRPARTIAL001,resident.t05.0101@okhdfcbank,T05-0101\n"
+            "98765432100012,2026-11-08 15:00:00,2026-11-08,UPI/OVERPAY/T05-0102,CREDIT,15000.00,INR,UTROVERPAY002,resident.t05.0102@okaxis,T05-0102\n"
+        )
+        res = commit_bank_statement(db, csv_payload, "test_partial_overpay.csv", admin.id)
+        rows = db.query(BankRow).filter(BankRow.import_file_id == res["import_file_id"]).order_by(BankRow.original_row_number.asc()).all()
+        assert len(rows) == 2
+
+        partial_row, overpay_row = rows[0], rows[1]
+        assert partial_row.decision == "REVIEW"
+        assert partial_row.decision_reason == "PARTIAL_PAYMENT_REQUIRES_REVIEW"
+        assert overpay_row.decision == "REVIEW"
+        assert overpay_row.decision_reason == "OVERPAYMENT_EXCEEDS_BALANCE"
+
+        # 1. Approve Partial Payment
+        flat_partial = db.query(Flat).filter(Flat.flat_number == "T05-0101").first()
+        bill_partial = db.query(Bill).filter(Bill.flat_id == flat_partial.id).first()
+        assert bill_partial.balance_amount == Decimal("10660.00")
+
+        approved_row = handle_review_action(
+            db=db,
+            bank_row_id=partial_row.id,
+            action="APPROVE",
+            reviewer_user_id=admin.id,
+            reason="Approved partial payment"
+        )
+        assert approved_row.review_status == "APPROVED"
+        assert approved_row.matched_payment_id is not None
+
+        db.refresh(bill_partial)
+        assert bill_partial.paid_amount == Decimal("4000.00")
+        assert bill_partial.balance_amount == Decimal("6660.00")
+        assert bill_partial.status == "PARTIALLY_PAID"
+
+        ledger_entry = db.query(FlatLedgerEntry).filter(
+            FlatLedgerEntry.reference_id == approved_row.matched_payment_id
+        ).first()
+        assert ledger_entry is not None
+        assert ledger_entry.entry_type == "CREDIT"
+        assert ledger_entry.amount == Decimal("4000.00")
+
+        # Concurrency safety: Approving again is safe and posts no duplicate
+        handle_review_action(
+            db=db,
+            bank_row_id=partial_row.id,
+            action="APPROVE",
+            reviewer_user_id=admin.id
+        )
+        assert db.query(Payment).filter(Payment.transaction_reference == "UTRPARTIAL001").count() == 1
+        assert db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == approved_row.matched_payment_id).count() == 1
+
+        # 2. Attempt Overpayment Approval -> Must fail and remain HELD
+        flat_overpay = db.query(Flat).filter(Flat.flat_number == "T05-0102").first()
+        bill_overpay = db.query(Bill).filter(Bill.flat_id == flat_overpay.id).first()
+        assert bill_overpay.balance_amount == Decimal("9230.00")
+
+        with pytest.raises(ValueError, match="exceeds"):
+            handle_review_action(
+                db=db,
+                bank_row_id=overpay_row.id,
+                action="APPROVE",
+                reviewer_user_id=admin.id,
+                reason="Attempting to approve excess payment"
+            )
+
+        db.refresh(overpay_row)
+        assert overpay_row.review_status == "HELD"
+        assert overpay_row.matched_payment_id is None
+
+        # Bill remains untouched
+        db.refresh(bill_overpay)
+        assert bill_overpay.paid_amount == Decimal("0.00")
+        assert bill_overpay.balance_amount == Decimal("9230.00")
+        assert bill_overpay.status == "ISSUED"
+
+        # Zero payments and zero ledger entries created for overpayment
+        assert db.query(Payment).filter(Payment.transaction_reference == "UTROVERPAY002").count() == 0
     finally:
         db.close()
 

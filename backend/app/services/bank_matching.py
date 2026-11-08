@@ -26,6 +26,7 @@ from backend.app.models.entities import (
     BankAccount, BankImportFile, BankRow, Flat, Bill, Payment,
     FlatLedgerEntry, Receipt, RegisteredUPI, AuditEvent, User
 )
+from backend.app.schemas.bank import BankMatchReason
 from backend.app.services.billing import round_currency
 
 
@@ -267,28 +268,28 @@ def evaluate_candidate_decision(
 
     # 1. Cheque pending check
     if "CHQ CLG PENDING" in narration_upper or "CHEQUE PENDING" in narration_upper:
-        return "REVIEW", "CHEQUE_CLEARANCE_PENDING", "HOLD"
+        return "REVIEW", BankMatchReason.CHEQUE_CLEARANCE_PENDING.value, "HOLD"
 
     # 2. Reversal / Bounce check
     if any(k in narration_upper for k in ["BOUNCE", "REVERSAL", "RTN CHQ", "RETURN CHQ"]):
-        return "REVIEW", "REVERSAL_BOUNCE_REVIEW", "HOLD"
+        return "REVIEW", BankMatchReason.REVERSAL_BOUNCE_REVIEW.value, "HOLD"
 
     # 3. Direction check (DEBIT rows)
     if direction == "DEBIT":
-        return "REVIEW", "DEBIT_ROW_REQUIRES_MANUAL_REVIEW", "HOLD"
+        return "REVIEW", BankMatchReason.DEBIT_ROW_REQUIRES_MANUAL_REVIEW.value, "HOLD"
 
     # 4. UTR presence check
     if not utr:
-        return "REVIEW", "MISSING_UTR", "HOLD"
+        return "REVIEW", BankMatchReason.MISSING_UTR.value, "HOLD"
 
     # 5. UTR uniqueness and collision check (in batch and in DB)
     evidence_signature = f"{amount:.2f}:{direction}:{flat_ref.upper()}:{payer_upi.lower()}"
     if utr in seen_utrs:
         prev_sig = seen_utrs[utr]["signature"]
         if prev_sig == evidence_signature:
-            return "DUPLICATE_NO_OP", "DUPLICATE_UTR_IDENTICAL_EVIDENCE", "NO_ACTION"
+            return "DUPLICATE_NO_OP", BankMatchReason.DUPLICATE_UTR_IDENTICAL_EVIDENCE.value, "NO_ACTION"
         else:
-            return "REVIEW", "UTR_CONFLICT_DIFFERENT_EVIDENCE", "HOLD"
+            return "REVIEW", BankMatchReason.UTR_CONFLICT_DIFFERENT_EVIDENCE.value, "HOLD"
 
     existing_db_row = db.query(BankRow).filter(BankRow.utr == utr).first()
     if existing_db_row:
@@ -298,10 +299,10 @@ def evaluate_candidate_decision(
         db_sig = f"{prev_amt}:{existing_db_row.direction}:{prev_flat}:{prev_upi}"
         if db_sig == evidence_signature:
             seen_utrs[utr] = {"signature": evidence_signature, "decision": "DUPLICATE_NO_OP"}
-            return "DUPLICATE_NO_OP", "DUPLICATE_UTR_IDENTICAL_EVIDENCE", "NO_ACTION"
+            return "DUPLICATE_NO_OP", BankMatchReason.DUPLICATE_UTR_IDENTICAL_EVIDENCE.value, "NO_ACTION"
         else:
             seen_utrs[utr] = {"signature": evidence_signature, "decision": "REVIEW"}
-            return "REVIEW", "UTR_CONFLICT_DIFFERENT_EVIDENCE", "HOLD"
+            return "REVIEW", BankMatchReason.UTR_CONFLICT_DIFFERENT_EVIDENCE.value, "HOLD"
 
     seen_utrs[utr] = {"signature": evidence_signature, "decision": "PENDING"}
 
@@ -314,75 +315,71 @@ def evaluate_candidate_decision(
     if flat_ref_upper and upi_clean:
         ref_flat_id = all_flats.get(flat_ref_upper)
         if not ref_flat_id:
-            return "REVIEW", "FLAT_REF_NOT_FOUND", "CORRECT_MAPPING"
+            return "REVIEW", BankMatchReason.FLAT_REF_NOT_FOUND.value, "CORRECT_MAPPING"
 
         upi_flats = upi_map.get(upi_clean, [])
         if not upi_flats:
-            return "REVIEW", "UNKNOWN_PAYER_UPI", "CORRECT_MAPPING"
+            return "REVIEW", BankMatchReason.UNKNOWN_PAYER_UPI.value, "CORRECT_MAPPING"
+        if len(upi_flats) > 1:
+            return "REVIEW", BankMatchReason.UPI_REUSED_ACROSS_FLATS_AMBIGUOUS.value, "HOLD"
         if ref_flat_id not in upi_flats:
-            return "REVIEW", "CONFLICTING_UPI_AND_FLAT_REF", "HOLD"
+            return "REVIEW", BankMatchReason.CONFLICTING_UPI_AND_FLAT_REF.value, "HOLD"
 
         matched_flat_id = ref_flat_id
 
-    # Case B: Only payer_upi provided
+    # Case B: Only payer_upi provided -> REVIEW, reason UPI_ONLY_REVIEW
     elif upi_clean and not flat_ref_upper:
         upi_flats = upi_map.get(upi_clean, [])
         if not upi_flats:
-            return "REVIEW", "UNKNOWN_PAYER_UPI", "CORRECT_MAPPING"
+            return "REVIEW", BankMatchReason.UNKNOWN_PAYER_UPI.value, "CORRECT_MAPPING"
         if len(upi_flats) > 1:
-            return "REVIEW", "UPI_REUSED_ACROSS_FLATS_AMBIGUOUS", "HOLD"
-        matched_flat_id = upi_flats[0]
+            return "REVIEW", BankMatchReason.UPI_REUSED_ACROSS_FLATS_AMBIGUOUS.value, "HOLD"
+        return "REVIEW", BankMatchReason.UPI_ONLY_REVIEW.value, "HOLD"
 
-    # Case C: Only flat_ref provided
+    # Case C: Only flat_ref provided -> REVIEW, reason FLAT_REF_ONLY_REVIEW
     elif flat_ref_upper and not upi_clean:
         ref_flat_id = all_flats.get(flat_ref_upper)
         if not ref_flat_id:
-            return "REVIEW", "FLAT_REF_NOT_FOUND", "CORRECT_MAPPING"
-        matched_flat_id = ref_flat_id
+            return "REVIEW", BankMatchReason.FLAT_REF_NOT_FOUND.value, "CORRECT_MAPPING"
+        return "REVIEW", BankMatchReason.FLAT_REF_ONLY_REVIEW.value, "HOLD"
 
-    # Case D: Neither provided - attempt narration fallback
+    # Case D: Neither provided - attempt narration fallback or amount-only
     else:
         narration_match = re.search(r"\b(T\d{2}-\d{4})\b", narration_upper)
         if narration_match:
             candidate_num = narration_match.group(1)
             ref_flat_id = all_flats.get(candidate_num)
-            if ref_flat_id:
-                matched_flat_id = ref_flat_id
-            else:
-                return "REVIEW", "FLAT_REF_NOT_FOUND", "CORRECT_MAPPING"
+            if not ref_flat_id:
+                return "REVIEW", BankMatchReason.FLAT_REF_NOT_FOUND.value, "CORRECT_MAPPING"
+            return "REVIEW", BankMatchReason.FLAT_REF_ONLY_REVIEW.value, "HOLD"
         else:
-            return "REVIEW", "AMOUNT_ONLY_NO_IDENTIFIER", "HOLD"
+            return "REVIEW", BankMatchReason.AMOUNT_ONLY_REVIEW.value, "HOLD"
 
     if not matched_flat_id:
-        return "REVIEW", "NO_REFERENCE_FOUND", "HOLD"
+        return "REVIEW", BankMatchReason.AMOUNT_ONLY_REVIEW.value, "HOLD"
 
-    # 7. Bill Balance Matching
+    # 7. Bill Balance Matching (Only reachable when both registered UPI and flat_ref match the same flat)
     open_bills = db.query(Bill).filter(
         Bill.flat_id == matched_flat_id,
         Bill.balance_amount > Decimal("0.00")
     ).order_by(Bill.due_date.asc()).all()
 
     if not open_bills:
-        return "REVIEW", "OVERPAYMENT_ALL_BILLS_PAID", "HOLD"
+        return "REVIEW", BankMatchReason.OVERPAYMENT_ALL_BILLS_PAID.value, "HOLD"
 
     # Ambiguity check: multiple open bills with exact same balance matching amount
     matching_bills = [b for b in open_bills if b.balance_amount == amount]
     if len(matching_bills) > 1:
-        return "REVIEW", "AMBIGUOUS_MULTI_BILL_MATCH", "HOLD"
+        return "REVIEW", BankMatchReason.AMBIGUOUS_MULTI_BILL_MATCH.value, "HOLD"
 
     target_bill = open_bills[0]
 
     if amount == target_bill.balance_amount:
-        if flat_ref_upper and upi_clean:
-            return "AUTO_MATCH", "EXACT_BALANCE_MATCH", "APPROVE"
-        elif upi_clean:
-            return "AUTO_MATCH", "EXACT_BALANCE_MATCH_UPI", "APPROVE"
-        else:
-            return "AUTO_MATCH", "EXACT_BALANCE_MATCH_FLAT_REF", "APPROVE"
+        return "AUTO_MATCH", BankMatchReason.REGISTERED_UPI_AND_FLAT_REFERENCE.value, "APPROVE"
     elif amount < target_bill.balance_amount:
-        return "REVIEW", "PARTIAL_PAYMENT_REQUIRES_REVIEW", "HOLD"
+        return "REVIEW", BankMatchReason.PARTIAL_PAYMENT_REQUIRES_REVIEW.value, "HOLD"
     else:
-        return "REVIEW", "OVERPAYMENT_EXCEEDS_BALANCE", "HOLD"
+        return "REVIEW", BankMatchReason.OVERPAYMENT_EXCEEDS_BALANCE.value, "HOLD"
 
 
 def commit_bank_statement(
@@ -607,6 +604,11 @@ def commit_bank_statement(
                 fl_list = upi_map[payer_upi_str.strip().lower()]
                 if len(fl_list) == 1:
                     resolved_flat_id = fl_list[0]
+            else:
+                narration_match = re.search(r"\b(T\d{2}-\d{4})\b", narration.upper())
+                if narration_match:
+                    candidate_num = narration_match.group(1)
+                    resolved_flat_id = all_flats.get(candidate_num)
             bank_row.matched_flat_id = resolved_flat_id
 
             # If AUTO_MATCH: execute post payment logic immediately in this transaction
@@ -631,7 +633,7 @@ def commit_bank_statement(
                 else:
                     # Defensive fallback: if bill balance shifted, hold for review
                     bank_row.decision = "REVIEW"
-                    bank_row.decision_reason = "BILL_BALANCE_SHIFTED_DURING_COMMIT"
+                    bank_row.decision_reason = BankMatchReason.BILL_BALANCE_SHIFTED_DURING_COMMIT.value
                     bank_row.next_action = "HOLD"
 
         if bank_row not in db:
@@ -897,6 +899,12 @@ def handle_review_action(
 
         if not target_bill:
             raise ValueError("No open bill found to allocate approved payment.")
+
+        if bank_row.amount and bank_row.amount > target_bill.balance_amount:
+            bank_row.review_status = "HELD"
+            bank_row.correction_reason = reason or "Overpayment exceeds bill balance; held for accounts review"
+            db.commit()
+            raise ValueError(f"Cannot approve overpayment of {bank_row.amount} which exceeds open bill balance of {target_bill.balance_amount}. Row remains HELD.")
 
         # Execute posting logic
         post_bank_payment(

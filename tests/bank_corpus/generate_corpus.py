@@ -79,7 +79,7 @@ def generate_corpus(seed: int = 42) -> list[dict]:
             "payer_upi": upi,
             "flat_ref": flat_num,
             "expected_decision": "AUTO_MATCH",
-            "expected_reason": "EXACT_BALANCE_MATCH",
+            "expected_reason": "REGISTERED_UPI_AND_FLAT_REFERENCE",
             "category": "EXACT_MATCH_FULL"
         })
 
@@ -106,8 +106,8 @@ def generate_corpus(seed: int = 42) -> list[dict]:
             "utr": utr,
             "payer_upi": upi,
             "flat_ref": "",
-            "expected_decision": "AUTO_MATCH",
-            "expected_reason": "EXACT_BALANCE_MATCH_UPI",
+            "expected_decision": "REVIEW",
+            "expected_reason": "UPI_ONLY_REVIEW",
             "category": "UPI_ONLY_MATCH"
         })
 
@@ -132,8 +132,8 @@ def generate_corpus(seed: int = 42) -> list[dict]:
             "utr": utr,
             "payer_upi": "",
             "flat_ref": flat_num,
-            "expected_decision": "AUTO_MATCH",
-            "expected_reason": "EXACT_BALANCE_MATCH_FLAT_REF",
+            "expected_decision": "REVIEW",
+            "expected_reason": "FLAT_REF_ONLY_REVIEW",
             "category": "FLAT_REF_ONLY_MATCH"
         })
 
@@ -188,7 +188,7 @@ def generate_corpus(seed: int = 42) -> list[dict]:
             "payer_upi": "",
             "flat_ref": "",
             "expected_decision": "REVIEW",
-            "expected_reason": "AMOUNT_ONLY_NO_IDENTIFIER",
+            "expected_reason": "AMOUNT_ONLY_REVIEW",
             "category": "AMOUNT_ONLY"
         })
 
@@ -302,7 +302,7 @@ def generate_corpus(seed: int = 42) -> list[dict]:
             "payer_upi": "",
             "flat_ref": f"T01-03{k:02d}",
             "expected_decision": "REVIEW",
-            "expected_reason": "WRONG_BANK_ACCOUNT",
+            "expected_reason": "UNRECOGNIZED_BANK_ACCOUNT",
             "category": "WRONG_ACCOUNT"
         })
 
@@ -367,7 +367,7 @@ def generate_corpus(seed: int = 42) -> list[dict]:
             "payer_upi": "",
             "flat_ref": "",
             "expected_decision": "REVIEW",
-            "expected_reason": "NO_REFERENCE_FOUND",
+            "expected_reason": "AMOUNT_ONLY_REVIEW",
             "category": "NO_REFERENCE"
         })
 
