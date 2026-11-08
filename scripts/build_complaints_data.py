@@ -2,7 +2,8 @@
 # Constructs balanced dataset across categories, urgencies, and languages.
 
 import os
-import pandas as pd
+import csv
+from collections import Counter
 
 complaints_data = [
     # =========================================================================
@@ -478,18 +479,32 @@ complaints_data = [
     {"text": "Flat renovation permission letter approve karun dya carpenter team ready ahe NOC pass dya.", "category": "GENERAL", "urgency": "LOW", "language": "mr", "incident_family": "renovation_noc_request"},
 ]
 
-df = pd.DataFrame(complaints_data)
-print(f"Total rows: {len(df)}")
+print(f"Total rows: {len(complaints_data)}")
+
+cat_counts = Counter(r["category"] for r in complaints_data)
 print("\nCategories distribution:")
-print(df["category"].value_counts())
+for k, v in cat_counts.most_common():
+    print(f"  {k}: {v}")
+
+urg_counts = Counter(r["urgency"] for r in complaints_data)
 print("\nUrgencies distribution:")
-print(df["urgency"].value_counts())
+for k, v in urg_counts.most_common():
+    print(f"  {k}: {v}")
+
+lang_counts = Counter(r["language"] for r in complaints_data)
 print("\nLanguages distribution:")
-print(df["language"].value_counts())
-print(f"\nUnique incident families: {df['incident_family'].nunique()}")
+for k, v in lang_counts.most_common():
+    print(f"  {k}: {v}")
+
+unique_families = len(set(r["incident_family"] for r in complaints_data))
+print(f"\nUnique incident families: {unique_families}")
 
 # Ensure target directory exists
 os.makedirs("backend/app/ml/data", exist_ok=True)
 csv_path = "backend/app/ml/data/complaints_v1.csv"
-df.to_csv(csv_path, index=False, encoding="utf-8")
+fieldnames = ["text", "category", "urgency", "language", "incident_family"]
+with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(complaints_data)
 print(f"\nSuccessfully wrote {csv_path}")

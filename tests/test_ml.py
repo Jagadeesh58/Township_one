@@ -9,9 +9,10 @@ Verifies:
 """
 
 import os
+import csv
+from collections import Counter
 import unittest
 from unittest.mock import patch, MagicMock
-import pandas as pd
 
 from backend.app.ml.emergency import detect_emergency
 from backend.app.ml.classifier import (
@@ -29,45 +30,48 @@ class TestComplaintsDataset(unittest.TestCase):
 
     def setUp(self):
         self.assertTrue(os.path.exists(DEFAULT_DATA_PATH), f"Missing dataset at {DEFAULT_DATA_PATH}")
-        self.df = pd.read_csv(DEFAULT_DATA_PATH)
+        self.rows = []
+        with open(DEFAULT_DATA_PATH, mode="r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            self.fieldnames = list(reader.fieldnames or [])
+            self.rows = list(reader)
 
     def test_minimum_row_count(self):
         """Must contain >= 300 labelled complaints."""
-        self.assertGreaterEqual(len(self.df), 300)
+        self.assertGreaterEqual(len(self.rows), 300)
 
     def test_required_columns(self):
         """Must contain all required column definitions."""
         expected_cols = {"text", "category", "urgency", "language", "incident_family"}
-        self.assertTrue(expected_cols.issubset(set(self.df.columns)))
+        self.assertTrue(expected_cols.issubset(set(self.fieldnames)))
 
     def test_categories_valid_and_balanced(self):
         """All 8 categories must be valid and equally represented."""
-        unique_cats = set(self.df["category"].unique())
-        self.assertEqual(unique_cats, set(VALID_CATEGORIES))
-        cat_counts = self.df["category"].value_counts()
+        cat_counts = Counter(r["category"] for r in self.rows)
+        self.assertEqual(set(cat_counts.keys()), set(VALID_CATEGORIES))
         # Each category should have 45 samples
         for cat in VALID_CATEGORIES:
             self.assertEqual(cat_counts[cat], 45)
 
     def test_urgencies_valid_and_balanced(self):
         """All 4 urgencies must be valid and well-balanced."""
-        unique_urgs = set(self.df["urgency"].unique())
-        self.assertEqual(unique_urgs, set(VALID_URGENCIES))
-        urg_counts = self.df["urgency"].value_counts()
+        urg_counts = Counter(r["urgency"] for r in self.rows)
+        self.assertEqual(set(urg_counts.keys()), set(VALID_URGENCIES))
         for urg in VALID_URGENCIES:
             self.assertGreaterEqual(urg_counts[urg], 80)
             self.assertLessEqual(urg_counts[urg], 100)
 
     def test_languages_balanced(self):
         """Must cover English, Hindi, and Marathi evenly."""
-        lang_counts = self.df["language"].value_counts()
+        lang_counts = Counter(r["language"] for r in self.rows)
         self.assertEqual(set(lang_counts.keys()), {"en", "hi", "mr"})
         for lang in ["en", "hi", "mr"]:
             self.assertEqual(lang_counts[lang], 120)
 
     def test_incident_families_count(self):
         """Must contain 40 incident families (5 per category)."""
-        self.assertEqual(self.df["incident_family"].nunique(), 40)
+        families = set(r["incident_family"] for r in self.rows)
+        self.assertEqual(len(families), 40)
 
 
 class TestEmergencyDetection(unittest.TestCase):
@@ -170,8 +174,9 @@ class TestEmergencyDetection(unittest.TestCase):
 class TestClassifier(unittest.TestCase):
     """Verifies local scikit-learn classifier pipeline and fallback behaviors."""
 
+    @patch("backend.app.ml.classifier.settings.GROQ_API_KEY", "")
     def test_local_model_prediction(self):
-        res = predict_category_and_urgency("Main pipe burst flooding kitchen floor rapidly")
+        res = predict_category_and_urgency("Main pipe burst flooding kitchen floor rapidly", groq_api_key="")
         self.assertEqual(res["category"], "PLUMBING")
         self.assertEqual(res["urgency"], "CRITICAL")
         self.assertEqual(res["provider"], "local_nb")
@@ -179,17 +184,19 @@ class TestClassifier(unittest.TestCase):
         self.assertFalse(res["needs_human_review"])
         self.assertGreater(res["confidence"], 0.5)
 
+    @patch("backend.app.ml.classifier.settings.GROQ_API_KEY", "")
     def test_local_multilingual_lift_prediction(self):
-        res = predict_category_and_urgency("lift beech me band ho gayi hai 4th floor par")
+        res = predict_category_and_urgency("lift beech me band ho gayi hai 4th floor par", groq_api_key="")
         self.assertEqual(res["category"], "LIFT")
         self.assertFalse(res["needs_human_review"])
 
+    @patch("backend.app.ml.classifier.settings.GROQ_API_KEY", "")
     def test_unclassified_empty_and_gibberish(self):
-        empty_res = predict_category_and_urgency("  ")
+        empty_res = predict_category_and_urgency("  ", groq_api_key="")
         self.assertEqual(empty_res["category"], "UNCLASSIFIED")
         self.assertTrue(empty_res["needs_human_review"])
 
-        gibberish_res = predict_category_and_urgency("xyz")
+        gibberish_res = predict_category_and_urgency("xyz", groq_api_key="")
         self.assertEqual(gibberish_res["category"], "UNCLASSIFIED")
         self.assertTrue(gibberish_res["needs_human_review"])
 

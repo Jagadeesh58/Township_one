@@ -8,14 +8,15 @@ Provides category and urgency prediction with:
 - Low-confidence and empty input gating to UNCLASSIFIED / human review.
 """
 
+import csv
 import json
 import logging
 import os
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import joblib
-import pandas as pd
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import FeatureUnion, Pipeline
@@ -53,17 +54,26 @@ def build_pipeline() -> Pipeline:
 
 def train_model(
     csv_path: Optional[str] = None,
-    save_path: Optional[str] = None
+    save_path: Optional[str] = None,
+    random_seed: int = 42
 ) -> Tuple[Pipeline, Pipeline]:
-    """Trains category and urgency pipelines from complaints dataset and persists artifacts."""
+    """Trains category and urgency pipelines from complaints dataset and persists artifacts reproducibly."""
+    np.random.seed(random_seed)
+
     csv_file = csv_path or DEFAULT_DATA_PATH
     if not os.path.exists(csv_file):
         raise FileNotFoundError(f"Training dataset not found at {csv_file}")
 
-    df = pd.read_csv(csv_file)
-    X = df["text"].astype(str).tolist()
-    y_cat = df["category"].astype(str).tolist()
-    y_urg = df["urgency"].astype(str).tolist()
+    X: List[str] = []
+    y_cat: List[str] = []
+    y_urg: List[str] = []
+
+    with open(csv_file, mode="r", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            X.append(str(row.get("text", "")))
+            y_cat.append(str(row.get("category", "")))
+            y_urg.append(str(row.get("urgency", "")))
 
     cat_pipeline = build_pipeline()
     cat_pipeline.fit(X, y_cat)
@@ -196,8 +206,8 @@ def predict_category_and_urgency(
             "needs_human_review": True,
         }
 
-    key = groq_api_key or settings.GROQ_API_KEY
-    model_id = groq_model_id or settings.GROQ_MODEL_ID
+    key = groq_api_key if groq_api_key is not None else settings.GROQ_API_KEY
+    model_id = groq_model_id if groq_model_id is not None else settings.GROQ_MODEL_ID
 
     # Attempt Groq API invocation if key is provided
     if key and key.strip():
