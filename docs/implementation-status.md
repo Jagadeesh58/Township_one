@@ -1,49 +1,46 @@
-# Township One — Implementation Status & Requirement Matrix
+# Township One — Feature Status
 
-## 1. Scope Boundary & Release Summary
+**Repository:** `https://github.com/Jagadeesh58/Township_one.git`  
+**Current Phase:** Core Release (Resident Authentication, Spatial Modeling, Maintenance Billing, Payments & Ledgers)
 
-Township One is delivered as a verified, production-ready core release implementing resident authentication, township data architecture, maintenance billing, test payments, running accounting ledgers, and a bilingual PWA resident experience.
+---
 
-| Requirement Area | Planned Scope | Implementation Status | Automated Verification |
+## 1. Feature Status
+
+| Feature | Status | Verified By Test / Command | Notes |
 |---|---|---|---|
-| **Township Foundation** | 28 towers, 2,400 flats, 180 staff, 4 gates | **Complete** | `tests/test_seed.py` (Passed) |
-| **Authentication & RBAC** | Passwordless phone OTP, single-use, JTI revocation, permissions | **Complete** | `tests/test_auth.py` (Passed) |
-| **Maintenance Billing** | Area-rate tariff (₹6.50/sq ft), grace period, leap year, multi-bill aggregation | **Complete** | `tests/test_billing.py` (Passed) |
-| **Payment Gateway** | Idempotency locking, request fingerprinting, conflict handling, vouchers | **Complete** | `tests/test_payments.py`, `tests/test_payment_concurrency.py` (Passed) |
-| **Resident PWA** | 2-tap payment CTA, multi-bill selection, offline app shell, trilingual i18n | **Complete** | `frontend/src/__tests__/app.test.ts` (Passed), Vite Build (Passed) |
-| **Accounting Ledger** | Dual-entry DEBIT/CREDIT records, running post-transaction balances | **Complete** | `tests/test_integration.py` (Passed) |
-| **Financial Precision** | Decimal arithmetic (ROUND_HALF_UP), binary float immunity | **Complete** | `tests/test_money_precision.py` (Passed) |
+| **Township Spatial Modeling** | Built | `tests/test_seed.py` | 28 towers, 2,400 flats, 180 staff members, 4 gates |
+| **Passwordless Phone OTP Auth** | Built | `tests/test_auth.py` | Persistent `OTPChallenge`, IP & phone rate limits, single-use |
+| **Cookie Session & CSRF Protection** | Built | `tests/test_auth.py`, `tests/test_resident_security.py` | `township_session` HttpOnly cookie, double-submit `X-CSRF-Token` |
+| **Role-Based Access Control (RBAC)** | Built | `tests/test_auth.py`, `tests/test_resident_security.py` | Database-backed role assignments; committee blocked from individual flats |
+| **Maintenance Billing Engine** | Built | `tests/test_billing.py`, `tests/test_money_precision.py` | Area-based calculation (₹6.50/sq ft), leap year simple interest, 5-day grace period |
+| **Simulated Payment Gateway** | Built | `tests/test_payments.py`, `tests/test_payment_concurrency.py` | Cryptographic SHA-256 idempotency fingerprinting, outcome simulation |
+| **Dual-Entry Accounting Ledger** | Built | `tests/test_integration.py`, `tests/test_resident_security.py` | DEBIT on bill issue, CREDIT on payment, running balance tracking |
+| **Decimal Currency Precision** | Built | `tests/test_money_precision.py`, `tests/test_resident_security.py` | Zero binary floating-point drift (`ROUND_HALF_UP` Decimal) |
+| **Payment Receipts** | Built | `tests/test_payments.py` | Sequential receipt numbering, tamper-evident transaction references |
+| **Resident PWA Interface** | Built | `frontend/src/__tests__/app.test.ts`, `frontend/src/__tests__/components.test.tsx` | Responsive layout (320px–1024px), 2-tap dues payment shortcut, offline shell |
+| **Trilingual Localization** | Built | `tests/test_resident_security.py`, `frontend/src/__tests__/components.test.tsx` | English, Marathi, Hindi complete translations |
+| **PWA Cache Lifecycle** | Built | `tests/test_resident_security.py`, `frontend/public/sw.js` | App shell pre-caching, network-only bypass for `/api/*`, cache wipe on logout |
+| **Committee Aggregate Metrics** | In Progress | `backend/app/api/billing.py::get_committee_aggregate` | High-level collection efficiency and aggregate totals |
+| **Bank Statement Reconciliation (MT940/CSV)** | Not built yet | — | Scheduled for future release |
+| **Complaint Lifecycle & Helpdesk Dispatch** | Not built yet | — | Scheduled for future release |
+| **AI Complaint Classification** | Not built yet | — | Scheduled for future release |
+| **Visitor Gate Check-in & Dynamic PINs** | Not built yet | — | Scheduled for future release |
+| **Amenity Booking Slot Reservation** | Not built yet | — | Scheduled for future release |
+| **Digital Notice Board Publishing** | Not built yet | — | Scheduled for future release |
+| **Committee Audit Pack Generator** | Not built yet | — | Scheduled for future release |
 
 ---
 
-## 2. Verified Persona Checklist
+## 2. Reviewer Personas (Demo Reference Date: `2026-11-06`)
 
-The local demo database (`township_one.db`) is fully initialized with verified sample personas as of **`2026-11-06`**:
-
-- [x] **Neeraj Kulkarni (Flat T07-1203):**
-  - Phone: `9876543210` (Demo OTP: `123456`)
-  - Status: Owner, 1,150 sq ft, Fully Paid (₹7,475.00), Outstanding Due: ₹0.00.
-- [x] **Swati Joshi (Flat T12-0408):**
-  - Phone: `9876543211` (Demo OTP: `123456`)
-  - Status: Tenant, 980 sq ft, Unpaid Bill due 2026-09-20 (Exactly 47 days overdue), Outstanding Due: ₹6,370.00.
-- [x] **Aamir Shaikh (Flat T21-1601):**
-  - Phone: `9876543212` (Demo OTP: `123456`)
-  - Status: Owner, 1,640 sq ft, Partially Paid ₹5,000.00 due 2026-10-19 (Exactly 18 days overdue), Outstanding Due: ₹5,660.00.
-- [x] **Ananya Kulkarni (Flat T07-1203):**
-  - Phone: `9876543213` (Demo OTP: `123456`)
-  - Status: Family Member, `can_pay_bills = False` (View permitted, payment blocked).
-- [x] **Vikram Sardesai (Management Committee):**
-  - Phone: `9876543250` (Demo OTP: `123456`)
-  - Status: Committee Member, Authorized for Township Aggregate Metrics, Blocked from Individual Flats.
-- [x] **Suresh Shinde (Gate Security):**
-  - Phone: `9876543230` (Demo OTP: `123456`)
-  - Status: Security Guard, Authorized for Gate Passes, Blocked from Financial Ledgers.
-
----
-
-## 3. Product Roadmap (Future Phases)
-
-The following modules represent future planned phases beyond the current release:
-- **Phase 2 (Operations & Service Delivery):** Multi-tenant complaint lifecycle, automatic category-based staff routing, SLA breach notifications, and photo attachments.
-- **Phase 3 (Security & Visitor Access):** Fast-pass QR generation, offline gate tablet sync via IndexedDB, and automated 90-day DPDP photo purging.
-- **Phase 4 (Treasury & Committee Governance):** Bank statement reconciliation parser (CSV/MT940), automated match score heuristic, and committee audit pack generator.
+| Persona | Phone | Demo OTP | Role / Flat | State |
+|---|---|---|---|---|
+| **Neeraj Kulkarni** | `9876543210` | `123456` | Owner, Flat T07-1203 | 1,150 sq ft, fully settled dues (₹7,475.00 paid), ₹0.00 outstanding |
+| **Swati Joshi** | `9876543211` | `123456` | Tenant, Flat T12-0408 | 980 sq ft, 47 days overdue (due 2026-09-20), ₹6,370.00 outstanding |
+| **Aamir Shaikh** | `9876543212` | `123456` | Owner, Flat T21-1601 | 1,640 sq ft, 18 days overdue (due 2026-10-19), ₹5,660.00 outstanding |
+| **Ananya Kulkarni** | `9876543213` | `123456` | Family Member, Flat T07-1203 | Can view dues summary, cannot execute payments |
+| **Anita Deshmukh** | `9876543240` | `123456` | Accounts Staff | Authorized for bill generation and financial ledger views |
+| **Vikram Sardesai** | `9876543250` | `123456` | Committee Member | Authorized for aggregate metrics; individual flat drilldown blocked |
+| **Suresh Shinde** | `9876543230` | `123456` | Security Guard | Gate access; billing and financial records blocked |
+| **System Admin** | `9876543200` | `123456` | Administrator | Full administrative authority across all modules |
