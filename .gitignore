@@ -40,6 +40,7 @@ frontend/build/
 *.sqlite
 *.sqlite3
 township_one.db
+scratch/
 
 # Archives
 *.zip
