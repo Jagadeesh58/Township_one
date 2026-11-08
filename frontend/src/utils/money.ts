@@ -96,6 +96,8 @@ export function formatMoney(
   return showCurrency ? `₹${withSign}` : withSign;
 }
 
+export const formatINR = formatMoney;
+
 /**
  * Performs safe addition of two monetary values using integer paise.
  */

@@ -1,15 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { api, UserProfile } from './api/client';
 import { Language } from './i18n/translations';
-import { Navbar } from './components/Navbar';
+import { Navbar, NavTab } from './components/Navbar';
 import { LoginPage } from './pages/LoginPage';
 import { ResidentHomePage } from './pages/ResidentHomePage';
+import { ResidentComplaints } from './pages/ResidentComplaints';
+import { AccountsWorkspace } from './pages/AccountsWorkspace';
+import { HelpDeskQueue } from './pages/HelpDeskQueue';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [selectedFlatId, setSelectedFlatId] = useState<string>('');
   const [currentLang, setCurrentLang] = useState<Language>('en');
+  const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [loading, setLoading] = useState<boolean>(true);
+
+  const determineDefaultTab = (profile: UserProfile): NavTab => {
+    const roles = profile.roles.map((r) => r.role_code);
+    if (profile.flats && profile.flats.length > 0) {
+      return 'home';
+    }
+    if (roles.includes('ACCOUNTS')) {
+      return 'accounts';
+    }
+    if (roles.includes('HELPDESK') || roles.includes('COMMITTEE') || roles.includes('MANAGEMENT')) {
+      return 'helpdesk';
+    }
+    return 'home';
+  };
 
   // Check existing session
   useEffect(() => {
@@ -20,6 +38,7 @@ export default function App() {
         if (profile.flats && profile.flats.length > 0) {
           setSelectedFlatId(profile.flats[0].flat_id);
         }
+        setActiveTab(determineDefaultTab(profile));
       } catch (e) {
         setUser(null);
       } finally {
@@ -41,12 +60,14 @@ export default function App() {
     if (profile.flats && profile.flats.length > 0) {
       setSelectedFlatId(profile.flats[0].flat_id);
     }
+    setActiveTab(determineDefaultTab(profile));
   };
 
   const handleLogout = async () => {
     await api.logout();
     setUser(null);
     setSelectedFlatId('');
+    setActiveTab('home');
   };
 
   if (loading) {
@@ -66,6 +87,8 @@ export default function App() {
         onLogout={handleLogout}
         selectedFlatId={selectedFlatId}
         onSelectFlat={setSelectedFlatId}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
 
       <main style={{ flex: 1, paddingBottom: '2rem' }}>
@@ -73,6 +96,22 @@ export default function App() {
           <LoginPage
             lang={currentLang}
             onLoginSuccess={handleLoginSuccess}
+          />
+        ) : activeTab === 'complaints' ? (
+          <ResidentComplaints
+            user={user}
+            selectedFlatId={selectedFlatId}
+            lang={currentLang}
+          />
+        ) : activeTab === 'accounts' ? (
+          <AccountsWorkspace
+            user={user}
+            lang={currentLang}
+          />
+        ) : activeTab === 'helpdesk' ? (
+          <HelpDeskQueue
+            user={user}
+            lang={currentLang}
           />
         ) : (
           <ResidentHomePage
