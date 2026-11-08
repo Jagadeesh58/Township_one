@@ -10,6 +10,7 @@ Test suite verifying:
 
 import os
 import uuid
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pytest
@@ -19,8 +20,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.app.main import app
 from backend.app.core.database import SessionLocal, Base
-from backend.app.models.entities import Bill, Payment, OTPChallenge
-from backend.app.models.entities import OTPChallenge
+from backend.app.models.entities import Bill, Payment, OTPChallenge, Flat, Tower
 
 client = TestClient(app)
 
@@ -160,14 +160,28 @@ def test_postgresql_with_for_update_row_locking():
     PgSession = sessionmaker(bind=pg_engine)
 
     init_db = PgSession()
+    flat = init_db.query(Flat).first()
+    if not flat:
+        tower = Tower(id=str(uuid.uuid4()), tower_number="T99", name="Test Tower", total_floors=10, total_flats=40)
+        init_db.add(tower)
+        flat = Flat(id=str(uuid.uuid4()), tower_id=tower.id, flat_number="T99-0101", floor_number=1, area_sqft=Decimal("1000.00"), bhk_type="2BHK")
+        init_db.add(flat)
+        init_db.commit()
+
     test_bill_id = str(uuid.uuid4())
-    flat_id = str(uuid.uuid4())
+    now_utc = datetime.now(timezone.utc)
     bill = Bill(
         id=test_bill_id,
-        flat_id=flat_id,
-        period_month=11,
-        period_year=2026,
+        flat_id=flat.id,
+        billing_rule_version="v1.0-demo",
+        period_month=12,
+        period_year=2099,
+        issue_date=now_utc,
+        due_date=now_utc + timedelta(days=15),
+        area_sqft=Decimal("1000.00"),
+        rate_per_sqft=Decimal("5.00"),
         principal_amount=Decimal("5000.00"),
+        late_fee_amount=Decimal("0.00"),
         total_amount=Decimal("5000.00"),
         paid_amount=Decimal("0.00"),
         balance_amount=Decimal("5000.00"),

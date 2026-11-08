@@ -120,7 +120,28 @@ def initiate_simulated_payment(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A transaction with this idempotency key is currently being processed. Please retry."
             )
-    else:
+
+    # 4. Acquire row-level lock on Bill BEFORE inserting child records (prevents PostgreSQL FK KeyShare lock inversion & deadlocks)
+    bill_query = db.query(Bill).filter(Bill.id == bill_id, Bill.flat_id == flat_id)
+    if db.bind and db.bind.dialect.name != "sqlite":
+        bill_query = bill_query.with_for_update()
+    bill = bill_query.first()
+    if not bill:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found for this flat.")
+
+    if bill.balance_amount <= Decimal("0.00"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Bill {bill.id} is already fully paid. Duplicate payment is not permitted."
+        )
+
+    if amount > bill.balance_amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Payment amount (₹{amount}) cannot exceed current outstanding balance (₹{bill.balance_amount})."
+        )
+
+    if not existing_rec:
         # Create in-progress record to secure lock
         try:
             idempotency_record = PaymentIdempotencyRecord(
@@ -150,32 +171,6 @@ def initiate_simulated_payment(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Concurrent request detected for this idempotency key. Please retry."
             )
-
-    # 3. Validate Bill Existence and Balance (with dialect-aware row locking)
-    bill_query = db.query(Bill).filter(Bill.id == bill_id, Bill.flat_id == flat_id)
-    if db.bind and db.bind.dialect.name != "sqlite":
-        bill_query = bill_query.with_for_update()
-    bill = bill_query.first()
-    if not bill:
-        if idempotency_record:
-            db.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found for this flat.")
-
-    if bill.balance_amount <= Decimal("0.00"):
-        if idempotency_record:
-            db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Bill {bill.id} is already fully paid. Duplicate payment is not permitted."
-        )
-
-    if amount > bill.balance_amount:
-        if idempotency_record:
-            db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Payment amount (₹{amount}) cannot exceed current outstanding balance (₹{bill.balance_amount})."
-        )
 
     # 4. Generate unique payment transaction reference (distinct from idempotency key!)
     now_dt = datetime.now(timezone.utc)
