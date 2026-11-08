@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-Township One is an enterprise-grade gated community operations and resident management platform engineered for large-scale residential townships. The system is specifically architected for **Company A, Pune**, accommodating **2,400 residential flats across 28 towers, 180 on-site operations staff, and 4 multi-lane security gates**.
+Township One is a gated community operations and resident management platform engineered for large-scale residential townships. The system is specifically architected for **Company A, Pune**, accommodating **2,400 residential flats across 28 towers, 180 on-site operations staff, and 4 multi-lane security gates**.
 
 The platform is designed around reliability, data integrity, auditability, and role-based access control.
 

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "township-one"
 version = "1.0.0"
-description = "Township One — Gated Township Resident & Operations Platform (Brief 2)"
+description = "Township One — Gated Township Resident & Operations Platform"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -6,7 +6,7 @@
 
 ## 1. System Architecture Overview
 
-**Township One** is an enterprise-grade reliability runtime and resident portal designed for large residential communities (modeled on Company A, Pune: 2,400 flats, 28 towers, 180 staff, 4 access gates).
+**Township One** is a resident experience and community operations portal designed for large residential communities (modeled on Company A, Pune: 2,400 flats, 28 towers, 180 staff, 4 access gates).
 
 - **Backend Runtime:** Python 3.11+ ASGI application using FastAPI, SQLAlchemy 2.0 ORM, and Alembic database migrations.
 - **Frontend Client:** React 19 + TypeScript + Vite Progressive Web Application (PWA) with multilingual i18n (English, Marathi, Hindi) and offline cache capabilities.

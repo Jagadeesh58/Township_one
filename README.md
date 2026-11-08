@@ -3,13 +3,13 @@
 **Repository URL:** https://github.com/Jagadeesh58/Township_one.git  
 **Client:** Company A, Pune  
 **Township Context:** 2,400 residential flats across 28 towers, 180 on-site staff, 4 multi-lane access gates, managing ₹22–26 crore annual maintenance budget.  
-**Scope Authority:** Challenge Brief Part C: Brief 2 (Gated township resident app for maintenance, complaints, and visitors).  
+**Scope:** Gated township resident app for maintenance billing, complaints, and community operations.  
 
 ---
 
 ## 1. System Overview
 
-Township One is an enterprise-grade resident experience and community operations platform engineered for large-scale gated communities. The platform provides secure resident authentication, spatial township modeling, maintenance dues calculation with transparent breakdown, simulated test payment processing with cryptographic idempotency, dual-entry accounting ledgers, and a mobile-first Progressive Web App (PWA).
+Township One is a resident experience and community operations platform engineered for large-scale gated communities. The platform provides secure resident authentication, spatial township modeling, maintenance dues calculation with transparent breakdown, simulated test payment processing with cryptographic idempotency, dual-entry accounting ledgers, and a mobile-first Progressive Web App (PWA).
 
 ### Architecture Highlights
 - **Backend API:** FastAPI (Python 3.11), SQLAlchemy 2.0 ORM, Pydantic v2, and Alembic schema migrations.
@@ -36,7 +36,7 @@ Comprehensive architecture specifications, data schemas, security models, and ve
 | [`docs/security-and-privacy.md`](docs/security-and-privacy.md) | Production configuration guards, IDOR prevention, brute-force defenses, and DPDP Act 2023 alignment. |
 | [`docs/testing-and-validation.md`](docs/testing-and-validation.md) | Verification engine methodology, test suite topology, and test execution evidence. |
 | [`docs/assumptions-and-open-decisions.md`](docs/assumptions-and-open-decisions.md) | Domain assumptions register, late fee legal notice, and architectural roadmap. |
-| [`docs/implementation-status.md`](docs/implementation-status.md) | Requirement completion matrix, verified persona checklist, and future phase boundaries. |
+| [`docs/implementation-status.md`](docs/implementation-status.md) | Feature completion status, verified persona checklist, and future phase boundaries. |
 | [`docs/reviewer-walkthrough.md`](docs/reviewer-walkthrough.md) | Step-by-step evaluation guide and demonstration scenarios. |
 | [`docs/deployment.md`](docs/deployment.md) | Production deployment guide, environment variables, and operations checklist. |
 
@@ -45,7 +45,7 @@ Comprehensive architecture specifications, data schemas, security models, and ve
 - [`docs/reports/migration-validation.md`](docs/reports/migration-validation.md) — Alembic schema migration and revision verification.
 - [`docs/reports/seed-data-validation.md`](docs/reports/seed-data-validation.md) — Database entity counts and overdue math validation.
 - [`docs/reports/frontend-validation.md`](docs/reports/frontend-validation.md) — Vitest frontend test report and production asset build metrics.
-- [`docs/reports/payment-safety-validation.md`](docs/reports/payment-safety-validation.md) — Idempotency replay matrix, concurrency benchmarks, and precision tests.
+- [`docs/reports/payment-safety-validation.md`](docs/reports/payment-safety-validation.md) — Idempotency key replay verification, concurrency benchmarks, and precision tests.
 
 ---
 

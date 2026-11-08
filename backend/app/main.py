@@ -16,7 +16,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Township One - Gated Township Resident & Operations Platform (Brief 2)",
+    description="Township One - Gated Township Resident & Operations Platform",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
