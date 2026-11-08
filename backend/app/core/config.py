@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     ]
 
     # Database URLs (PostgreSQL standard per architecture; SQLite fast-test local fallback)
-    DATABASE_URL: str = "sqlite:///./township_one.db"
-    TEST_DATABASE_URL: str = "sqlite:///./township_one_test.db"
+    DATABASE_URL: str = "postgresql+psycopg://township:township_dev_password@localhost:5432/township_one"
+    TEST_DATABASE_URL: str = "postgresql+psycopg://township:township_dev_password@localhost:5432/township_one_test"
 
     # Reference Date for Date Consistency across UI, API, Seed & Tests
     DEMO_AS_OF_DATE: str = "2026-11-06T00:00:00Z"

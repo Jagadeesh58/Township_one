@@ -37,6 +37,8 @@ def get_auth_token(phone: str) -> tuple[str, dict]:
         db.close()
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    csrf = res.cookies.get("township_csrf", "")
+    client.headers["X-CSRF-Token"] = csrf
     data = res.json()
     return data["access_token"], data["user"]
 
@@ -45,7 +47,7 @@ def test_mandatory_idempotency_key_enforcement():
     # Login as Swati (T12-0408)
     token, user = get_auth_token("9876543211")
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
     summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     bill_id = summary["latest_bill"]["id"]
 
@@ -81,7 +83,7 @@ def test_simulated_payment_blocked_in_production(monkeypatch):
     # First obtain auth token while in test environment
     token, user = get_auth_token("9876543211")
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     # Now switch to production environment
     monkeypatch.setattr(settings, "APP_ENV", "production")
@@ -105,7 +107,7 @@ def test_pay_already_paid_bill_rejected():
     # Login as Neeraj (T07-1203) - bill is already paid
     token, user = get_auth_token("9876543210")
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     bill_id = summary["latest_bill"]["id"]
@@ -130,7 +132,7 @@ def test_invalid_payment_outcomes_rejected():
     # Login as Swati (T12-0408)
     token, user = get_auth_token("9876543211")
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     summary_before = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     bill_id = summary_before["latest_bill"]["id"]
@@ -201,7 +203,7 @@ def test_payment_failure_pending_expired_leaves_dues_intact():
     # Login as Swati (T12-0408)
     token, user = get_auth_token("9876543211")
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     summary_before = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     initial_due = summary_before["current_due"]
@@ -233,7 +235,7 @@ def test_cross_flat_idempotency_key_replay_and_leakage_prevention():
     # 1. Swati (T12-0408) pays partial amount with key K
     swati_token, swati_user = get_auth_token("9876543211")
     swati_flat_id = swati_user["flats"][0]["flat_id"]
-    swati_headers = {"Authorization": f"Bearer {swati_token}"}
+    swati_headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
     swati_summary = client.get(f"/api/v1/billing/flats/{swati_flat_id}/summary", headers=swati_headers).json()
     swati_bill_id = swati_summary["latest_bill"]["id"]
 
@@ -258,7 +260,7 @@ def test_cross_flat_idempotency_key_replay_and_leakage_prevention():
     # 2. Aamir (T21-1601) attempts to use the same key K for his flat and bill
     aamir_token, aamir_user = get_auth_token("9876543212")
     aamir_flat_id = aamir_user["flats"][0]["flat_id"]
-    aamir_headers = {"Authorization": f"Bearer {aamir_token}"}
+    aamir_headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
     aamir_summary = client.get(f"/api/v1/billing/flats/{aamir_flat_id}/summary", headers=aamir_headers).json()
     aamir_bill_id = aamir_summary["latest_bill"]["id"]
 
@@ -287,7 +289,7 @@ def test_idempotency_key_payload_divergence_returns_409():
     # Swati uses key K with amount 500
     token, user = get_auth_token("9876543211")
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
     summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     bill_id = summary["latest_bill"]["id"]
 
@@ -342,7 +344,7 @@ def test_cross_resident_receipt_and_payment_access_denied():
     # Swati pays and gets a receipt
     swati_token, swati_user = get_auth_token("9876543211")
     swati_flat_id = swati_user["flats"][0]["flat_id"]
-    swati_headers = {"Authorization": f"Bearer {swati_token}"}
+    swati_headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
     swati_summary = client.get(f"/api/v1/billing/flats/{swati_flat_id}/summary", headers=swati_headers).json()
     swati_bill_id = swati_summary["latest_bill"]["id"]
 
@@ -367,7 +369,7 @@ def test_cross_resident_receipt_and_payment_access_denied():
 
     # Aamir (different resident) attempts to access Swati's receipt and payment -> 403 Forbidden
     aamir_token, _ = get_auth_token("9876543212")
-    aamir_headers = {"Authorization": f"Bearer {aamir_token}"}
+    aamir_headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     rec_access = client.get(f"/api/v1/payments/receipts/{receipt_no}", headers=aamir_headers)
     assert rec_access.status_code == 403
@@ -380,7 +382,7 @@ def test_family_member_without_pay_permission_blocked():
     # Login as Ananya Kulkarni (Family member of T07-1203 with can_pay_bills=False)
     ananya_token, ananya_user = get_auth_token("9876543213")
     flat_id = ananya_user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {ananya_token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     # Ananya attempts to pay -> 403 Forbidden
     resp = client.post(
@@ -402,7 +404,7 @@ def test_payment_exceeding_balance_rejected():
     # Login as Swati (T12-0408)
     token, user = get_auth_token("9876543211")
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     bill = summary["unpaid_bills"][0] if summary.get("unpaid_bills") else summary["latest_bill"]

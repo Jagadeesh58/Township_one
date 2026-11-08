@@ -170,14 +170,16 @@ def test_billing_summary_aggregates_multiple_unpaid_bills():
 def test_billing_cross_flat_idor_denied():
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
     neeraj_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"}).json()
-    token = neeraj_login["access_token"]
+    neeraj_token = neeraj_login["access_token"]
 
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543211"})
     swati_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543211", "otp": "123456"}).json()
     swati_flat_id = swati_login["user"]["flats"][0]["flat_id"]
 
-    headers = {"Authorization": f"Bearer {token}"}
-    resp = client.get(f"/api/v1/billing/flats/{swati_flat_id}/summary", headers=headers)
+    resp = client.get(
+        f"/api/v1/billing/flats/{swati_flat_id}/summary",
+        cookies={"township_session": neeraj_token}
+    )
     assert resp.status_code == 403
     assert "Access denied" in resp.json()["error"]["message"]
 

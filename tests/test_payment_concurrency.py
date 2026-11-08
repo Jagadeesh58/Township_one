@@ -32,14 +32,10 @@ def get_auth_token(phone: str) -> tuple[str, dict]:
         db.commit()
     finally:
         db.close()
-    db = SessionLocal()
-    try:
-        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
-        db.commit()
-    finally:
-        db.close()
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     res = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    csrf = res.cookies.get("township_csrf", "")
+    client.headers["X-CSRF-Token"] = csrf
     data = res.json()
     return data["access_token"], data["user"]
 
@@ -48,7 +44,7 @@ def test_concurrent_identical_idempotency_requests():
     """Verify concurrent requests with the identical idempotency key produce only 1 payment."""
     token, user = get_auth_token("9876543211")  # Swati (T12-0408)
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     unpaid = summary.get("unpaid_bills") or [summary["latest_bill"]]
@@ -103,7 +99,7 @@ def test_concurrent_payments_prevent_over_allocation():
     """Verify that multiple concurrent threads attempting to over-consume a bill balance are bounded."""
     token, user = get_auth_token("9876543212")  # Aamir (T21-1601)
     flat_id = user["flats"][0]["flat_id"]
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"X-CSRF-Token": client.cookies.get("township_csrf", "")}
 
     summary = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers).json()
     target_bill = summary["latest_bill"]

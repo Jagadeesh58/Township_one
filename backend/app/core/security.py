@@ -201,30 +201,27 @@ def revoke_token_persisted(token: str, user_id: str, db: Session):
 
 
 def get_current_user(
-    request: Request = None,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    request: Request,
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Validates token from HttpOnly session cookie first, with fallback to Bearer token.
+    Validates token from HttpOnly session cookie.
+    Sessions are cookie-only. Bearer fallback is disabled.
     Checks database & in-memory revocation, and resolves active user.
     """
-    token = None
-    if credentials:
-        token = credentials.credentials
-
-    if not token and request is not None and "township_session" in request.cookies:
-        token = request.cookies.get("township_session")
-
-    if not token and request is not None:
-        auth_hdr = request.headers.get("Authorization", "")
-        if auth_hdr.startswith("Bearer "):
-            token = auth_hdr.split(" ")[1]
+    token = request.cookies.get("township_session") if request else None
 
     if not token:
+        if request is not None:
+            auth_hdr = request.headers.get("Authorization", "")
+            if auth_hdr.startswith("Bearer "):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Bearer authentication is disabled. Cookie-based session authentication is required."
+                )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please provide a session cookie or Bearer token."
+            detail="Authentication required. Please provide a session cookie."
         )
 
     token = token.strip()

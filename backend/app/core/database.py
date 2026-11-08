@@ -17,6 +17,17 @@ def get_engine(custom_url: str = None):
         is_test = os.environ.get("TOWNSHIP_ENV") == "test"
         url = settings.TEST_DATABASE_URL if is_test else settings.DATABASE_URL
 
+    # If default PostgreSQL URL is configured but not reachable on localhost during dev, fall back to SQLite
+    if url.startswith("postgresql") and not os.environ.get("DATABASE_URL") and not os.environ.get("TEST_DATABASE_URL"):
+        try:
+            temp_eng = create_engine(url, pool_pre_ping=True)
+            with temp_eng.connect():
+                pass
+            temp_eng.dispose()
+        except Exception:
+            is_test = os.environ.get("TOWNSHIP_ENV") == "test"
+            url = "sqlite:///./township_one_test.db" if is_test else "sqlite:///./township_one.db"
+
     connect_args = {}
     if url.startswith("sqlite"):
         connect_args = {"check_same_thread": False}

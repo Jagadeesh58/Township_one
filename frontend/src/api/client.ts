@@ -16,7 +16,7 @@ export interface UserFlat {
   flat_id: string;
   flat_number: string;
   floor_number: number;
-  area_sqft: number;
+  area_sqft: string | number;
   member_type: string;
   can_pay_bills: boolean;
   can_approve_visitors: boolean;

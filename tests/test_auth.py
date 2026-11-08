@@ -90,17 +90,24 @@ def test_logout_and_revocation():
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
     login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
     token = login_resp.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    csrf_token = login_resp.cookies.get("township_csrf")
+    headers = {"X-CSRF-Token": csrf_token}
 
-    me_resp = client.get("/api/v1/auth/me", headers=headers)
+    me_resp = client.get("/api/v1/auth/me")
     assert me_resp.status_code == 200
 
     logout_resp = client.post("/api/v1/auth/logout", headers=headers)
     assert logout_resp.status_code == 200
 
-    post_logout_resp = client.get("/api/v1/auth/me", headers=headers)
+    # Cookie was cleared; request without session cookie fails with 401
+    post_logout_resp = client.get("/api/v1/auth/me")
     assert post_logout_resp.status_code == 401
-    assert "revoked" in post_logout_resp.json()["error"]["message"]
+    assert "session cookie" in post_logout_resp.json()["error"]["message"].lower()
+
+    # Even if client explicitly attaches the revoked cookie, it is rejected as revoked
+    revoked_cookie_resp = client.get("/api/v1/auth/me", cookies={"township_session": token})
+    assert revoked_cookie_resp.status_code == 401
+    assert "revoked" in revoked_cookie_resp.json()["error"]["message"].lower()
 
 
 def test_cross_flat_access_idor_denied():
@@ -224,9 +231,10 @@ def test_database_persisted_revoked_token():
     # Persistent DB cleaning handled via SessionLocal
 
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
-    login = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"}).json()
-    token = login["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    token = login_resp.json()["access_token"]
+    csrf_token = login_resp.cookies.get("township_csrf")
+    headers = {"X-CSRF-Token": csrf_token}
 
     logout_resp = client.post("/api/v1/auth/logout", headers=headers)
     assert logout_resp.status_code == 200
@@ -483,3 +491,26 @@ def test_ip_rate_limiting_exceeded():
         db.query(OTPChallenge).filter(OTPChallenge.ip_address == ip).delete()
         db.commit()
         db.close()
+
+
+def test_bearer_only_request_rejected():
+    """Verify that requests providing only Authorization: Bearer without session cookie are rejected with 401."""
+    phone = "9876543210"
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
+    client.post("/api/v1/auth/otp/request", json={"phone": phone})
+    login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+
+    unauth_client = TestClient(app)
+    resp = unauth_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 401
+    assert "Bearer authentication is disabled" in resp.json()["error"]["message"]

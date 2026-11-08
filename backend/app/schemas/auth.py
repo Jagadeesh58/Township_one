@@ -21,7 +21,7 @@ class FlatMembershipResponse(BaseModel):
     flat_id: str
     flat_number: str
     floor_number: int
-    area_sqft: float
+    area_sqft: str
     member_type: str
     can_pay_bills: bool
     can_approve_visitors: bool

@@ -61,25 +61,21 @@ async def csrf_protect_middleware(request: Request, call_next):
             "/openapi.json",
         }
         if path not in exempt_paths:
-            session_cookie = request.cookies.get("township_session")
             csrf_cookie = request.cookies.get("township_csrf")
             csrf_header = request.headers.get("X-CSRF-Token")
 
-            # Enforce CSRF on cookie-authenticated / browser requests.
-            # Automated API/curl clients sending Authorization: Bearer are exempt.
-            auth_header = request.headers.get("Authorization", "")
-            if not auth_header.startswith("Bearer "):
-                if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
-                    return JSONResponse(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        content={
-                            "error": {
-                                "code": "CSRF_ERROR",
-                                "message": "CSRF token missing or invalid",
-                                "request_id": getattr(request.state, "request_id", None),
-                            }
+            # Sessions are strictly cookie-based. CSRF token validation is mandatory for all mutating requests.
+            if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={
+                        "error": {
+                            "code": "CSRF_ERROR",
+                            "message": "CSRF token missing or invalid",
+                            "request_id": getattr(request.state, "request_id", None),
                         }
-                    )
+                    }
+                )
 
     response = await call_next(request)
     return response

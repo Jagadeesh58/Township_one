@@ -1,3 +1,4 @@
+from decimal import Decimal
 """
 Township One — Authentication API Endpoints.
 
@@ -45,7 +46,7 @@ def build_user_profile(user: User, db: Session) -> UserProfileResponse:
                         flat_id=flat.id,
                         flat_number=flat.flat_number,
                         floor_number=flat.floor_number,
-                        area_sqft=float(flat.area_sqft),
+                        area_sqft=str(Decimal(str(flat.area_sqft))),
                         member_type=fm.member_type,
                         can_pay_bills=fm.can_pay_bills,
                         can_approve_visitors=fm.can_approve_visitors,
@@ -153,14 +154,10 @@ def get_profile(
 def logout(
     request: Request,
     response: Response,
-    authorization: Optional[str] = Header(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     token = request.cookies.get("township_session")
-    if not token and authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ")[1]
-
     if token:
         revoke_token_persisted(token=token, user_id=current_user.id, db=db)
 

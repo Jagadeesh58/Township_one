@@ -53,7 +53,9 @@ def test_full_resident_billing_and_payment_journey():
     assert user["flats"][0]["flat_number"] == "T12-0408"
     assert user["flats"][0]["member_type"] == "TENANT"
 
-    headers = {"Authorization": f"Bearer {token}"}
+    csrf_token = login_resp.cookies.get("township_csrf", "")
+    client.headers["X-CSRF-Token"] = csrf_token
+    headers = {"X-CSRF-Token": csrf_token}
 
     # -------------------------------------------------------------
     # Step 2: View Outstanding Bill Summary
@@ -152,7 +154,8 @@ def test_full_resident_billing_and_payment_journey():
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
     neeraj_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"}).json()
-    neeraj_headers = {"Authorization": f"Bearer {neeraj_login['access_token']}"}
+    neeraj_csrf = client.cookies.get("township_csrf", "")
+    neeraj_headers = {"X-CSRF-Token": neeraj_csrf}
     neeraj_flat_id = neeraj_login["user"]["flats"][0]["flat_id"]
 
     neeraj_summary = client.get(f"/api/v1/billing/flats/{neeraj_flat_id}/summary", headers=neeraj_headers).json()
@@ -168,7 +171,8 @@ def test_full_resident_billing_and_payment_journey():
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543212"})
     aamir_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543212", "otp": "123456"}).json()
-    aamir_headers = {"Authorization": f"Bearer {aamir_login['access_token']}"}
+    aamir_csrf = client.cookies.get("township_csrf", "")
+    aamir_headers = {"X-CSRF-Token": aamir_csrf}
     aamir_flat_id = aamir_login["user"]["flats"][0]["flat_id"]
 
     aamir_summary = client.get(f"/api/v1/billing/flats/{aamir_flat_id}/summary", headers=aamir_headers).json()
@@ -185,7 +189,8 @@ def test_full_resident_billing_and_payment_journey():
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543250"})
     comm_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"}).json()
-    comm_headers = {"Authorization": f"Bearer {comm_login['access_token']}"}
+    comm_csrf = client.cookies.get("township_csrf", "")
+    comm_headers = {"X-CSRF-Token": comm_csrf}
 
     comm_agg = client.get("/api/v1/billing/committee/aggregate", headers=comm_headers)
     assert comm_agg.status_code == 200
@@ -202,7 +207,8 @@ def test_full_resident_billing_and_payment_journey():
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543213"})
     ananya_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543213", "otp": "123456"}).json()
-    ananya_headers = {"Authorization": f"Bearer {ananya_login['access_token']}"}
+    ananya_csrf = client.cookies.get("township_csrf", "")
+    ananya_headers = {"X-CSRF-Token": ananya_csrf}
     ananya_flat_id = ananya_login["user"]["flats"][0]["flat_id"]
 
     ananya_summary = client.get(f"/api/v1/billing/flats/{ananya_flat_id}/summary", headers=ananya_headers)
