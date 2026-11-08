@@ -166,7 +166,8 @@ def test_billing_summary_aggregates_multiple_unpaid_bills():
 
 def test_billing_cross_flat_idor_denied():
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
-    client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
+    neeraj_res = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"})
+    neeraj_token = neeraj_res.cookies.get("township_session")
 
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543211"})
     swati_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543211", "otp": "123456"}).json()
