@@ -20,7 +20,7 @@ def get_engine(custom_url: str = None):
     # If default PostgreSQL URL is configured but not reachable on localhost during dev, fall back to SQLite
     if url.startswith("postgresql") and not os.environ.get("DATABASE_URL") and not os.environ.get("TEST_DATABASE_URL"):
         try:
-            temp_eng = create_engine(url, pool_pre_ping=True)
+            temp_eng = create_engine(url, connect_args={"connect_timeout": 1}, pool_pre_ping=True)
             with temp_eng.connect():
                 pass
             temp_eng.dispose()

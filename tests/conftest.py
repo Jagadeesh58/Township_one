@@ -30,7 +30,7 @@ os.environ["TOWNSHIP_ENV"] = "test"
 test_db_url = settings.TEST_DATABASE_URL
 if test_db_url.startswith("postgresql") and not os.environ.get("TEST_DATABASE_URL"):
     try:
-        temp_engine = create_engine(test_db_url, pool_pre_ping=True)
+        temp_engine = create_engine(test_db_url, connect_args={"connect_timeout": 1}, pool_pre_ping=True)
         with temp_engine.connect():
             pass
         temp_engine.dispose()
