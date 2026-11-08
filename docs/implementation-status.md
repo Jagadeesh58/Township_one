@@ -17,7 +17,7 @@
 | **Dual-Entry Accounting Ledger** | Built | `tests/test_resident_security.py` | DEBIT on bill issue, CREDIT on payment, running balance tracking |
 | **Decimal Currency Precision** | Built | `tests/test_money_precision.py`, `tests/test_resident_security.py` | Zero binary floating-point drift (`ROUND_HALF_UP` Decimal) |
 | **Payment Receipts** | Built | `tests/test_payments.py` | Sequential receipt numbering, tamper-evident transaction references |
-| **Bank Statement Matching Engine** | Built | `tests/test_bank_matching.py` | Canonical statement preview, deterministic rules, zero false auto-postings (385-row corpus), review queue |
+| **Bank Statement Matching Engine** | Built | `tests/test_bank_matching.py` | Canonical statement preview, deterministic safety rules, 60 / 385 rows auto-matched (15.58% coverage), 325 rows held for review with non-empty reasons, 0 false auto-postings verified, review queue |
 | **Complaint Lifecycle State Machine** | Built | `tests/test_complaints.py` | Explicit state transitions (HTTP 409 Conflict on illegal transition), flat-scoping, rating & reopen |
 | **Trilingual Emergency Detection** | Built | `tests/test_complaints.py`, `tests/test_ml.py` | Deterministic regex detector across en/hi/mr forcing CRITICAL urgency and SafetyEvent |
 | **AI Complaint Classification & Fallback** | Built | `tests/test_ml.py` | Groq API client with local TF-IDF + MultinomialNB fallback trained on 360-row multilingual dataset |
@@ -27,12 +27,12 @@
 | **Help Desk Queue UI** | Built | `frontend/src/__tests__/features.test.tsx` | Status/category/urgency filters, SLA badges, AI evidence card, one-tap optimistic correction |
 | **Resident Complaints UI** | Built | `frontend/src/__tests__/features.test.tsx` | Ticket submission with photo upload, my complaints, 1-5 star resolution rating, reopen request |
 | **Notification Bell & In-App Alerts** | Built | `frontend/src/__tests__/features.test.tsx` | Unread badge count, safety escalation alerts, mark-all-read |
-| **Trilingual Localization** | Built | `frontend/src/__tests__/translations.test.ts` | Complete English, Marathi, Hindi translations |
+| **Trilingual Localization** | Built | `frontend/src/__tests__/translations.test.ts` | English, Marathi, and Hindi translations |
 | **PWA Cache Lifecycle** | Built | `frontend/src/__tests__/serviceWorker.test.ts` | App shell pre-caching, network-only bypass for `/api/*`, cache wipe on logout |
-| **Visitor Gate Check-in & Dynamic PINs** | Scheduled | — | Scheduled for future release |
-| **Amenity Booking Slot Reservation** | Scheduled | — | Scheduled for future release |
-| **Digital Notice Board Publishing** | Scheduled | — | Scheduled for future release |
-| **Committee Audit Pack Generator** | Scheduled | — | Scheduled for future release |
+| **Visitor Gate Check-in & Dynamic PINs** | Not built yet | — | Scheduled for future scope |
+| **Amenity Booking Slot Reservation** | Not built yet | — | Scheduled for future scope |
+| **Digital Notice Board Publishing** | Not built yet | — | Scheduled for future scope |
+| **Committee Audit Pack Generator** | Not built yet | — | Scheduled for future scope |
 
 ---
 
@@ -40,7 +40,7 @@
 
 | Persona | Phone | Demo OTP | Role / Flat | State |
 |---|---|---|---|---|
-| **Neeraj Kulkarni** | `9876543210` | `123456` | Owner, Flat T07-1203 | 1,150 sq ft, fully settled dues (₹7,475.00 paid), ₹0.00 outstanding |
+| **Neeraj Kulkarni** | `9876543210` | `123456` | Owner, Flat T07-1203 | 1,150 sq ft, settled dues (₹7,475.00 paid), ₹0.00 outstanding |
 | **Swati Joshi** | `9876543211` | `123456` | Tenant, Flat T12-0408 | 980 sq ft, 47 days overdue (due 2026-09-20), ₹6,370.00 outstanding |
 | **Aamir Shaikh** | `9876543212` | `123456` | Owner, Flat T21-1601 | 1,640 sq ft, 18 days overdue (due 2026-10-19), ₹5,660.00 outstanding |
 | **Ananya Kulkarni** | `9876543213` | `123456` | Family Member, Flat T07-1203 | Can view dues summary, cannot execute payments |

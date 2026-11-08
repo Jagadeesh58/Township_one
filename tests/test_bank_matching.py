@@ -895,21 +895,43 @@ def test_concurrent_import_and_approval_duplicate_prevention():
 
 def test_alembic_bank_postings_upgrade_and_downgrade():
     """Verify clean upgrade and downgrade cycle for the bank_postings migration."""
+    import os
     import subprocess
     import sys
+    import tempfile
 
-    # Downgrade 1 step
-    res_down = subprocess.run(
-        [sys.executable, "-m", "alembic", "downgrade", "-1"],
-        capture_output=True, text=True
-    )
-    assert res_down.returncode == 0, f"Alembic downgrade failed: {res_down.stderr}"
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
+        temp_db_path = tf.name
 
-    # Upgrade back to head
-    res_up = subprocess.run(
-        [sys.executable, "-m", "alembic", "upgrade", "head"],
-        capture_output=True, text=True
-    )
-    assert res_up.returncode == 0, f"Alembic upgrade failed: {res_up.stderr}"
+    try:
+        env = os.environ.copy()
+        env["DATABASE_URL"] = f"sqlite:///{temp_db_path}"
+
+        # 1. Upgrade to head
+        res_head = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            env=env, capture_output=True, text=True
+        )
+        assert res_head.returncode == 0, f"Alembic upgrade head failed: {res_head.stderr}"
+
+        # 2. Downgrade 1 step
+        res_down = subprocess.run(
+            [sys.executable, "-m", "alembic", "downgrade", "-1"],
+            env=env, capture_output=True, text=True
+        )
+        assert res_down.returncode == 0, f"Alembic downgrade failed: {res_down.stderr}"
+
+        # 3. Upgrade back to head
+        res_up = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            env=env, capture_output=True, text=True
+        )
+        assert res_up.returncode == 0, f"Alembic upgrade failed: {res_up.stderr}"
+    finally:
+        if os.path.exists(temp_db_path):
+            try:
+                os.remove(temp_db_path)
+            except OSError:
+                pass
 
 

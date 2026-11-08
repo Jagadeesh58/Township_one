@@ -1,130 +1,121 @@
-# TOWNSHIP ONE — PRODUCTION DEPLOYMENT & OPERATIONS GUIDE
+# TOWNSHIP ONE — DEPLOYMENT & OPERATIONS GUIDE
 
-**Repository URL:** https://github.com/Jagadeesh58/Township_one.git  
+**Repository URL:** https://github.com/Jagadeesh58/Township_one.git
 
 ---
 
 ## 1. System Architecture Overview
 
-**Township One** is a resident experience and community operations portal designed for large residential communities (modeled on Company A, Pune: 2,400 flats, 28 towers, 180 staff, 4 access gates).
+**Township One** is an integrated resident portal and community operations system engineered for large residential communities (modeled on a reference community with 2,400 flats, 28 towers, 180 staff members, and 4 gates).
 
-- **Backend Runtime:** Python 3.11+ ASGI application using FastAPI, SQLAlchemy 2.0 ORM, and Alembic database migrations.
-- **Frontend Client:** React 19 + TypeScript + Vite Progressive Web Application (PWA) with multilingual i18n (English, Marathi, Hindi) and offline cache capabilities.
-- **Database Architecture:**
-  - Local Development & Testing: SQLite with WAL mode.
-  - Production Deployment: PostgreSQL 15+ via high-performance `psycopg` (v3) with connection pooling and `SELECT ... FOR UPDATE` row-level concurrency locking.
-- **Security & Authorization:** Salted SHA-256 OTP challenges with database persistence, HttpOnly SameSite=Lax session cookies, double-submit CSRF protection, PyJWT access tokens, server-side RBAC, and persistent token revocation via `revoked_tokens`.
-
----
-
-## 2. Prerequisites & System Requirements
-
-- **Python:** 3.11.0 or higher
-- **Node.js:** v20.x or higher (LTS recommended), npm v10+
-- **Database:** PostgreSQL 15+ (Production standard) or SQLite 3.35+ (Development fallback)
-- **Memory & Storage:** 2 GB RAM minimum, 10 GB disk space
+- **Backend:** FastAPI (Python 3.11+), SQLAlchemy 2.0 ORM, and Alembic database migrations.
+- **Frontend:** React 19 + TypeScript + Vite Progressive Web Application (PWA) with multilingual localization (English, Marathi, Hindi) and offline cache capabilities.
+- **Database:** PostgreSQL 15+ (production via `psycopg` v3 with row-level `SELECT ... FOR UPDATE` locking) or SQLite (local development and test suite).
+- **Authentication:** Passwordless phone OTP with salted SHA-256 challenge records, HttpOnly SameSite=Lax session cookies, and double-submit CSRF protection.
+- **Private Photo Storage:** Local or volume-mounted protected directory for complaint attachments, with Pillow MIME verification, EXIF stripping, and signed streaming URLs.
+- **AI / Classification:** Groq API client with local scikit-learn TF-IDF + MultinomialNB offline fallback trained on multilingual data.
 
 ---
 
-## 3. Environment Configuration (`.env`)
+## 2. Environment Variables
 
-Configure environment variables via host environment or a secure `.env` file:
+The application is configured using the following environment variable names (set in the host environment or a secure `.env` file):
 
+- `APP_NAME`: Application display name.
+- `APP_ENV`: Deployment environment (`development`, `staging`, or `production`).
+- `DEBUG`: Boolean flag (`true` or `false`). Set to `false` in production.
+- `PORT`: HTTP server listen port.
+- `API_PREFIX`: REST API root route prefix (e.g. `/api/v1`).
+- `ALLOWED_ORIGINS`: Comma-separated or JSON list of permitted CORS origins.
+- `SECRET_KEY`: High-entropy cryptographic secret (minimum 32 characters) for signing session cookies and HMAC tokens.
+- `ACCESS_TOKEN_EXPIRE_MINUTES`: Session token expiration duration in minutes.
+- `DATABASE_URL`: Primary database connection string (PostgreSQL in production, SQLite in local development).
+- `TEST_DATABASE_URL`: Test database connection string.
+- `DEMO_AS_OF_DATE`: Reference timestamp used for demo calculations and interest accruals.
+- `SMS_PROVIDER_API_KEY`: API key for SMS gateway provider (in production; development logs OTP to console).
+- `OTP_EXPIRY_SECONDS`: Lifespan of generated OTP challenges in seconds.
+- `MAINTENANCE_RATE_PER_SQFT`: Monthly maintenance charge rate per square foot.
+- `DEFAULT_GRACE_PERIOD_DAYS`: Number of grace period days following billing due date before interest accrues.
+- `DEMO_LATE_FEE_PERCENTAGE_PA`: Annualized simple interest rate percentage for overdue balances.
+- `GROQ_API_KEY`: API key for Groq LLM service (optional; offline local model fallback is used if omitted or unavailable).
+- `GROQ_MODEL_ID`: Model identifier for Groq API (e.g. `llama-3.3-70b-versatile`).
+- `STORAGE_DIR`: Filesystem path to secure directory for private photo attachments.
+
+---
+
+## 3. Local Run Steps
+
+### 1. Prerequisites
+- Python 3.11+
+- Node.js v20+ and npm v10+
+- Git
+
+### 2. Backend Setup
 ```bash
-# Application Identity & Mode
-APP_NAME=Township One
-APP_ENV=production                # Options: development, staging, production
-DEBUG=false                       # MUST be false in production
-
-# Network & Server
-PORT=8000
-API_PREFIX=/api/v1
-ALLOWED_ORIGINS=<set-in-host-env>
-
-# Cryptographic Keys (MUST be strong high-entropy key >= 32 characters in production)
-SECRET_KEY=<set-in-host-env>
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
-
-# Database URLs
-DATABASE_URL=<set-in-host-env>
-TEST_DATABASE_URL=<set-in-host-env>
-
-# SMS Gateway Credentials (Required in production; system fails closed if omitted)
-SMS_PROVIDER_API_KEY=<set-in-host-env>
-OTP_EXPIRY_SECONDS=300
-
-# Canonical Reference Snapshot Date
-DEMO_AS_OF_DATE=2026-11-06T00:00:00Z
-
-# Maintenance Billing Parameters
-MAINTENANCE_RATE_PER_SQFT=6.50
-DEFAULT_GRACE_PERIOD_DAYS=5
-DEMO_LATE_FEE_PERCENTAGE_PA=18.00
-```
-
----
-
-## 4. Production Installation & Setup Steps
-
-### Step 1: Clone and Prepare Python Environment
-```bash
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate   # On Windows: .venv\Scripts\Activate.ps1
+source .venv/bin/activate       # On Windows: .venv\Scripts\Activate.ps1
 
-# Install production dependencies
+# Install backend dependencies
 pip install --upgrade pip
 pip install -r requirements.txt
-```
 
-### Step 2: Apply Database Migrations
-```bash
+# Run database migrations
 alembic upgrade head
-```
 
-### Step 3: Seed Synthetic Reference Data (Optional for Demo / Staging)
-```bash
-# Safe mode: validates completeness or seeds fresh local DB without touching remote DBs
-python scripts/seed.py --mode safe
+# Seed synthetic reference data (28 towers, 2,400 flats, 180 staff, 4 gates)
+python -m seed.seed_data
 
-# Reset demo mode (strictly local databases only; fails closed on remote hosts):
-# python scripts/seed.py --mode reset-demo --confirm-local-demo
-```
-
-### Step 4: Build Frontend Assets
-```bash
-cd frontend
-npm ci
-npm test
-npm run build
-cd ..
-```
-Compiled production bundles are emitted to `frontend/dist/`.
-
----
-
-## 5. Running the Application
-
-### Running with Uvicorn (Development / Testing)
-```bash
+# Start backend development server
 uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Running with Gunicorn / Multi-Worker Uvicorn (Production)
+### 3. Frontend Setup
 ```bash
-gunicorn backend.app.main:app \
-  --workers 4 \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000 \
-  --access-logfile /var/log/township-one/access.log \
-  --error-logfile /var/log/township-one/error.log \
-  --capture-output
+cd frontend
+
+# Install frontend dependencies
+npm ci
+
+# Run frontend tests
+npm test
+
+# Build frontend bundle
+npm run build
+
+# Start frontend development server
+npm run dev
 ```
 
 ---
 
-## 6. Reverse Proxy Configuration (Nginx Example)
+## 4. How It Is Deployed (Production Architecture)
 
+### 1. Database Tier (PostgreSQL 15+)
+- Provision PostgreSQL 15+ instance with connection pooling.
+- Execute migrations using Alembic:
+  ```bash
+  alembic upgrade head
+  ```
+- Ensure row-level locking (`SELECT ... FOR UPDATE`) is permitted on the database user.
+
+### 2. Backend Service (FastAPI via Gunicorn / Uvicorn)
+- Run the ASGI application with multi-worker process management:
+  ```bash
+  gunicorn backend.app.main:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 127.0.0.1:8000 \
+    --access-logfile /var/log/township-one/access.log \
+    --error-logfile /var/log/township-one/error.log
+  ```
+- Protect application startup with checks (valid `SECRET_KEY`, `APP_ENV=production`, `DEBUG=false`).
+
+### 3. Frontend Static Hosting & Reverse Proxy (Nginx)
+- Build the frontend bundle: `npm run build` in `frontend/`.
+- Serve static files from `frontend/dist/`.
+- Route `/api/` traffic to the backend ASGI server.
+- Sample Nginx configuration:
 ```nginx
 server {
     listen 80;
@@ -139,7 +130,6 @@ server {
     ssl_certificate /etc/letsencrypt/live/township.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/township.example.com/privkey.pem;
 
-    # Frontend Single Page App & PWA
     root /var/www/township-one/frontend/dist;
     index index.html;
 
@@ -147,7 +137,6 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # API Endpoints Reverse Proxy
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
@@ -156,7 +145,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Service Worker caching policy
     location = /sw.js {
         add_header Cache-Control "no-cache";
         expires 0;
@@ -164,37 +152,23 @@ server {
 }
 ```
 
----
-
-## 7. Health Checks & Monitoring
-
-The backend exposes dedicated operational health probes:
-
-- **Liveness Probe:** `GET /health` — Returns application status and version.
-- **Readiness Probe:** `GET /health/ready` — Verifies live database connectivity and query response time.
-
-```bash
-curl -f http://localhost:8000/health
-# Expected: {"status":"healthy","service":"township-one","version":"1.0.0"}
-
-curl -f http://localhost:8000/health/ready
-# Expected: {"status":"ready","database":"connected","response_time_ms":1.2}
-```
+### 4. Health Probes & Monitoring
+- **Liveness:** `GET /health` — Verifies application process is running.
+- **Readiness:** `GET /health/ready` — Verifies database connection and query response.
 
 ---
 
-## 8. Automated Verification
+## 5. Reviewer Personas & Demo Logins (Reference Date: `2026-11-06`)
 
-Before deploying any release, run the complete automated test suite:
-
-```bash
-# 1. Run Backend Pytest Suite
-pytest tests/ -v
-
-# 2. Run Frontend Vitest Suite
-cd frontend
-npm test
-
-# 3. Verify Production Frontend Build
-npm run build
-```
+| Persona | Phone | Demo OTP | Role / Flat | State |
+|---|---|---|---|---|
+| **Neeraj Kulkarni** | `9876543210` | `123456` | Owner, Flat T07-1203 | 1,150 sq ft, settled dues (₹7,475.00 paid), ₹0.00 outstanding |
+| **Swati Joshi** | `9876543211` | `123456` | Tenant, Flat T12-0408 | 980 sq ft, 47 days overdue (due 2026-09-20), ₹6,370.00 outstanding |
+| **Aamir Shaikh** | `9876543212` | `123456` | Owner, Flat T21-1601 | 1,640 sq ft, 18 days overdue (due 2026-10-19), ₹5,660.00 outstanding |
+| **Ananya Kulkarni** | `9876543213` | `123456` | Family Member, Flat T07-1203 | Can view dues summary, cannot execute payments |
+| **Priya Sharma** | `9876543214` | `123456` | Owner, Flat T03-0201 | 1,150 sq ft, routine maintenance account |
+| **Ramesh Patil** | `9876543220` | `123456` | Help Desk Staff | Authorized for complaints queue, triage, and incident linking |
+| **Suresh Shinde** | `9876543230` | `123456` | Security Guard | Gate access; billing, bank, and complaint mutations blocked |
+| **Anita Deshmukh** | `9876543240` | `123456` | Accounts Staff | Authorized for bank statement imports, review queue, and ledger posting |
+| **Vikram Sardesai** | `9876543250` | `123456` | Committee Member | Authorized for aggregate metrics and complaints queue; individual flat actions blocked |
+| **System Admin** | `9876543200` | `123456` | Administrator | Full administrative authority across all modules |
