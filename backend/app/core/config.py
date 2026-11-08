@@ -6,8 +6,10 @@ session expiry policies, and fail-closed production safety guards.
 """
 
 import os
+import json
 import secrets
-from typing import List
+from typing import List, Union
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,12 +20,25 @@ class Settings(BaseSettings):
     PORT: int = 8000
     API_PREFIX: str = "/api/v1"
     SECRET_KEY: str = ""
-    ALLOWED_ORIGINS: List[str] = [
+    ALLOWED_ORIGINS: Union[str, List[str]] = [
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
     ]
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        if isinstance(v, str):
+            clean = v.strip()
+            if clean.startswith("["):
+                try:
+                    return json.loads(clean)
+                except Exception:
+                    pass
+            return [x.strip() for x in clean.split(",") if x.strip()]
+        return v
 
     # Database URLs (PostgreSQL standard per architecture; SQLite fast-test local fallback)
     DATABASE_URL: str = "postgresql+psycopg://township:township_dev_password@localhost:5432/township_one"
