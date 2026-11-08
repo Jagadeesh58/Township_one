@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     DEFAULT_GRACE_PERIOD_DAYS: int = 5
     DEMO_LATE_FEE_PERCENTAGE_PA: float = 18.00
 
+    # Storage & Attachments
+    STORAGE_DIR: str = os.path.join(os.getcwd(), "private_storage")
+
+    # AI Classification & Emergency Service
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL_ID: str = "llama-3.3-70b-versatile"
+    GROQ_TIMEOUT_SECONDS: float = 5.0
+
+    # Demo SLA Timers (Hours per urgency)
+    DEMO_SLA_HOURS: dict = {"CRITICAL": 1, "HIGH": 4, "MEDIUM": 24, "LOW": 48}
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

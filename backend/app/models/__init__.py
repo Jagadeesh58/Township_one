@@ -16,7 +16,22 @@ from backend.app.models.entities import (
     Complaint,
     Notice,
     Visitor,
-    Amenity
+    Amenity,
+    BankAccount,
+    BankImportFile,
+    BankRow,
+    RegisteredUPI,
+    AuditEvent,
+    StaffTeam,
+    StaffShift,
+    ComplaintEvent,
+    ComplaintAttachment,
+    ClassificationDecision,
+    SafetyEvent,
+    SafetyEventAction,
+    IncidentGroup,
+    IncidentGroupMember,
+    Notification
 )
 
 __all__ = [
@@ -37,5 +52,20 @@ __all__ = [
     "Complaint",
     "Notice",
     "Visitor",
-    "Amenity"
+    "Amenity",
+    "BankAccount",
+    "BankImportFile",
+    "BankRow",
+    "RegisteredUPI",
+    "AuditEvent",
+    "StaffTeam",
+    "StaffShift",
+    "ComplaintEvent",
+    "ComplaintAttachment",
+    "ClassificationDecision",
+    "SafetyEvent",
+    "SafetyEventAction",
+    "IncidentGroup",
+    "IncidentGroupMember",
+    "Notification"
 ]
