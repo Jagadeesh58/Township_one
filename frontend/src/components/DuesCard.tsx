@@ -122,11 +122,24 @@ export const DuesCard: React.FC<DuesCardProps> = ({
           padding: '0.6rem 0.75rem',
           fontSize: '0.78rem'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: '#92400e' }}>
-            <span>{t.late_fee_estimate}:</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 600, color: '#92400e' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span>{t.late_fee_estimate}:</span>
+              <span style={{
+                background: '#fef3c7',
+                color: '#92400e',
+                border: '1px solid #fde68a',
+                padding: '1px 6px',
+                borderRadius: '4px',
+                fontSize: '0.68rem',
+                fontWeight: 700
+              }}>
+                Illustrative demo rule
+              </span>
+            </div>
             <span>+{formatMoney(summary.estimated_late_fee)}</span>
           </div>
-          <div style={{ fontSize: '0.7rem', color: '#b45309', marginTop: '2px' }}>
+          <div style={{ fontSize: '0.7rem', color: '#b45309', marginTop: '4px', lineHeight: 1.3 }}>
             *{summary.late_fee_notice}
           </div>
         </div>

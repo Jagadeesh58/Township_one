@@ -145,7 +145,7 @@ def get_flat_billing_summary(
         interest_eligible_days=max_interest_eligible_days,
         estimated_late_fee=total_estimated_late_fee,
         estimated_late_fee_inr=f"{total_estimated_late_fee:.2f}",
-        late_fee_notice="Illustrative demo calculation (18% p.a. simple interest after 5-day grace period) pending society federation approval (not an approved legal rate)",
+        late_fee_notice="Illustrative demo rule: 18.00% p.a. simple interest after 5-day grace period (Model Bye-Law No. 67 / MCS Act 1960 illustrative benchmark pending society general body resolution)",
         unpaid_bills=[to_bill_response(b) for b in unpaid_bills],
         latest_bill=to_bill_response(latest_bill) if latest_bill else None,
         recent_ledger=[to_ledger_response(e) for e in ledger_entries]
@@ -216,7 +216,7 @@ def get_committee_aggregate(
 
     dec_billed = Decimal(str(total_billed))
     dec_collected = Decimal(str(total_collected))
-    eff_pct = round(float(dec_collected / dec_billed * 100), 2) if dec_billed > 0 else 0.0
+    eff_pct = round_currency((dec_collected / dec_billed) * Decimal("100.00")) if dec_billed > 0 else Decimal("0.00")
 
     return {
         "status": "authorized",
@@ -225,6 +225,6 @@ def get_committee_aggregate(
         "total_billed_inr": f"{dec_billed:.2f}",
         "total_collected_inr": f"{dec_collected:.2f}",
         "total_outstanding_inr": f"{Decimal(str(total_outstanding)):.2f}",
-        "collection_efficiency_pct": eff_pct,
+        "collection_efficiency_pct": str(eff_pct),
         "as_of_date": get_effective_date().isoformat()
     }

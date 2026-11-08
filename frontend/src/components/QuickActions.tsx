@@ -40,7 +40,10 @@ export const QuickActions: React.FC<QuickActionsProps> = ({ lang, onActionClick 
               alignItems: 'center',
               gap: '0.35rem',
               textAlign: 'center',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+              boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+              minHeight: '44px',
+              minWidth: '44px',
+              cursor: 'pointer'
             }}
           >
             <div style={{
