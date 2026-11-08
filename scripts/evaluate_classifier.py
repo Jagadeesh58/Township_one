@@ -4,14 +4,14 @@ Township One - Classifier Evaluation Harness.
 Evaluates category and urgency prediction performance using incident-family
 grouped held-out test partitioning. Demonstrates cross-family semantic
 generalization without leaking incident variants between train and test sets.
+Uses standard csv module and scikit-learn without requiring pandas.
 """
 
+import csv
 import os
 import sys
 import numpy as np
-import pandas as pd
-from sklearn.metrics import classification_report, accuracy_score, precision_recall_fscore_support
-from sklearn.model_selection import GroupShuffleSplit
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
 # Ensure Township One project root is in python path
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -49,9 +49,11 @@ def evaluate():
         print(f"ERROR: Dataset file not found at {DEFAULT_DATA_PATH}")
         sys.exit(1)
 
-    df = pd.read_csv(DEFAULT_DATA_PATH)
-    total_records = len(df)
-    unique_families = df["incident_family"].nunique()
+    with open(DEFAULT_DATA_PATH, "r", encoding="utf-8") as f:
+        records = list(csv.DictReader(f))
+
+    total_records = len(records)
+    unique_families = len(set(r["incident_family"] for r in records))
     print(f"Total labeled records: {total_records}")
     print(f"Unique incident families: {unique_families}")
     print(f"Grouping strategy: GroupShuffleSplit on 'incident_family'")
@@ -61,29 +63,28 @@ def evaluate():
     rng = np.random.RandomState(42)
     test_families = set()
     for cat in VALID_CATEGORIES:
-        cat_families = df[df["category"] == cat]["incident_family"].unique()
+        cat_families = sorted(list(set(r["incident_family"] for r in records if r["category"] == cat)))
         chosen = rng.choice(cat_families, size=1, replace=False)[0]
         test_families.add(chosen)
 
-    test_mask = df["incident_family"].isin(test_families)
-    train_df = df[~test_mask].copy()
-    test_df = df[test_mask].copy()
+    train_records = [r for r in records if r["incident_family"] not in test_families]
+    test_records = [r for r in records if r["incident_family"] in test_families]
 
-    train_families = set(train_df["incident_family"])
+    train_families = set(r["incident_family"] for r in train_records)
     overlap = train_families.intersection(test_families)
 
-    print(f"\nTrain set: {len(train_df)} samples across {len(train_families)} incident families")
-    print(f"Held-out test set: {len(test_df)} samples across {len(test_families)} incident families")
+    print(f"\nTrain set: {len(train_records)} samples across {len(train_families)} incident families")
+    print(f"Held-out test set: {len(test_records)} samples across {len(test_families)} incident families")
     print(f"Family leakage verification: {len(overlap)} overlapping families (strict zero-leakage)")
 
     # Train category and urgency models on train partition only
-    X_train = train_df["text"].astype(str).tolist()
-    y_cat_train = train_df["category"].astype(str).tolist()
-    y_urg_train = train_df["urgency"].astype(str).tolist()
+    X_train = [r["text"] for r in train_records]
+    y_cat_train = [r["category"] for r in train_records]
+    y_urg_train = [r["urgency"] for r in train_records]
 
-    X_test = test_df["text"].astype(str).tolist()
-    y_cat_test = test_df["category"].astype(str).tolist()
-    y_urg_test = test_df["urgency"].astype(str).tolist()
+    X_test = [r["text"] for r in test_records]
+    y_cat_test = [r["category"] for r in test_records]
+    y_urg_test = [r["urgency"] for r in test_records]
 
     cat_pipeline = build_pipeline()
     cat_pipeline.fit(X_train, y_cat_train)
@@ -162,15 +163,20 @@ def evaluate():
     print("-" * 90)
 
     languages = ["en", "hi", "mr"]
-    test_df["cat_pred"] = cat_preds
-    test_df["urg_pred"] = urg_preds
+    for r, cp, up in zip(test_records, cat_preds, urg_preds):
+        r["cat_pred"] = cp
+        r["urg_pred"] = up
 
     for lang in languages:
-        sub = test_df[test_df["language"] == lang]
+        sub = [r for r in test_records if r.get("language") == lang]
         supp = len(sub)
         if supp > 0:
-            lang_cat_acc = accuracy_score(sub["category"], sub["cat_pred"])
-            lang_urg_acc = accuracy_score(sub["urgency"], sub["urg_pred"])
+            y_c = [r["category"] for r in sub]
+            y_cp = [r["cat_pred"] for r in sub]
+            y_u = [r["urgency"] for r in sub]
+            y_up = [r["urg_pred"] for r in sub]
+            lang_cat_acc = accuracy_score(y_c, y_cp)
+            lang_urg_acc = accuracy_score(y_u, y_up)
             tag = format_support_tag(supp)
             print(lang_col_fmt.format(
                 lang,

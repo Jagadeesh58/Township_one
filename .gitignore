@@ -44,6 +44,7 @@ scratch/
 
 # Storage & Uploads
 private_storage/
+storage/
 uploads/
 
 # Archives
