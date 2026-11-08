@@ -167,6 +167,13 @@ export const api = {
       await fetchWithAuth(`${API_BASE}/auth/logout`, {
         method: 'POST',
       });
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map(k => caches.delete(k)));
+      }
+      if (typeof navigator !== 'undefined' && navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHES' });
+      }
     } catch (e) {
       console.error(e);
     }

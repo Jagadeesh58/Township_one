@@ -82,3 +82,18 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request).catch(() => caches.match(event.request))
   );
 });
+
+self.addEventListener('message', (event) => {
+  if (event.data && (event.data.type === 'CLEAR_CACHES' || event.data.type === 'LOGOUT')) {
+    event.waitUntil(
+      caches.keys().then((keys) => {
+        return Promise.all(keys.map((key) => caches.delete(key)));
+      }).then(() => {
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage({ cleared: true });
+        }
+      })
+    );
+  }
+});
+
