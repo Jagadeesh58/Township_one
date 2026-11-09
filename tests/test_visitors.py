@@ -1,20 +1,23 @@
 import io
 import os
-import tempfile
-from datetime import datetime, timezone, timedelta
-from PIL import Image
-import pytest
-from fastapi.testclient import TestClient
+from datetime import UTC, datetime, timedelta
 
-from backend.app.main import app
+from fastapi.testclient import TestClient
+from PIL import Image
+
 from backend.app.core.database import SessionLocal
+from backend.app.main import app
 from backend.app.models.entities import (
-    User, Flat, Gate, VisitorEntry, VisitorPhoto, SupervisorOverride, AuditEvent, OTPChallenge
+    AuditEvent,
+    Flat,
+    Gate,
+    OTPChallenge,
+    VisitorEntry,
+    VisitorPhoto,
 )
 from backend.app.services.visitor_service import (
-    purge_visitor_photos,
-    generate_signed_photo_url,
     get_storage_path,
+    purge_visitor_photos,
 )
 
 
@@ -334,7 +337,7 @@ def test_photo_retention_purge_job_deletes_files_and_is_idempotent():
         f.write(create_jpeg_bytes())
 
     # Create photo record expired 1 day ago
-    expired_time = datetime.now(timezone.utc) - timedelta(days=1)
+    expired_time = datetime.now(UTC) - timedelta(days=1)
     old_photo = VisitorPhoto(
         storage_key=dummy_file,
         sha256="dummy_sha256_expired_photo",
@@ -351,7 +354,7 @@ def test_photo_retention_purge_job_deletes_files_and_is_idempotent():
     assert os.path.exists(dummy_file)
 
     # Run purge job as of current time
-    purged_count = purge_visitor_photos(as_of=datetime.now(timezone.utc))
+    purged_count = purge_visitor_photos(as_of=datetime.now(UTC))
     assert purged_count >= 1
 
     # Verify binary file deleted and storage_key nulled
@@ -363,14 +366,17 @@ def test_photo_retention_purge_job_deletes_files_and_is_idempotent():
     assert checked.deleted_at is not None
 
     # Verify audit event recorded
-    audit = db.query(AuditEvent).filter(
-        AuditEvent.action == "PURGE_VISITOR_PHOTOS"
-    ).order_by(AuditEvent.created_at.desc()).first()
+    audit = (
+        db.query(AuditEvent)
+        .filter(AuditEvent.action == "PURGE_VISITOR_PHOTOS")
+        .order_by(AuditEvent.created_at.desc())
+        .first()
+    )
     assert audit is not None
     db.close()
 
     # Re-running purge job is idempotent and does not fail
-    second_run = purge_visitor_photos(as_of=datetime.now(timezone.utc))
+    second_run = purge_visitor_photos(as_of=datetime.now(UTC))
     assert second_run == 0
 
 
@@ -393,3 +399,60 @@ def test_guard_cannot_access_billing_complaints_or_bank_endpoints():
     # Committee report denied for Guard
     comm_res = guard_client.get("/api/v1/committee/report", headers=guard_headers)
     assert comm_res.status_code == 403
+
+
+def test_guard_cross_gate_scope_authorization_denied():
+    """Verify a guard assigned to Gate 1 cannot access, create, admit, or exit visitors for Gate 2."""
+    guard_client, guard_headers = get_auth_client("9876543230")  # Suresh Shinde (assigned to Gate 1)
+
+    db = SessionLocal()
+    g1 = db.query(Gate).filter(Gate.gate_number == 1).first()
+    g2 = db.query(Gate).filter(Gate.gate_number == 2).first()
+    flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
+    gate1_id = g1.id
+    gate2_id = g2.id
+    flat_id = flat.id
+
+    # Create an entry at Gate 2 directly for testing
+    entry_gate2 = VisitorEntry(
+        gate_id=gate2_id,
+        flat_id=flat_id,
+        visitor_name="Sneha Patil",
+        phone="9822001122",
+        purpose="Courier Delivery",
+        status="APPROVED",
+    )
+    db.add(entry_gate2)
+    db.commit()
+    entry_gate2_id = entry_gate2.id
+    db.close()
+
+    # 1. Guard cannot query Gate 2 entries
+    list_res = guard_client.get(f"/api/v1/visitors/entries?gate_id={gate2_id}", headers=guard_headers)
+    assert list_res.status_code == 403
+    assert "cannot perform operations on gate" in list_res.json()["detail"]
+
+    # 2. Guard cannot create visitor entry for Gate 2
+    create_res = guard_client.post(
+        "/api/v1/visitors/entries",
+        json={
+            "gate_id": gate2_id,
+            "flat_id": flat_id,
+            "visitor_name": "Rohan Deshmukh",
+            "phone": "9822334455",
+            "purpose": "Package Delivery",
+        },
+        headers=guard_headers,
+    )
+    assert create_res.status_code == 403
+    assert "cannot perform operations on gate" in create_res.json()["detail"]
+
+    # 3. Guard cannot admit visitor at Gate 2
+    admit_res = guard_client.post(f"/api/v1/visitors/{entry_gate2_id}/admit", headers=guard_headers)
+    assert admit_res.status_code == 403
+    assert "cannot perform operations on gate" in admit_res.json()["detail"]
+
+    # 4. Guard cannot exit visitor at Gate 2
+    exit_res = guard_client.post(f"/api/v1/visitors/{entry_gate2_id}/exit", headers=guard_headers)
+    assert exit_res.status_code == 403
+    assert "cannot perform operations on gate" in exit_res.json()["detail"]

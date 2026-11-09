@@ -12,7 +12,8 @@ Usage:
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from backend.app.services.visitor_service import purge_visitor_photos
 
 
@@ -23,7 +24,7 @@ def main():
         dest="as_of",
         type=str,
         default=None,
-        help="Injectable reference datetime in ISO-8601 format (e.g. 2027-03-01T00:00:00Z)"
+        help="Injectable reference datetime in ISO-8601 format (e.g. 2027-03-01T00:00:00Z)",
     )
     args = parser.parse_args()
 
@@ -35,7 +36,7 @@ def main():
             print(f"Error parsing --as-of date: {exc}")
             sys.exit(1)
     else:
-        as_of_dt = datetime.now(timezone.utc)
+        as_of_dt = datetime.now(UTC)
 
     print(f"Running visitor photo retention purge job with as-of cutoff: {as_of_dt.isoformat()}...")
     purged = purge_visitor_photos(as_of=as_of_dt)

@@ -4,32 +4,30 @@ import io
 import json
 import os
 import secrets
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Tuple, Dict, Any, List
+from datetime import UTC, datetime
+from typing import Any
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from fastapi import HTTPException, status
 from PIL import Image
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, status
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.exceptions import InvalidSignature
 
 from backend.app.core.config import settings
 from backend.app.models.entities import (
-    VisitorEntry,
-    VisitorPhoto,
-    PreApproval,
-    VisitorEvent,
-    SupervisorOverride,
     AuditEvent,
     FlatMembership,
-    Gate,
-    Flat,
+    PreApproval,
+    SupervisorOverride,
+    VisitorEntry,
+    VisitorEvent,
+    VisitorPhoto,
 )
 from backend.app.schemas.visitors import (
-    VisitorStatus,
-    VisitorEntryCreate,
-    PreApprovalCreate,
     OfflineSyncItem,
+    PreApprovalCreate,
+    VisitorStatus,
 )
 
 # Explicit status transitions map
@@ -56,7 +54,7 @@ VALID_TRANSITIONS = {
 }
 
 # In-memory ECDSA P-256 signing key for guest credentials
-_ECDSA_PRIVATE_KEY: Optional[ec.EllipticCurvePrivateKey] = None
+_ECDSA_PRIVATE_KEY: ec.EllipticCurvePrivateKey | None = None
 
 
 def get_ecdsa_private_key() -> ec.EllipticCurvePrivateKey:
@@ -82,15 +80,14 @@ def get_storage_path() -> str:
     return photos_dir
 
 
-def validate_and_process_photo(photo_bytes: bytes, filename: str) -> Tuple[str, str, int, bytes]:
+def validate_and_process_photo(photo_bytes: bytes, filename: str) -> tuple[str, str, int, bytes]:
     """
     Validates photo with Pillow (JPEG, PNG, WebP; max 5MB; max 4000x4000).
     Strips EXIF/GPS, re-encodes as clean JPEG, and returns (sha256, content_type, size, clean_bytes).
     """
     if len(photo_bytes) > 5 * 1024 * 1024:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Photo file size exceeds maximum permitted limit of 5 MB."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Photo file size exceeds maximum permitted limit of 5 MB."
         )
 
     try:
@@ -99,14 +96,14 @@ def validate_and_process_photo(photo_bytes: bytes, filename: str) -> Tuple[str, 
         if image_format not in ("JPEG", "JPG", "PNG", "WEBP"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported image format. Allowed formats: JPEG, PNG, WebP."
+                detail="Unsupported image format. Allowed formats: JPEG, PNG, WebP.",
             )
 
         width, height = image.size
         if width > 4000 or height > 4000:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Image dimensions exceed maximum allowed resolution of 4000x4000 pixels."
+                detail="Image dimensions exceed maximum allowed resolution of 4000x4000 pixels.",
             )
 
         # Convert to RGB and re-encode to strip EXIF and metadata
@@ -118,26 +115,23 @@ def validate_and_process_photo(photo_bytes: bytes, filename: str) -> Tuple[str, 
         sha256_hash = hashlib.sha256(clean_bytes).hexdigest()
         return sha256_hash, "image/jpeg", len(clean_bytes), clean_bytes
 
-    except (IOError, SyntaxError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid image file: {str(exc)}"
-        )
+    except (OSError, SyntaxError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid image file: {str(exc)}")
 
 
 def generate_signed_photo_url(visitor_id: str, photo_id: str, expires_in_seconds: int = 300) -> str:
     """Generates an HMAC-SHA256 signed URL valid for at most 5 minutes."""
-    expires_at = int(datetime.now(timezone.utc).timestamp()) + min(expires_in_seconds, 300)
-    msg = f"{visitor_id}:{photo_id}:{expires_at}".encode("utf-8")
+    expires_at = int(datetime.now(UTC).timestamp()) + min(expires_in_seconds, 300)
+    msg = f"{visitor_id}:{photo_id}:{expires_at}".encode()
     sig = hmac.new(settings.SECRET_KEY.encode("utf-8"), msg, hashlib.sha256).hexdigest()
     return f"/api/v1/visitors/{visitor_id}/photo?photo_id={photo_id}&expires={expires_at}&sig={sig}"
 
 
 def verify_photo_signature(visitor_id: str, photo_id: str, expires: int, sig: str) -> bool:
-    now_ts = int(datetime.now(timezone.utc).timestamp())
+    now_ts = int(datetime.now(UTC).timestamp())
     if now_ts > expires:
         return False
-    msg = f"{visitor_id}:{photo_id}:{expires}".encode("utf-8")
+    msg = f"{visitor_id}:{photo_id}:{expires}".encode()
     expected_sig = hmac.new(settings.SECRET_KEY.encode("utf-8"), msg, hashlib.sha256).hexdigest()
     return hmac.compare_digest(sig, expected_sig)
 
@@ -146,21 +140,21 @@ def transition_visitor_entry(
     db: Session,
     entry: VisitorEntry,
     target_status: VisitorStatus,
-    actor_user_id: Optional[str],
+    actor_user_id: str | None,
     actor_role: str,
-    notes: Optional[str] = None
+    notes: str | None = None,
 ) -> VisitorEntry:
     current = VisitorStatus(entry.status)
     if target_status not in VALID_TRANSITIONS.get(current, set()):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Illegal state transition from {current.value} to {target_status.value}."
+            detail=f"Illegal state transition from {current.value} to {target_status.value}.",
         )
 
     old_status = entry.status
     entry.status = target_status.value
     entry.version += 1
-    entry.updated_at = datetime.now(timezone.utc)
+    entry.updated_at = datetime.now(UTC)
 
     # Record append-only event
     event = VisitorEvent(
@@ -195,9 +189,9 @@ def admit_visitor(db: Session, entry: VisitorEntry, guard_user_id: str) -> Visit
     if current not in (VisitorStatus.APPROVED, VisitorStatus.OVERRIDDEN_ADMIT):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot admit visitor with status '{current.value}'. Requires APPROVED or OVERRIDDEN_ADMIT."
+            detail=f"Cannot admit visitor with status '{current.value}'. Requires APPROVED or OVERRIDDEN_ADMIT.",
         )
-    entry.admitted_at = datetime.now(timezone.utc)
+    entry.admitted_at = datetime.now(UTC)
     return transition_visitor_entry(
         db, entry, VisitorStatus.ADMITTED, guard_user_id, "GUARD", "Visitor admitted at gate"
     )
@@ -208,37 +202,30 @@ def exit_visitor(db: Session, entry: VisitorEntry, guard_user_id: str) -> Visito
     if current != VisitorStatus.ADMITTED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot exit visitor with status '{current.value}'. Visitor must currently be ADMITTED."
+            detail=f"Cannot exit visitor with status '{current.value}'. Visitor must currently be ADMITTED.",
         )
-    entry.exited_at = datetime.now(timezone.utc)
-    return transition_visitor_entry(
-        db, entry, VisitorStatus.EXITED, guard_user_id, "GUARD", "Visitor exited township"
-    )
+    entry.exited_at = datetime.now(UTC)
+    return transition_visitor_entry(db, entry, VisitorStatus.EXITED, guard_user_id, "GUARD", "Visitor exited township")
 
 
 def apply_supervisor_override(
-    db: Session,
-    entry: VisitorEntry,
-    supervisor_user_id: str,
-    supervisor_role: str,
-    reason: str
+    db: Session, entry: VisitorEntry, supervisor_user_id: str, supervisor_role: str, reason: str
 ) -> VisitorEntry:
     if supervisor_role not in ("HELPDESK", "HELP_DESK", "ADMIN"):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Supervisor override requires HELPDESK or ADMIN privileges."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor override requires HELPDESK or ADMIN privileges."
         )
     if not reason or len(reason.strip()) < 3:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Supervisor override requires an explicit, meaningful reason."
+            detail="Supervisor override requires an explicit, meaningful reason.",
         )
 
     current = VisitorStatus(entry.status)
     if current != VisitorStatus.AWAITING_APPROVAL:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Supervisor override can only be applied to AWAITING_APPROVAL entries, currently {current.value}."
+            detail=f"Supervisor override can only be applied to AWAITING_APPROVAL entries, currently {current.value}.",
         )
 
     # Insert supervisor override record
@@ -256,33 +243,33 @@ def apply_supervisor_override(
         VisitorStatus.OVERRIDDEN_ADMIT,
         supervisor_user_id,
         supervisor_role,
-        notes=f"SUPERVISOR OVERRIDE: {reason.strip()}"
+        notes=f"SUPERVISOR OVERRIDE: {reason.strip()}",
     )
     return entry
 
 
-def hash_pre_approval_code(raw_code: str, salt: Optional[str] = None) -> str:
+def hash_pre_approval_code(raw_code: str, salt: str | None = None) -> str:
     if salt is None:
         salt = secrets.token_hex(16)
-    code_hash = hashlib.sha256(f"{raw_code}:{salt}".encode("utf-8")).hexdigest()
+    code_hash = hashlib.sha256(f"{raw_code}:{salt}".encode()).hexdigest()
     return f"{salt}:{code_hash}"
 
 
-def create_pre_approval(
-    db: Session,
-    payload: PreApprovalCreate,
-    creator_user_id: str
-) -> Tuple[PreApproval, str]:
+def create_pre_approval(db: Session, payload: PreApprovalCreate, creator_user_id: str) -> tuple[PreApproval, str]:
     # Verify creator membership on flat
-    membership = db.query(FlatMembership).filter(
-        FlatMembership.flat_id == payload.flat_id,
-        FlatMembership.user_id == creator_user_id,
-        FlatMembership.can_approve_visitors == True,
-    ).first()
+    membership = (
+        db.query(FlatMembership)
+        .filter(
+            FlatMembership.flat_id == payload.flat_id,
+            FlatMembership.user_id == creator_user_id,
+            FlatMembership.can_approve_visitors == True,
+        )
+        .first()
+    )
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User does not hold visitor approval permission for this flat."
+            detail="User does not hold visitor approval permission for this flat.",
         )
 
     # Generate 6-digit random guest code and compute salted SHA-256
@@ -328,12 +315,9 @@ def create_pre_approval(
 
 
 def verify_guest_code(
-    db: Session,
-    gate_id: str,
-    raw_code: Optional[str] = None,
-    credential_jwt: Optional[str] = None
-) -> Dict[str, Any]:
-    now = datetime.now(timezone.utc)
+    db: Session, gate_id: str, raw_code: str | None = None, credential_jwt: str | None = None
+) -> dict[str, Any]:
+    now = datetime.now(UTC)
 
     # 1. Verification via offline ECDSA compact credential
     if credential_jwt:
@@ -360,11 +344,15 @@ def verify_guest_code(
                 return {"valid": False, "message": f"Credential is restricted to gate {data['gate']}."}
 
             # Check database state if online
-            pre_app = db.query(PreApproval).filter(
-                PreApproval.flat_id == data["fid"],
-                PreApproval.guest_name == data["name"],
-                PreApproval.is_revoked == False
-            ).first()
+            pre_app = (
+                db.query(PreApproval)
+                .filter(
+                    PreApproval.flat_id == data["fid"],
+                    PreApproval.guest_name == data["name"],
+                    PreApproval.is_revoked == False,
+                )
+                .first()
+            )
 
             conflict = False
             if pre_app:
@@ -373,7 +361,7 @@ def verify_guest_code(
                     return {
                         "valid": False,
                         "message": "Guest credential maximum usage limit reached.",
-                        "conflict_flagged": True
+                        "conflict_flagged": True,
                     }
                 pre_app.used_count += 1
                 db.flush()
@@ -392,17 +380,17 @@ def verify_guest_code(
 
     # 2. Verification via online 6-digit code
     if raw_code:
-        candidates = db.query(PreApproval).filter(
-            PreApproval.is_revoked == False,
-            PreApproval.valid_from <= now,
-            PreApproval.valid_until >= now
-        ).all()
+        candidates = (
+            db.query(PreApproval)
+            .filter(PreApproval.is_revoked == False, PreApproval.valid_from <= now, PreApproval.valid_until >= now)
+            .all()
+        )
 
-        matched: Optional[PreApproval] = None
+        matched: PreApproval | None = None
         for cand in candidates:
             if ":" in cand.code_hash:
                 salt, expected_hash = cand.code_hash.split(":", 1)
-                computed = hashlib.sha256(f"{raw_code}:{salt}".encode("utf-8")).hexdigest()
+                computed = hashlib.sha256(f"{raw_code}:{salt}".encode()).hexdigest()
                 if hmac.compare_digest(computed, expected_hash):
                     matched = cand
                     break
@@ -432,22 +420,16 @@ def verify_guest_code(
     return {"valid": False, "message": "Either raw guest code or offline credential token must be provided."}
 
 
-def sync_offline_entries(
-    db: Session,
-    guard_user_id: str,
-    items: List[OfflineSyncItem]
-) -> Dict[str, Any]:
+def sync_offline_entries(db: Session, guard_user_id: str, items: list[OfflineSyncItem]) -> dict[str, Any]:
     """
     Idempotent offline gate sync. Deduplicates by client_event_id UNIQUE.
     Returns processed count, acknowledged IDs, and flagged conflicts.
     """
-    acknowledged: List[str] = []
-    conflicts: List[dict] = []
+    acknowledged: list[str] = []
+    conflicts: list[dict] = []
 
     for item in items:
-        existing = db.query(VisitorEntry).filter(
-            VisitorEntry.client_event_id == item.client_event_id
-        ).first()
+        existing = db.query(VisitorEntry).filter(VisitorEntry.client_event_id == item.client_event_id).first()
 
         if existing:
             acknowledged.append(item.client_event_id)
@@ -459,10 +441,12 @@ def sync_offline_entries(
             pre_app = db.query(PreApproval).filter(PreApproval.id == item.pre_approval_id).first()
             if pre_app and pre_app.used_count >= pre_app.max_uses:
                 conflict_flagged = True
-                conflicts.append({
-                    "client_event_id": item.client_event_id,
-                    "reason": f"Guest code {item.pre_approval_id} previously used at another disconnected gate."
-                })
+                conflicts.append(
+                    {
+                        "client_event_id": item.client_event_id,
+                        "reason": f"Guest code {item.pre_approval_id} previously used at another disconnected gate.",
+                    }
+                )
             elif pre_app:
                 pre_app.used_count += 1
 
@@ -472,14 +456,16 @@ def sync_offline_entries(
             visitor_name=item.visitor_name,
             phone=item.phone,
             purpose=item.purpose,
-            status=VisitorStatus.APPROVED.value if item.pre_approval_id and not conflict_flagged else VisitorStatus.AWAITING_APPROVAL.value,
+            status=VisitorStatus.APPROVED.value
+            if item.pre_approval_id and not conflict_flagged
+            else VisitorStatus.AWAITING_APPROVAL.value,
             created_by_guard=guard_user_id,
             pre_approval_id=item.pre_approval_id,
             source="OFFLINE_SYNC",
             client_event_id=item.client_event_id,
             version=1,
             created_at=item.capture_time,
-            updated_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(UTC),
         )
         db.add(entry)
         db.flush()
@@ -491,7 +477,8 @@ def sync_offline_entries(
             event_type="OFFLINE_SYNC_INGESTED",
             from_status=None,
             to_status=entry.status,
-            notes=f"Synced from offline queue. ClientEventId: {item.client_event_id}" + (" [CONFLICT]" if conflict_flagged else ""),
+            notes=f"Synced from offline queue. ClientEventId: {item.client_event_id}"
+            + (" [CONFLICT]" if conflict_flagged else ""),
         )
         db.add(event)
         acknowledged.append(item.client_event_id)
@@ -504,24 +491,26 @@ def sync_offline_entries(
     }
 
 
-def purge_visitor_photos(as_of: Optional[datetime] = None, db: Optional[Session] = None) -> int:
+def purge_visitor_photos(as_of: datetime | None = None, db: Session | None = None) -> int:
     """
     Server-side 90-day retention purge job.
     Deletes photo files and nulls storage_key for all records where retention_expires_at <= as_of.
     Idempotent and accepts an injectable clock.
     """
-    cutoff = as_of or datetime.now(timezone.utc)
+    cutoff = as_of or datetime.now(UTC)
     from backend.app.core.database import SessionLocal
+
     own_session = False
     if db is None:
         db = SessionLocal()
         own_session = True
 
     try:
-        photos = db.query(VisitorPhoto).filter(
-            VisitorPhoto.deleted_at.is_(None),
-            VisitorPhoto.retention_expires_at <= cutoff
-        ).all()
+        photos = (
+            db.query(VisitorPhoto)
+            .filter(VisitorPhoto.deleted_at.is_(None), VisitorPhoto.retention_expires_at <= cutoff)
+            .all()
+        )
 
         purged_count = 0
         for photo in photos:

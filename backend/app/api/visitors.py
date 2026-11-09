@@ -1,62 +1,82 @@
 import os
-from datetime import datetime, timezone, timedelta
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response
-from fastapi.responses import FileResponse, JSONResponse
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
 from backend.app.core.security import get_current_user
 from backend.app.models.entities import (
+    Flat,
+    FlatMembership,
+    Gate,
+    PreApproval,
+    Tower,
     User,
     VisitorEntry,
     VisitorPhoto,
-    PreApproval,
-    Flat,
-    Tower,
-    FlatMembership,
-    Gate,
 )
 from backend.app.schemas.visitors import (
-    VisitorStatus,
-    VisitorEntryCreate,
-    VisitorEntryResponse,
-    VisitorApprovalDecision,
-    SupervisorOverrideRequest,
-    PreApprovalCreate,
-    PreApprovalResponse,
     GuestCodeVerifyRequest,
     GuestCodeVerifyResponse,
     OfflineSyncRequest,
     OfflineSyncResponse,
+    PreApprovalCreate,
+    PreApprovalResponse,
+    SupervisorOverrideRequest,
+    VisitorApprovalDecision,
+    VisitorEntryCreate,
+    VisitorEntryResponse,
+    VisitorStatus,
 )
 from backend.app.services.visitor_service import (
-    transition_visitor_entry,
     admit_visitor,
-    exit_visitor,
     apply_supervisor_override,
-    validate_and_process_photo,
-    generate_signed_photo_url,
-    verify_photo_signature,
     create_pre_approval,
-    verify_guest_code,
-    sync_offline_entries,
-    get_storage_path,
+    exit_visitor,
+    generate_signed_photo_url,
     get_ecdsa_public_key_pem,
+    get_storage_path,
+    sync_offline_entries,
+    transition_visitor_entry,
+    validate_and_process_photo,
+    verify_guest_code,
+    verify_photo_signature,
 )
 
 router = APIRouter(prefix="/visitors", tags=["visitors"])
 
 
-def get_user_roles(user: User) -> List[str]:
+def get_user_roles(user: User) -> list[str]:
     return [r.role_code for r in user.role_assignments]
 
 
-@router.get("/entries", response_model=List[VisitorEntryResponse])
+def get_guard_assigned_gate_id(user: User) -> str | None:
+    for r in user.role_assignments:
+        if r.role_code == "GUARD" and r.scope_type == "GATE" and r.scope_id:
+            return r.scope_id
+    return None
+
+
+def enforce_guard_gate_scope(user: User, gate_id: str) -> None:
+    roles = get_user_roles(user)
+    if "ADMIN" in roles or "HELPDESK" in roles or "HELP_DESK" in roles:
+        return
+    if "GUARD" in roles:
+        assigned = get_guard_assigned_gate_id(user)
+        if assigned and assigned != gate_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Guard is assigned to gate {assigned} and cannot perform operations on gate {gate_id}."
+            )
+
+
+@router.get("/entries", response_model=list[VisitorEntryResponse])
 def list_visitor_entries(
-    gate_id: Optional[str] = Query(None),
-    flat_id: Optional[str] = Query(None),
-    status_filter: Optional[VisitorStatus] = Query(None),
+    gate_id: str | None = Query(None),
+    flat_id: str | None = Query(None),
+    status_filter: VisitorStatus | None = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -68,16 +88,14 @@ def list_visitor_entries(
     if "GUARD" in roles and "ADMIN" not in roles and "HELPDESK" not in roles and "HELP_DESK" not in roles:
         if not gate_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Guard must specify a gate_id to view entries."
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Guard must specify a gate_id to view entries."
             )
+        enforce_guard_gate_scope(current_user, gate_id)
         query = query.filter(VisitorEntry.gate_id == gate_id)
 
     # 2. Residents see only entries for flats they belong to
     elif "RESIDENT" in roles and "ADMIN" not in roles and "HELPDESK" not in roles and "HELP_DESK" not in roles:
-        user_flat_ids = [
-            m.flat_id for m in current_user.flat_memberships if m.can_approve_visitors
-        ]
+        user_flat_ids = [m.flat_id for m in current_user.flat_memberships if m.can_approve_visitors]
         if not user_flat_ids:
             return []
         query = query.filter(VisitorEntry.flat_id.in_(user_flat_ids))
@@ -106,29 +124,31 @@ def list_visitor_entries(
         if entry.photo_id:
             photo_url = generate_signed_photo_url(entry.id, entry.photo_id)
 
-        result.append(VisitorEntryResponse(
-            id=entry.id,
-            gate_id=entry.gate_id,
-            flat_id=entry.flat_id,
-            flat_number=flat.flat_number if flat else None,
-            tower_number=tower.code if tower else None,
-            visitor_name=entry.visitor_name,
-            phone=entry.phone,
-            purpose=entry.purpose,
-            status=VisitorStatus(entry.status),
-            created_by_guard=entry.created_by_guard,
-            approval_decided_by=entry.approval_decided_by,
-            approval_decided_at=entry.approval_decided_at,
-            admitted_at=entry.admitted_at,
-            exited_at=entry.exited_at,
-            photo_id=entry.photo_id,
-            photo_url=photo_url,
-            pre_approval_id=entry.pre_approval_id,
-            source=entry.source,
-            client_event_id=entry.client_event_id,
-            version=entry.version,
-            created_at=entry.created_at,
-        ))
+        result.append(
+            VisitorEntryResponse(
+                id=entry.id,
+                gate_id=entry.gate_id,
+                flat_id=entry.flat_id,
+                flat_number=flat.flat_number if flat else None,
+                tower_number=tower.code if tower else None,
+                visitor_name=entry.visitor_name,
+                phone=entry.phone,
+                purpose=entry.purpose,
+                status=VisitorStatus(entry.status),
+                created_by_guard=entry.created_by_guard,
+                approval_decided_by=entry.approval_decided_by,
+                approval_decided_at=entry.approval_decided_at,
+                admitted_at=entry.admitted_at,
+                exited_at=entry.exited_at,
+                photo_id=entry.photo_id,
+                photo_url=photo_url,
+                pre_approval_id=entry.pre_approval_id,
+                source=entry.source,
+                client_event_id=entry.client_event_id,
+                version=entry.version,
+                created_at=entry.created_at,
+            )
+        )
 
     return result
 
@@ -142,29 +162,22 @@ def create_visitor_entry(
     roles = get_user_roles(current_user)
     if "GUARD" not in roles and "ADMIN" not in roles:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only guards or administrators can record visitor arrival."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only guards or administrators can record visitor arrival."
         )
+
+    enforce_guard_gate_scope(current_user, payload.gate_id)
 
     flat = db.query(Flat).filter(Flat.id == payload.flat_id).first()
     if not flat:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Specified flat does not exist."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Specified flat does not exist.")
 
     gate = db.query(Gate).filter(Gate.id == payload.gate_id).first()
     if not gate:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Specified gate does not exist."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Specified gate does not exist.")
 
     # Check client_event_id deduplication
     if payload.client_event_id:
-        existing = db.query(VisitorEntry).filter(
-            VisitorEntry.client_event_id == payload.client_event_id
-        ).first()
+        existing = db.query(VisitorEntry).filter(VisitorEntry.client_event_id == payload.client_event_id).first()
         if existing:
             return existing
 
@@ -225,22 +238,26 @@ def decide_visitor_approval(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visitor entry not found.")
 
     # Server-side authorization: User must belong to this flat with approval permission
-    membership = db.query(FlatMembership).filter(
-        FlatMembership.flat_id == entry.flat_id,
-        FlatMembership.user_id == current_user.id,
-        FlatMembership.can_approve_visitors == True,
-    ).first()
+    membership = (
+        db.query(FlatMembership)
+        .filter(
+            FlatMembership.flat_id == entry.flat_id,
+            FlatMembership.user_id == current_user.id,
+            FlatMembership.can_approve_visitors == True,
+        )
+        .first()
+    )
 
     roles = get_user_roles(current_user)
     if not membership and "ADMIN" not in roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: You do not have permission to approve visitors for this flat."
+            detail="Forbidden: You do not have permission to approve visitors for this flat.",
         )
 
     target_status = VisitorStatus.APPROVED if decision_payload.decision == "APPROVE" else VisitorStatus.REJECTED
     entry.approval_decided_by = current_user.id
-    entry.approval_decided_at = datetime.now(timezone.utc)
+    entry.approval_decided_at = datetime.now(UTC)
 
     transition_visitor_entry(
         db,
@@ -248,7 +265,7 @@ def decide_visitor_approval(
         target_status,
         current_user.id,
         "RESIDENT" if membership else "ADMIN",
-        notes=f"Resident {decision_payload.decision.lower()}d visitor arrival."
+        notes=f"Resident {decision_payload.decision.lower()}d visitor arrival.",
     )
     db.commit()
     db.refresh(entry)
@@ -296,6 +313,8 @@ def admit_visitor_endpoint(
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visitor entry not found.")
 
+    enforce_guard_gate_scope(current_user, entry.gate_id)
+
     admit_visitor(db, entry, current_user.id)
     db.commit()
     db.refresh(entry)
@@ -337,11 +356,15 @@ def exit_visitor_endpoint(
 ):
     roles = get_user_roles(current_user)
     if "GUARD" not in roles and "ADMIN" not in roles:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only on-duty guards can record visitor exit.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only on-duty guards can record visitor exit."
+        )
 
     entry = db.query(VisitorEntry).filter(VisitorEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visitor entry not found.")
+
+    enforce_guard_gate_scope(current_user, entry.gate_id)
 
     exit_visitor(db, entry, current_user.id)
     db.commit()
@@ -384,11 +407,12 @@ def supervisor_override_endpoint(
     db: Session = Depends(get_db),
 ):
     roles = get_user_roles(current_user)
-    matching_role = "ADMIN" if "ADMIN" in roles else ("HELPDESK" if ("HELPDESK" in roles or "HELP_DESK" in roles) else None)
+    matching_role = (
+        "ADMIN" if "ADMIN" in roles else ("HELPDESK" if ("HELPDESK" in roles or "HELP_DESK" in roles) else None)
+    )
     if not matching_role:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Supervisor override requires HELPDESK or ADMIN privileges."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Supervisor override requires HELPDESK or ADMIN privileges."
         )
 
     entry = db.query(VisitorEntry).filter(VisitorEntry.id == entry_id).first()
@@ -436,12 +460,16 @@ async def upload_visitor_photo(
 ):
     roles = get_user_roles(current_user)
     if "GUARD" not in roles and "ADMIN" not in roles:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only guards or admins can upload visitor photos.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only guards or admins can upload visitor photos."
+        )
 
     content = await file.read()
-    sha256_hash, content_type, file_size, clean_bytes = validate_and_process_photo(content, file.filename or "photo.jpg")
+    sha256_hash, content_type, file_size, clean_bytes = validate_and_process_photo(
+        content, file.filename or "photo.jpg"
+    )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     retention_expires_at = now + timedelta(days=90)
 
     photo = VisitorPhoto(
@@ -468,7 +496,7 @@ async def upload_visitor_photo(
         "sha256": sha256_hash,
         "capture_time": now.isoformat(),
         "retention_expires_at": retention_expires_at.isoformat(),
-        "data_protection_notice": "Visitor photograph collected for security logging and automatically purged after 90 days."
+        "data_protection_notice": "Visitor photograph collected for security logging and automatically purged after 90 days.",
     }
 
 
@@ -482,13 +510,14 @@ def stream_visitor_photo(
 ):
     if not verify_photo_signature(entry_id, photo_id, expires, sig):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden: Invalid or expired photo signature."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Invalid or expired photo signature."
         )
 
     photo = db.query(VisitorPhoto).filter(VisitorPhoto.id == photo_id).first()
     if not photo or not photo.storage_key or not os.path.exists(photo.storage_key):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photograph file not found or retention period expired.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Photograph file not found or retention period expired."
+        )
 
     return FileResponse(photo.storage_key, media_type="image/jpeg")
 
@@ -496,6 +525,7 @@ def stream_visitor_photo(
 # =========================================================================
 # Pre-Approvals & Offline Guest Code Endpoints
 # =========================================================================
+
 
 @router.post("/pre-approvals", response_model=PreApprovalResponse, status_code=status.HTTP_201_CREATED)
 def create_pre_approval_endpoint(
@@ -512,15 +542,13 @@ def create_pre_approval_endpoint(
     return resp
 
 
-@router.get("/pre-approvals", response_model=List[PreApprovalResponse])
+@router.get("/pre-approvals", response_model=list[PreApprovalResponse])
 def list_pre_approvals(
-    flat_id: Optional[str] = Query(None),
+    flat_id: str | None = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user_flat_ids = [
-        m.flat_id for m in current_user.flat_memberships if m.can_approve_visitors
-    ]
+    user_flat_ids = [m.flat_id for m in current_user.flat_memberships if m.can_approve_visitors]
     roles = get_user_roles(current_user)
     query = db.query(PreApproval)
 
@@ -545,7 +573,9 @@ def verify_guest_code_endpoint(
 ):
     roles = get_user_roles(current_user)
     if "GUARD" not in roles and "ADMIN" not in roles:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only guards or admins can verify guest credentials.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only guards or admins can verify guest credentials."
+        )
 
     result = verify_guest_code(db, payload.gate_id, payload.code, payload.credential_jwt)
     db.commit()
@@ -556,20 +586,21 @@ def verify_guest_code_endpoint(
 # Gate Offline Mode Endpoints
 # =========================================================================
 
+
 @router.get("/gate/public-key")
 def get_gate_public_key():
     """Provides ECDSA P-256 public key for enrolled gate devices to verify credentials offline."""
     return {
         "algorithm": "ECDSA_P256_SHA256",
         "public_key_pem": get_ecdsa_public_key_pem(),
-        "offline_notice": "While offline a gate cannot know about later revocations or use at another disconnected gate."
+        "offline_notice": "While offline a gate cannot know about later revocations or use at another disconnected gate.",
     }
 
 
 @router.get("/gate/time-anchor")
 def get_time_anchor():
     """Issues device time anchor for offline timestamp verification."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return {
         "server_time_utc": now.isoformat(),
         "timestamp_unix": int(now.timestamp()),
@@ -585,7 +616,12 @@ def sync_offline_entries_endpoint(
 ):
     roles = get_user_roles(current_user)
     if "GUARD" not in roles and "ADMIN" not in roles:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only guards can synchronize offline gate queues.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only guards can synchronize offline gate queues."
+        )
+
+    for ev in payload.events:
+        enforce_guard_gate_scope(current_user, ev.gate_id)
 
     res = sync_offline_entries(db, current_user.id, payload.events)
     db.commit()

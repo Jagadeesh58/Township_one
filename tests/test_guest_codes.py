@@ -1,15 +1,12 @@
 import json
 import time
-from datetime import datetime, timezone, timedelta
-import pytest
-from fastapi.testclient import TestClient
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes, serialization
+from datetime import UTC, datetime, timedelta
 
-from backend.app.main import app
+from fastapi.testclient import TestClient
+
 from backend.app.core.database import SessionLocal
-from backend.app.models.entities import Flat, Gate, PreApproval, VisitorEntry, OTPChallenge
-from backend.app.services.visitor_service import get_ecdsa_private_key
+from backend.app.main import app
+from backend.app.models.entities import Flat, Gate, OTPChallenge, PreApproval, VisitorEntry
 
 
 def get_auth_client(phone: str) -> tuple[TestClient, dict]:
@@ -38,7 +35,7 @@ def test_online_guest_code_verification_and_usage_decrement():
     gate1 = db.query(Gate).filter(Gate.gate_number == 1).first()
     db.close()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     create_res = resident_client.post(
         "/api/v1/visitors/pre-approvals",
         json={
@@ -104,7 +101,7 @@ def test_offline_ecdsa_credential_verification_and_tamper_rejection():
     gate2 = db.query(Gate).filter(Gate.gate_number == 2).first()
     db.close()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     create_res = resident_client.post(
         "/api/v1/visitors/pre-approvals",
         json={
@@ -199,9 +196,9 @@ def test_offline_sync_deduplication_and_conflict_flagging():
                 "phone": "9812300001",
                 "purpose": "Maintenance",
                 "pre_approval_id": pre_app.id if pre_app else None,
-                "capture_time": datetime.now(timezone.utc).isoformat(),
+                "capture_time": datetime.now(UTC).isoformat(),
             }
-        ]
+        ],
     }
 
     # 1. First sync ingest

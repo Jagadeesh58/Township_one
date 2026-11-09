@@ -1,7 +1,8 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class VisitorStatus(str, Enum):
@@ -18,10 +19,10 @@ class VisitorEntryCreate(BaseModel):
     gate_id: str
     flat_id: str
     visitor_name: str = Field(..., min_length=2, max_length=100)
-    phone: Optional[str] = Field(None, max_length=20)
+    phone: str | None = Field(None, max_length=20)
     purpose: str = Field(..., min_length=2, max_length=100)
-    photo_id: Optional[str] = None
-    client_event_id: Optional[str] = None
+    photo_id: str | None = None
+    client_event_id: str | None = None
     source: str = "ONLINE"
 
 
@@ -29,22 +30,22 @@ class VisitorEntryResponse(BaseModel):
     id: str
     gate_id: str
     flat_id: str
-    flat_number: Optional[str] = None
-    tower_number: Optional[str] = None
+    flat_number: str | None = None
+    tower_number: str | None = None
     visitor_name: str
-    phone: Optional[str] = None
+    phone: str | None = None
     purpose: str
     status: VisitorStatus
-    created_by_guard: Optional[str] = None
-    approval_decided_by: Optional[str] = None
-    approval_decided_at: Optional[datetime] = None
-    admitted_at: Optional[datetime] = None
-    exited_at: Optional[datetime] = None
-    photo_id: Optional[str] = None
-    photo_url: Optional[str] = None
-    pre_approval_id: Optional[str] = None
+    created_by_guard: str | None = None
+    approval_decided_by: str | None = None
+    approval_decided_at: datetime | None = None
+    admitted_at: datetime | None = None
+    exited_at: datetime | None = None
+    photo_id: str | None = None
+    photo_url: str | None = None
+    pre_approval_id: str | None = None
     source: str
-    client_event_id: Optional[str] = None
+    client_event_id: str | None = None
     version: int
     created_at: datetime
 
@@ -62,9 +63,9 @@ class SupervisorOverrideRequest(BaseModel):
 class PreApprovalCreate(BaseModel):
     flat_id: str
     guest_name: str = Field(..., min_length=2, max_length=100)
-    phone: Optional[str] = Field(None, max_length=20)
+    phone: str | None = Field(None, max_length=20)
     purpose: str = Field(..., min_length=2, max_length=100)
-    gate_id: Optional[str] = None
+    gate_id: str | None = None
     valid_from: datetime
     valid_until: datetime
     max_uses: int = Field(1, ge=1, le=10)
@@ -74,15 +75,15 @@ class PreApprovalResponse(BaseModel):
     id: str
     flat_id: str
     guest_name: str
-    phone: Optional[str] = None
+    phone: str | None = None
     purpose: str
-    gate_id: Optional[str] = None
+    gate_id: str | None = None
     valid_from: datetime
     valid_until: datetime
     max_uses: int
     used_count: int
-    code: Optional[str] = None  # Returned only on creation
-    credential_jwt: Optional[str] = None
+    code: str | None = None  # Returned only on creation
+    credential_jwt: str | None = None
     is_revoked: bool
     created_at: datetime
 
@@ -91,16 +92,16 @@ class PreApprovalResponse(BaseModel):
 
 class GuestCodeVerifyRequest(BaseModel):
     gate_id: str
-    code: Optional[str] = None
-    credential_jwt: Optional[str] = None
+    code: str | None = None
+    credential_jwt: str | None = None
 
 
 class GuestCodeVerifyResponse(BaseModel):
     valid: bool
     message: str
-    pre_approval_id: Optional[str] = None
-    flat_id: Optional[str] = None
-    guest_name: Optional[str] = None
+    pre_approval_id: str | None = None
+    flat_id: str | None = None
+    guest_name: str | None = None
     remaining_uses: int = 0
     conflict_flagged: bool = False
 
@@ -110,18 +111,18 @@ class OfflineSyncItem(BaseModel):
     gate_id: str
     flat_id: str
     visitor_name: str
-    phone: Optional[str] = None
+    phone: str | None = None
     purpose: str
     capture_time: datetime
-    photo_sha256: Optional[str] = None
-    pre_approval_id: Optional[str] = None
+    photo_sha256: str | None = None
+    pre_approval_id: str | None = None
 
 
 class OfflineSyncRequest(BaseModel):
-    events: List[OfflineSyncItem]
+    events: list[OfflineSyncItem]
 
 
 class OfflineSyncResponse(BaseModel):
     processed_count: int
-    acknowledged_ids: List[str]
-    conflicts: List[dict]
+    acknowledged_ids: list[str]
+    conflicts: list[dict]
