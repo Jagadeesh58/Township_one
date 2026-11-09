@@ -245,6 +245,199 @@ export interface NotificationItem {
   payload?: any;
 }
 
+export type VisitorStatusType =
+  | 'AWAITING_APPROVAL'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'ADMITTED'
+  | 'EXITED'
+  | 'EXPIRED'
+  | 'OVERRIDDEN_ADMIT';
+
+export interface VisitorEntryItem {
+  id: string;
+  gate_id: string;
+  flat_id: string;
+  flat_number?: string;
+  tower_number?: string;
+  visitor_name: string;
+  phone?: string;
+  purpose: string;
+  status: VisitorStatusType;
+  created_by_guard?: string;
+  approval_decided_by?: string;
+  approval_decided_at?: string;
+  admitted_at?: string;
+  exited_at?: string;
+  photo_id?: string;
+  photo_url?: string;
+  pre_approval_id?: string;
+  source: string;
+  client_event_id?: string;
+  version: number;
+  created_at: string;
+}
+
+export interface PreApprovalItem {
+  id: string;
+  flat_id: string;
+  guest_name: string;
+  phone?: string;
+  purpose: string;
+  gate_id?: string;
+  valid_from: string;
+  valid_until: string;
+  max_uses: number;
+  used_count: number;
+  code?: string;
+  credential_jwt?: string;
+  is_revoked: boolean;
+  created_at: string;
+}
+
+export interface GuestCodeVerificationResult {
+  valid: boolean;
+  message: string;
+  pre_approval_id?: string;
+  flat_id?: string;
+  guest_name?: string;
+  remaining_uses?: number;
+  conflict_flagged?: boolean;
+}
+
+export interface AmenityItem {
+  id: string;
+  name: string;
+  description?: string;
+  hourly_fee: string | number;
+  capacity: number;
+  rules?: string;
+}
+
+export interface AmenitySlotItem {
+  id: string;
+  amenity_id: string;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  booked_count: number;
+  available_spots: number;
+  is_closed: boolean;
+  closure_reason?: string;
+}
+
+export interface AmenityRuleItem {
+  id: string;
+  amenity_id: string;
+  booking_window_days: number;
+  max_daily_slots_per_flat: number;
+  cancellation_cutoff_hours: number;
+}
+
+export interface AmenityBookingItem {
+  id: string;
+  flat_id: string;
+  slot_id: string;
+  user_id: string;
+  amenity_name?: string;
+  slot_date?: string;
+  start_time?: string;
+  end_time?: string;
+  status: string;
+  fee: string | number;
+  fee_status: string;
+  idempotency_key: string;
+  version: number;
+  created_at: string;
+  cancelled_at?: string;
+}
+
+export interface AmenityClosureItem {
+  id: string;
+  amenity_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  created_by_user_id: string;
+  created_at: string;
+}
+
+export interface NoticeRevisionItem {
+  id: string;
+  notice_id: string;
+  revision_number: number;
+  title: string;
+  body: string;
+  body_en: string;
+  body_hi?: string;
+  body_mr?: string;
+  is_fallback_language: boolean;
+  fallback_language_label?: string;
+  publish_at: string;
+  expires_at?: string;
+  audience: string;
+  tower_id?: string;
+  tower_number?: string;
+  severity: string;
+  created_at: string;
+  is_read: boolean;
+}
+
+export interface DuesAgeingBandsData {
+  band_0_30_days: string | number;
+  band_31_60_days: string | number;
+  band_61_90_days: string | number;
+  band_90_plus_days: string | number;
+  total_outstanding: string | number;
+}
+
+export interface FinancialMetricsData {
+  total_billed: string | number;
+  total_collected: string | number;
+  total_outstanding: string | number;
+  collection_rate_percent: string | number;
+  ageing: DuesAgeingBandsData;
+}
+
+export interface ComplaintsMetricsData {
+  total_complaints: number;
+  open_unresolved_count: number;
+  closed_resolved_count: number;
+  overdue_count: number;
+  reopened_count: number;
+  reopened_rate_percent: string | number;
+  mean_resolution_hours?: string | number;
+  median_resolution_hours?: string | number;
+  mean_first_response_hours?: string | number;
+}
+
+export interface PaymentMatchingMetricsData {
+  total_rows_imported: number;
+  auto_matched_count: number;
+  review_queue_count: number;
+  manually_approved_count: number;
+  held_or_rejected_count: number;
+  auto_match_coverage_percent: string | number;
+}
+
+export interface ClientTargetData {
+  kpi_name: string;
+  client_target_description: string;
+  demo_sample_value: string;
+  target_status_label: string;
+}
+
+export interface CommitteeReportData {
+  reporting_period: string;
+  data_cutoff_time: string;
+  timezone: string;
+  financials: FinancialMetricsData;
+  complaints: ComplaintsMetricsData;
+  payment_matching: PaymentMatchingMetricsData;
+  client_targets: ClientTargetData[];
+}
+
 /**
  * Reads double-submit CSRF token from document cookie.
  */
@@ -269,7 +462,11 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
     }
   }
 
-  return fetch(url, {
+  const resolvedUrl = (typeof url === 'string' && url.startsWith('/') && (typeof window === 'undefined' || !window.location.origin || window.location.origin === 'null'))
+    ? `http://localhost:8000${url}`
+    : url;
+
+  return fetch(resolvedUrl, {
     ...options,
     headers,
     credentials: 'include',
@@ -621,5 +818,332 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to mark all notifications read');
     return res.json();
+  },
+
+  // Visitors & Gates
+  async listVisitorEntries(gateId?: string, flatId?: string, statusFilter?: string): Promise<VisitorEntryItem[]> {
+    const params = new URLSearchParams();
+    if (gateId) params.append('gate_id', gateId);
+    if (flatId) params.append('flat_id', flatId);
+    if (statusFilter) params.append('status_filter', statusFilter);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/visitors/entries${qs}`);
+    if (!res.ok) throw new Error('Failed to list visitor entries');
+    return res.json();
+  },
+
+  async createVisitorEntry(payload: {
+    gate_id: string;
+    flat_id: string;
+    visitor_name: string;
+    phone?: string;
+    purpose: string;
+    photo_id?: string;
+    client_event_id?: string;
+  }): Promise<VisitorEntryItem> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/entries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to record visitor entry');
+    }
+    return res.json();
+  },
+
+  async decideVisitorApproval(entryId: string, decision: 'APPROVE' | 'REJECT'): Promise<VisitorEntryItem> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/${entryId}/approval`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to decide visitor approval');
+    }
+    return res.json();
+  },
+
+  async admitVisitor(entryId: string): Promise<VisitorEntryItem> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/${entryId}/admit`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to admit visitor');
+    }
+    return res.json();
+  },
+
+  async exitVisitor(entryId: string): Promise<VisitorEntryItem> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/${entryId}/exit`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to record visitor exit');
+    }
+    return res.json();
+  },
+
+  async overrideVisitor(entryId: string, reason: string): Promise<VisitorEntryItem> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/${entryId}/override`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to apply supervisor override');
+    }
+    return res.json();
+  },
+
+  async uploadVisitorPhoto(file: File): Promise<{ photo_id: string; sha256: string; retention_expires_at: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetchWithAuth(`${API_BASE}/visitors/photo/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to upload visitor photo');
+    }
+    return res.json();
+  },
+
+  async createPreApproval(payload: {
+    flat_id: string;
+    guest_name: string;
+    phone?: string;
+    purpose: string;
+    gate_id?: string;
+    valid_from: string;
+    valid_until: string;
+    max_uses?: number;
+  }): Promise<PreApprovalItem> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/pre-approvals`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to create guest pass');
+    }
+    return res.json();
+  },
+
+  async listPreApprovals(flatId?: string): Promise<PreApprovalItem[]> {
+    const qs = flatId ? `?flat_id=${flatId}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/visitors/pre-approvals${qs}`);
+    if (!res.ok) throw new Error('Failed to list guest passes');
+    return res.json();
+  },
+
+  async verifyGuestCode(gateId: string, code?: string, credentialJwt?: string): Promise<GuestCodeVerificationResult> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/guest-code/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gate_id: gateId, code, credential_jwt: credentialJwt }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Guest code verification failed');
+    }
+    return res.json();
+  },
+
+  async getGatePublicKey(): Promise<{ algorithm: string; public_key_pem: string; offline_notice: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/public-key`);
+    if (!res.ok) throw new Error('Failed to fetch gate public key');
+    return res.json();
+  },
+
+  async getGateTimeAnchor(): Promise<{ server_time_utc: string; timestamp_unix: number; validity_window_seconds: number }> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/time-anchor`);
+    if (!res.ok) throw new Error('Failed to fetch gate time anchor');
+    return res.json();
+  },
+
+  async syncOfflineGate(gateId: string, events: any[]): Promise<{ processed_count: number; acknowledged_ids: string[]; conflicts: any[] }> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gate_id: gateId, events }),
+    });
+    if (!res.ok) throw new Error('Failed to sync offline gate queue');
+    return res.json();
+  },
+
+  // Amenities
+  async listAmenities(): Promise<AmenityItem[]> {
+    const res = await fetchWithAuth(`${API_BASE}/amenities`);
+    if (!res.ok) throw new Error('Failed to fetch amenities');
+    return res.json();
+  },
+
+  async listAmenitySlots(amenityId: string, targetDate?: string): Promise<AmenitySlotItem[]> {
+    const qs = targetDate ? `?target_date=${targetDate}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/amenities/${amenityId}/slots${qs}`);
+    if (!res.ok) throw new Error('Failed to fetch amenity slots');
+    return res.json();
+  },
+
+  async getAmenityRules(amenityId: string): Promise<AmenityRuleItem> {
+    const res = await fetchWithAuth(`${API_BASE}/amenities/${amenityId}/rules`);
+    if (!res.ok) throw new Error('Failed to fetch amenity rules');
+    return res.json();
+  },
+
+  async listAmenityBookings(flatId?: string): Promise<AmenityBookingItem[]> {
+    const qs = flatId ? `?flat_id=${flatId}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/amenities/bookings${qs}`);
+    if (!res.ok) throw new Error('Failed to list amenity bookings');
+    return res.json();
+  },
+
+  async bookAmenitySlot(flatId: string, slotId: string, idempotencyKey: string): Promise<AmenityBookingItem> {
+    const res = await fetchWithAuth(`${API_BASE}/amenities/bookings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ flat_id: flatId, slot_id: slotId, idempotency_key: idempotencyKey }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to book amenity slot');
+    }
+    return res.json();
+  },
+
+  async cancelAmenityBooking(bookingId: string): Promise<AmenityBookingItem> {
+    const res = await fetchWithAuth(`${API_BASE}/amenities/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to cancel amenity booking');
+    }
+    return res.json();
+  },
+
+  async createAmenityClosure(payload: {
+    amenity_id: string;
+    start_date: string;
+    end_date: string;
+    reason: string;
+  }): Promise<AmenityClosureItem> {
+    const res = await fetchWithAuth(`${API_BASE}/amenities/closures`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to create amenity closure');
+    }
+    return res.json();
+  },
+
+  // Notices
+  async listActiveNotices(lang: string = 'en', towerId?: string): Promise<NoticeRevisionItem[]> {
+    const params = new URLSearchParams();
+    if (lang) params.append('lang', lang);
+    if (towerId) params.append('tower_id', towerId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/notices${qs}`);
+    if (!res.ok) throw new Error('Failed to fetch community notices');
+    return res.json();
+  },
+
+  async getNoticeRevisions(noticeId: string, lang: string = 'en'): Promise<NoticeRevisionItem[]> {
+    const res = await fetchWithAuth(`${API_BASE}/notices/${noticeId}/revisions?lang=${lang}`);
+    if (!res.ok) throw new Error('Failed to fetch notice revisions');
+    return res.json();
+  },
+
+  async createNotice(payload: {
+    title: string;
+    body_en: string;
+    body_hi?: string;
+    body_mr?: string;
+    audience?: string;
+    tower_id?: string;
+    severity?: string;
+    expires_at?: string;
+  }) {
+    const res = await fetchWithAuth(`${API_BASE}/notices`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to publish notice');
+    }
+    return res.json();
+  },
+
+  async updateNotice(noticeId: string, payload: {
+    title: string;
+    body_en: string;
+    body_hi?: string;
+    body_mr?: string;
+    audience?: string;
+    tower_id?: string;
+    severity?: string;
+    expires_at?: string;
+  }) {
+    const res = await fetchWithAuth(`${API_BASE}/notices/${noticeId}/revisions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || err.error?.message || 'Failed to create notice revision');
+    }
+    return res.json();
+  },
+
+  async withdrawNotice(noticeId: string) {
+    const res = await fetchWithAuth(`${API_BASE}/notices/${noticeId}/withdraw`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to withdraw notice');
+    return res.json();
+  },
+
+  async markNoticeRead(revisionId: string) {
+    const res = await fetchWithAuth(`${API_BASE}/notices/revisions/${revisionId}/read`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to mark notice read');
+    return res.json();
+  },
+
+  // Committee Governance Reports
+  async getCommitteeReport(period?: string): Promise<CommitteeReportData> {
+    const qs = period ? `?period=${period}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/committee/report${qs}`);
+    if (!res.ok) throw new Error('Failed to fetch committee report');
+    return res.json();
+  },
+
+  async downloadCommitteeCsv(period?: string): Promise<string> {
+    const qs = period ? `?period=${period}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/committee/report/csv${qs}`);
+    if (!res.ok) throw new Error('Failed to download committee report CSV');
+    return res.text();
+  },
+
+  async downloadCommitteePdf(period?: string): Promise<Blob> {
+    const qs = period ? `?period=${period}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/committee/report/pdf${qs}`);
+    if (!res.ok) throw new Error('Failed to download committee report PDF');
+    return res.blob();
   },
 };

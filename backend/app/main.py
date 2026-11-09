@@ -9,7 +9,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.core.config import settings
 from backend.app.core.database import Base, engine
-from backend.app.api import health, auth, billing, payments, bank, complaints, notifications
+from backend.app.api import (
+    health, auth, billing, payments, bank, complaints, notifications,
+    visitors, amenities, notices, committee
+)
 
 # Create DB tables
 Base.metadata.create_all(bind=engine)
@@ -122,6 +125,10 @@ app.include_router(payments.router, prefix=settings.API_PREFIX)
 app.include_router(bank.router, prefix=settings.API_PREFIX)
 app.include_router(complaints.router, prefix=settings.API_PREFIX)
 app.include_router(notifications.router, prefix=settings.API_PREFIX)
+app.include_router(visitors.router, prefix=settings.API_PREFIX)
+app.include_router(amenities.router, prefix=settings.API_PREFIX)
+app.include_router(notices.router, prefix=settings.API_PREFIX)
+app.include_router(committee.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/")

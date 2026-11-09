@@ -15,7 +15,7 @@ docs/database-and-seed-data.md
 import os
 import sys
 import argparse
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time, date
 from decimal import Decimal
 
 # Ensure root directory is on PYTHONPATH
@@ -29,8 +29,10 @@ from backend.app.models.entities import (
     StaffMember, Gate, BillingRule, Bill, BillLine, Payment,
     PaymentIdempotencyRecord, FlatLedgerEntry, Receipt, Complaint, Notice, Amenity,
     BankAccount, RegisteredUPI, StaffTeam, StaffShift, ComplaintEvent, ClassificationDecision,
-    SafetyEvent, IncidentGroup, IncidentGroupMember, BankRow, BankImportFile, AuditEvent
+    SafetyEvent, IncidentGroup, IncidentGroupMember, BankRow, BankImportFile, AuditEvent,
+    NoticeRevision, AmenitySlot, AmenityRule, PreApproval, VisitorEntry, VisitorEvent
 )
+from backend.app.services.visitor_service import hash_pre_approval_code
 
 
 def is_safe_local_database(url_str: str) -> bool:
@@ -692,6 +694,7 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             target_audience="TOWER",
             target_tower_id=towers[6].id,
             priority="URGENT",
+            status="PUBLISHED",
             published_at=datetime(2026, 11, 5, 9, 0, tzinfo=timezone.utc),
             expires_at=datetime(2026, 11, 7, 23, 59, tzinfo=timezone.utc)
         )
@@ -702,10 +705,48 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             content="Annual General Meeting of Township One Co-operative Housing Federation is scheduled for 22nd November 2026 at the Main Clubhouse.",
             target_audience="ALL",
             priority="NORMAL",
+            status="PUBLISHED",
             published_at=datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc),
             expires_at=datetime(2026, 11, 23, 23, 59, tzinfo=timezone.utc)
         )
         db.add(n2)
+        db.flush()
+
+        # Seed Notice Revisions with Multilingual Content
+        rev1 = NoticeRevision(
+            notice_id=n1.id,
+            revision_number=1,
+            title=n1.title,
+            body_en=n1.content,
+            body_hi=None,  # English fallback test
+            body_mr=None,  # English fallback test
+            publish_at=n1.published_at,
+            expires_at=n1.expires_at,
+            audience="TOWER",
+            tower_id=towers[6].id,
+            severity="CRITICAL",
+            created_by_user_id=u_helpdesk.id
+        )
+        db.add(rev1)
+        db.flush()
+        n1.current_revision_id = rev1.id
+
+        rev2 = NoticeRevision(
+            notice_id=n2.id,
+            revision_number=1,
+            title=n2.title,
+            body_en=n2.content,
+            body_hi="टाउनशिप वन कोऑपरेटिव हाउसिंग फेडरेशनची वार्षिक सर्वसाधारण सभा (AGM) २२ नोव्हेंबर २०२६ रोजी मुख्य क्लबहाऊसमध्ये आयोजित केली आहे.",
+            body_mr="टाउनशिप वन सहकारी गृहनिर्माण महासंघाची वार्षिक सर्वसाधारण सभा (एजीएम) २२ नोव्हेंबर २०२६ रोजी मुख्य क्लबहाऊसमध्ये नियोजित आहे.",
+            publish_at=n2.published_at,
+            expires_at=n2.expires_at,
+            audience="ALL",
+            severity="NORMAL",
+            created_by_user_id=u_helpdesk.id
+        )
+        db.add(rev2)
+        db.flush()
+        n2.current_revision_id = rev2.id
 
         amenity_data = [
             ("Clubhouse Banquet Hall", "Capacity: 250 guests. Fully air-conditioned.", Decimal("1200.00"), 250, "Pre-booking required."),
@@ -715,9 +756,109 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
             ("Tennis Court", "Floodlit hard court.", Decimal("200.00"), 4, "Max 1 hour per flat per day."),
             ("Squash Court", "Glass back wall squash court.", Decimal("150.00"), 2, "Goggles recommended.")
         ]
+        created_amenities = []
         for a_name, a_desc, a_fee, a_cap, a_rules in amenity_data:
             am = Amenity(name=a_name, description=a_desc, hourly_fee=a_fee, capacity=a_cap, rules=a_rules)
             db.add(am)
+            created_amenities.append(am)
+        db.flush()
+
+        # Seed Amenity Rules and 7-day Slots for Banquet Hall and Tennis Court
+        for am in created_amenities:
+            db.add(AmenityRule(
+                amenity_id=am.id,
+                booking_window_days=7,
+                max_daily_slots_per_flat=1,
+                cancellation_cutoff_hours=2
+            ))
+            if am.name in ["Clubhouse Banquet Hall", "Tennis Court"]:
+                for day_offset in range(7):
+                    slot_d = demo_now.date() + timedelta(days=day_offset)
+                    for hour in range(8, 20):
+                        slot = AmenitySlot(
+                            amenity_id=am.id,
+                            slot_date=slot_d,
+                            start_time=time(hour, 0),
+                            end_time=time(hour + 1, 0),
+                            capacity=am.capacity,
+                            booked_count=0
+                        )
+                        db.add(slot)
+
+        print("12. Seeding Sample Pre-Approvals & Visitor Entries...")
+        pre_app = PreApproval(
+            flat_id=flats_dict["T07-1203"].id,
+            created_by_user_id=u_neeraj.id,
+            guest_name="Aarav Sharma",
+            phone="9820011111",
+            purpose="Personal Guest",
+            gate_id=gates[0].id,
+            valid_from=demo_now - timedelta(days=1),
+            valid_until=demo_now + timedelta(days=2),
+            max_uses=2,
+            used_count=0,
+            code_hash=hash_pre_approval_code("458921"),
+            is_revoked=False
+        )
+        db.add(pre_app)
+        db.flush()
+
+        ve1 = VisitorEntry(
+            gate_id=gates[0].id,
+            flat_id=flats_dict["T07-1203"].id,
+            visitor_name="Rohan Joshi",
+            phone="9819000001",
+            purpose="Delivery - Groceries",
+            status="AWAITING_APPROVAL",
+            created_by_guard=u_guard.id,
+            source="ONLINE",
+            version=1
+        )
+        db.add(ve1)
+
+        ve2 = VisitorEntry(
+            gate_id=gates[0].id,
+            flat_id=flats_dict["T07-1203"].id,
+            visitor_name="Kavita Verma",
+            phone="9819000002",
+            purpose="Family Friend",
+            status="APPROVED",
+            created_by_guard=u_guard.id,
+            approval_decided_by=u_neeraj.id,
+            approval_decided_at=demo_now - timedelta(minutes=15),
+            source="ONLINE",
+            version=1
+        )
+        db.add(ve2)
+
+        ve3 = VisitorEntry(
+            gate_id=gates[1].id,
+            flat_id=flats_dict["T12-0408"].id,
+            visitor_name="Priya Deshmukh",
+            phone="9819000003",
+            purpose="Guest",
+            status="ADMITTED",
+            created_by_guard=u_guard.id,
+            admitted_at=demo_now - timedelta(minutes=45),
+            source="ONLINE",
+            version=1
+        )
+        db.add(ve3)
+
+        ve4 = VisitorEntry(
+            gate_id=gates[0].id,
+            flat_id=flats_dict["T21-1601"].id,
+            visitor_name="Suresh Patil",
+            phone="9819000004",
+            purpose="Maintenance Tech",
+            status="EXITED",
+            created_by_guard=u_guard.id,
+            admitted_at=demo_now - timedelta(hours=3),
+            exited_at=demo_now - timedelta(hours=1),
+            source="ONLINE",
+            version=1
+        )
+        db.add(ve4)
 
         db.commit()
         print("Township One seed completed successfully!")

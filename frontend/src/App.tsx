@@ -7,6 +7,9 @@ import { ResidentHomePage } from './pages/ResidentHomePage';
 import { ResidentComplaints } from './pages/ResidentComplaints';
 import { AccountsWorkspace } from './pages/AccountsWorkspace';
 import { HelpDeskQueue } from './pages/HelpDeskQueue';
+import { AmenityBookingPage } from './pages/AmenityBookingPage';
+import { GuardGateTerminal } from './pages/GuardGateTerminal';
+import { CommitteeDashboard } from './pages/CommitteeDashboard';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -17,13 +20,19 @@ export default function App() {
 
   const determineDefaultTab = (profile: UserProfile): NavTab => {
     const roles = profile.roles.map((r) => r.role_code);
+    if (roles.includes('GUARD')) {
+      return 'guard';
+    }
+    if (roles.includes('COMMITTEE') && (!profile.flats || profile.flats.length === 0)) {
+      return 'committee';
+    }
     if (profile.flats && profile.flats.length > 0) {
       return 'home';
     }
     if (roles.includes('ACCOUNTS')) {
       return 'accounts';
     }
-    if (roles.includes('HELPDESK') || roles.includes('COMMITTEE') || roles.includes('MANAGEMENT')) {
+    if (roles.includes('HELPDESK') || roles.includes('MANAGEMENT')) {
       return 'helpdesk';
     }
     return 'home';
@@ -97,6 +106,22 @@ export default function App() {
             lang={currentLang}
             onLoginSuccess={handleLoginSuccess}
           />
+        ) : activeTab === 'amenities' ? (
+          <AmenityBookingPage
+            user={user}
+            selectedFlatId={selectedFlatId}
+            lang={currentLang}
+          />
+        ) : activeTab === 'guard' ? (
+          <GuardGateTerminal
+            user={user}
+            lang={currentLang}
+          />
+        ) : activeTab === 'committee' ? (
+          <CommitteeDashboard
+            user={user}
+            lang={currentLang}
+          />
         ) : activeTab === 'complaints' ? (
           <ResidentComplaints
             user={user}
@@ -118,6 +143,7 @@ export default function App() {
             user={user}
             selectedFlatId={selectedFlatId}
             lang={currentLang}
+            onNavigateTab={setActiveTab}
           />
         )}
       </main>

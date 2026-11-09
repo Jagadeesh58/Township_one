@@ -37,7 +37,7 @@ def clear_otp_challenges():
 
 def test_full_resident_billing_and_payment_journey():
     # -------------------------------------------------------------
-    # Step 1: Resident OTP Login (Swati Joshi, Tenant in T12-0408)
+    # Resident OTP Login (Swati Joshi, Tenant in T12-0408)
     # -------------------------------------------------------------
     otp_req = client.post("/api/v1/auth/otp/request", json={"phone": "9876543211"})
     assert otp_req.status_code == 200
@@ -58,7 +58,7 @@ def test_full_resident_billing_and_payment_journey():
     headers = {"X-CSRF-Token": csrf_token}
 
     # -------------------------------------------------------------
-    # Step 2: View Outstanding Bill Summary
+    # View Outstanding Bill Summary
     # -------------------------------------------------------------
     summary_resp = client.get(f"/api/v1/billing/flats/{flat_id}/summary", headers=headers)
     assert summary_resp.status_code == 200
@@ -70,7 +70,7 @@ def test_full_resident_billing_and_payment_journey():
     bill_id = summary["latest_bill"]["id"]
 
     # -------------------------------------------------------------
-    # Step 3: Test Payment - FAILED state preserves dues
+    # Test Payment - FAILED state preserves dues
     # -------------------------------------------------------------
     failed_pay = client.post(
         "/api/v1/payments/checkout",
@@ -92,7 +92,7 @@ def test_full_resident_billing_and_payment_journey():
     assert float(summary_check1["current_due"]) == 6370.0
 
     # -------------------------------------------------------------
-    # Step 4: Test Payment - SUCCESS state reduces dues & issues receipt
+    # Test Payment - SUCCESS state reduces dues & issues receipt
     # -------------------------------------------------------------
     success_pay = client.post(
         "/api/v1/payments/checkout",
@@ -121,7 +121,7 @@ def test_full_resident_billing_and_payment_journey():
     assert float(summary_check2["current_due"]) == 0.0
 
     # -------------------------------------------------------------
-    # Step 5: Check Running Flat Ledger Reconciliation
+    # Check Running Flat Ledger Reconciliation
     # -------------------------------------------------------------
     ledger_resp = client.get(f"/api/v1/billing/flats/{flat_id}/ledger", headers=headers)
     assert ledger_resp.status_code == 200
@@ -133,7 +133,7 @@ def test_full_resident_billing_and_payment_journey():
     assert float(latest_entry["balance_after"]) == 0.0
 
     # -------------------------------------------------------------
-    # Step 6: Paying already-paid bill is blocked
+    # Paying already-paid bill is blocked
     # -------------------------------------------------------------
     duplicate_pay = client.post(
         "/api/v1/payments/checkout",
@@ -150,7 +150,7 @@ def test_full_resident_billing_and_payment_journey():
     assert "already fully paid" in duplicate_pay.json()["error"]["message"]
 
     # -------------------------------------------------------------
-    # Step 7: Verify Neeraj Kulkarni (T07-1203) - Already Paid
+    # Verify Neeraj Kulkarni (T07-1203) - Already Paid
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
     neeraj_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543210", "otp": "123456"}).json()
@@ -167,7 +167,7 @@ def test_full_resident_billing_and_payment_journey():
     assert neeraj_summary["latest_bill"]["status"] == "PAID"
 
     # -------------------------------------------------------------
-    # Step 8: Verify Aamir Shaikh (T21-1601) - Partially Paid
+    # Verify Aamir Shaikh (T21-1601) - Partially Paid
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543212"})
     aamir_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543212", "otp": "123456"}).json()
@@ -185,7 +185,7 @@ def test_full_resident_billing_and_payment_journey():
     assert aamir_summary["latest_bill"]["status"] == "PARTIALLY_PAID"
 
     # -------------------------------------------------------------
-    # Step 9: Committee Role Strict Scoping Verification
+    # Committee Role Strict Scoping Verification
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543250"})
     comm_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"}).json()
@@ -203,7 +203,7 @@ def test_full_resident_billing_and_payment_journey():
     assert comm_flat_drilldown.status_code == 403
 
     # -------------------------------------------------------------
-    # Step 10: Family Member Permission Scoping
+    # Family Member Permission Scoping
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543213"})
     ananya_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543213", "otp": "123456"}).json()

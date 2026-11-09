@@ -3,7 +3,7 @@ import { Language, translations } from '../i18n/translations';
 import { UserProfile } from '../api/client';
 import { NotificationBell } from './NotificationBell';
 
-export type NavTab = 'home' | 'complaints' | 'accounts' | 'helpdesk';
+export type NavTab = 'home' | 'complaints' | 'amenities' | 'accounts' | 'helpdesk' | 'guard' | 'committee';
 
 interface NavbarProps {
   user: UserProfile | null;
@@ -31,6 +31,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const userRoles = user?.roles?.map((r) => r.role_code) || [];
   const isAccounts = userRoles.includes('ACCOUNTS') || userRoles.includes('ADMIN');
   const isHelpdesk = userRoles.includes('HELPDESK') || userRoles.includes('ADMIN') || userRoles.includes('COMMITTEE') || userRoles.includes('MANAGEMENT');
+  const isGuard = userRoles.includes('GUARD') || userRoles.includes('ADMIN');
+  const isCommittee = userRoles.includes('COMMITTEE') || userRoles.includes('ADMIN') || userRoles.includes('MANAGEMENT');
   const hasFlats = user?.flats && user.flats.length > 0;
 
   return (
@@ -79,7 +81,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Navigation Tabs */}
         {user && onTabChange && (
-          <nav style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+          <nav style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
             {hasFlats && (
               <>
                 <button
@@ -98,6 +100,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                   🏠 {t.home}
                 </button>
                 <button
+                  onClick={() => onTabChange('amenities')}
+                  style={{
+                    border: 'none',
+                    background: activeTab === 'amenities' ? '#f1f5f9' : 'transparent',
+                    color: activeTab === 'amenities' ? 'var(--primary)' : 'var(--text-muted)',
+                    fontWeight: activeTab === 'amenities' ? 700 : 500,
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: '6px',
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  🏊 {t.amenities}
+                </button>
+                <button
                   onClick={() => onTabChange('complaints')}
                   style={{
                     border: 'none',
@@ -113,6 +130,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                   🛠️ {t.complaints}
                 </button>
               </>
+            )}
+
+            {isGuard && (
+              <button
+                onClick={() => onTabChange('guard')}
+                style={{
+                  border: 'none',
+                  background: activeTab === 'guard' ? '#f1f5f9' : 'transparent',
+                  color: activeTab === 'guard' ? 'var(--primary)' : 'var(--text-muted)',
+                  fontWeight: activeTab === 'guard' ? 700 : 500,
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '6px',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🛡️ {t.guard_terminal}
+              </button>
             )}
 
             {isHelpdesk && (
@@ -148,6 +183,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
               >
                 💼 {t.accounts_workspace}
+              </button>
+            )}
+
+            {isCommittee && (
+              <button
+                onClick={() => onTabChange('committee')}
+                style={{
+                  border: 'none',
+                  background: activeTab === 'committee' ? '#f1f5f9' : 'transparent',
+                  color: activeTab === 'committee' ? 'var(--primary)' : 'var(--text-muted)',
+                  fontWeight: activeTab === 'committee' ? 700 : 500,
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '6px',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🏛️ {t.committee_dashboard}
               </button>
             )}
           </nav>
