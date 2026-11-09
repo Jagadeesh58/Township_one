@@ -6,20 +6,23 @@
 
 ## 1. System Architecture Overview
 
-**Township One** is an integrated resident portal and community operations system engineered for large residential communities (modeled on a reference community with 2,400 flats, 28 towers, 180 staff members, and 4 gates).
+**Township One** is an integrated resident portal and community operations system engineered for large residential communities (modeled on a reference community with 2,400 flats, 28 towers, 180 staff members, and 4 gates in Pune).
 
 - **Backend:** FastAPI (Python 3.11+), SQLAlchemy 2.0 ORM, and Alembic database migrations.
 - **Frontend:** React 19 + TypeScript + Vite Progressive Web Application (PWA) with multilingual localization (English, Marathi, Hindi) and offline cache capabilities.
 - **Database:** PostgreSQL 15+ (production via `psycopg` v3 with row-level `SELECT ... FOR UPDATE` locking) or SQLite (local development and test suite).
 - **Authentication:** Passwordless phone OTP with salted SHA-256 challenge records, HttpOnly SameSite=Lax session cookies, and double-submit CSRF protection.
-- **Private Photo Storage:** Local or volume-mounted protected directory for complaint attachments, with Pillow MIME verification, EXIF stripping, and signed streaming URLs.
+- **Visitor Gate Management:** Cryptographic ECDSA P-256 offline token verification, visitor photo storage with Pillow EXIF stripping, signed streaming, and 90-day retention purging.
+- **Amenity Management:** Slot booking with capacity reservation, idempotency enforcement, flat daily booking limits, and closure management.
+- **Community Notices:** Append-only revision tracking, tower scoping, and trilingual language fallback ("Shown in English").
+- **Committee Governance:** Dues ageing breakdown (0-30, 31-60, 61-90, 90+ days), complaint turnaround metrics, ReportLab PDF and CSV aggregate exports.
 - **AI / Classification:** Groq API client with local scikit-learn TF-IDF + MultinomialNB offline fallback trained on multilingual data.
 
 ---
 
 ## 2. Environment Variables
 
-The application is configured using the following environment variable names (set in the host environment or a secure `.env` file):
+The application is configured using the following environment variable names (set in the host environment or a secure `.env` file; no secret values are committed to git):
 
 - `APP_NAME`: Application display name.
 - `APP_ENV`: Deployment environment (`development`, `staging`, or `production`).
@@ -111,7 +114,13 @@ npm run dev
   ```
 - Protect application startup with checks (valid `SECRET_KEY`, `APP_ENV=production`, `DEBUG=false`).
 
-### 3. Frontend Static Hosting & Reverse Proxy (Nginx)
+### 3. Periodic Background Jobs (Cron)
+- Configure automated visitor photo 90-day retention purge daily:
+  ```bash
+  0 2 * * * /path/to/venv/bin/python -m backend.app.jobs.purge_visitor_photos >> /var/log/township-one/photo-purge.log 2>&1
+  ```
+
+### 4. Frontend Static Hosting & Reverse Proxy (Nginx)
 - Build the frontend bundle: `npm run build` in `frontend/`.
 - Serve static files from `frontend/dist/`.
 - Route `/api/` traffic to the backend ASGI server.
@@ -152,7 +161,7 @@ server {
 }
 ```
 
-### 4. Health Probes & Monitoring
+### 5. Health Probes & Monitoring
 - **Liveness:** `GET /health` — Verifies application process is running.
 - **Readiness:** `GET /health/ready` — Verifies database connection and query response.
 
@@ -168,7 +177,7 @@ server {
 | **Ananya Kulkarni** | `9876543213` | `123456` | Family Member, Flat T07-1203 | Can view dues summary, cannot execute payments |
 | **Priya Sharma** | `9876543214` | `123456` | Owner, Flat T03-0201 | 1,150 sq ft, routine maintenance account |
 | **Ramesh Patil** | `9876543220` | `123456` | Help Desk Staff | Authorized for complaints queue, triage, and incident linking |
-| **Suresh Shinde** | `9876543230` | `123456` | Security Guard | Gate access; billing, bank, and complaint mutations blocked |
+| **Suresh Shinde** | `9876543230` | `123456` | Security Guard | Gate access, visitor arrivals, gate admissions, offline sync, guest pass checks |
 | **Anita Deshmukh** | `9876543240` | `123456` | Accounts Staff | Authorized for bank statement imports, review queue, and ledger posting |
-| **Vikram Sardesai** | `9876543250` | `123456` | Committee Member | Authorized for aggregate metrics and complaints queue; individual flat actions blocked |
+| **Vikram Sardesai** | `9876543250` | `123456` | Committee Member | Authorized for aggregate governance dashboard, dues ageing, SLA metrics, PDF/CSV report exports |
 | **System Admin** | `9876543200` | `123456` | Administrator | Full administrative authority across all modules |

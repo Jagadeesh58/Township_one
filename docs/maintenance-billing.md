@@ -72,11 +72,11 @@ sequenceDiagram
     participant Bill as Bill Record
     participant Ledger as Flat Ledger Table
 
-    Note over Engine,Ledger: Step 1: Monthly Bill Issuance
+    Note over Engine,Ledger: Flow A: Monthly Bill Issuance
     Engine->>Bill: Create Bill (Amount: ₹6,370.00, Status: ISSUED)
     Engine->>Ledger: Insert DEBIT Entry (Amount: ₹6,370.00, Balance After: ₹6,370.00)
 
-    Note over Engine,Ledger: Step 2: Resident Settlement
+    Note over Engine,Ledger: Flow B: Resident Settlement
     Engine->>Bill: Update Bill (Paid: ₹6,370.00, Balance: ₹0.00, Status: PAID)
     Engine->>Ledger: Insert CREDIT Entry (Amount: ₹6,370.00, Balance After: ₹0.00)
 ```
