@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-11-09T10:07:21.845654+00:00",
+  "gates": {
+    "database_and_ground_truth": {
+      "status": "PASS",
+      "towers": 28,
+      "flats": 2400,
+      "staff": 180,
+      "gates": 4,
+      "ground_truth_balances": {
+        "T07-1203": "0.00",
+        "T12-0408": "6370.00",
+        "T21-1601": "5660.00"
+      }
+    },
+    "ruff": {
+      "return_code": 0,
+      "status": "PASS"
+    },
+    "mypy": {
+      "return_code": 0,
+      "status": "PASS"
+    },
+    "tests_and_coverage": {
+      "return_code": 0,
+      "coverage_percentage": 90,
+      "status": "PASS"
+    },
+    "frontend": {
+      "tsc_return_code": 0,
+      "test_return_code": 0,
+      "build_return_code": 0,
+      "status": "PASS"
+    },
+    "vocabulary_guard": {
+      "status": "PASS",
+      "violations_count": 0,
+      "violations": []
+    }
+  }
+}

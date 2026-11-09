@@ -59,21 +59,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Code Quality Checks
+        run: |
+          ruff check backend
+          ruff format --check backend
+          mypy backend/app
+
       - name: Prepare Postgres databases
         run: |
           python -c "import psycopg; conn = psycopg.connect('postgresql://township_user:township_pass@localhost:5432/postgres', autocommit=True); conn.execute('CREATE DATABASE township_app;'); conn.close()"
 
-      - name: Run Alembic migrations on fresh DB
+      - name: Run Alembic migrations and verify zero schema drift
         run: |
           alembic upgrade head
+          alembic check
 
       - name: Verify Seed Script on Postgres
         run: |
           python scripts/seed.py --mode reset-demo --confirm-local-demo
 
-      - name: Run Pytest Suite
+      - name: Run Pytest Suite with Coverage
         run: |
-          python -m pytest tests/ -v
+          python -m pytest tests/ --cov=backend/app --cov-report=term -v
 
   frontend:
     runs-on: ubuntu-latest
