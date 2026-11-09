@@ -10,9 +10,9 @@ Test suite verifying:
 
 import os
 import tempfile
-import pytest
-from alembic.config import Config
+
 from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
 
@@ -63,7 +63,7 @@ def test_alembic_upgrade_head_on_fresh_database():
             "amenities",
             "notices",
             "visitors",
-            "alembic_version"
+            "alembic_version",
         }
 
         assert expected_tables.issubset(tables), f"Missing tables: {expected_tables - tables}"

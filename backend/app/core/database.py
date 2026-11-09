@@ -6,12 +6,18 @@ and session dependency factories for SQLite and PostgreSQL engines.
 """
 
 import os
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from backend.app.core.config import settings
 
 
-def get_engine(custom_url: str = None):
+class Base(DeclarativeBase):
+    pass
+
+
+def get_engine(custom_url: str | None = None):
     url = custom_url
     if not url:
         is_test = os.environ.get("TOWNSHIP_ENV") == "test"
@@ -32,16 +38,11 @@ def get_engine(custom_url: str = None):
     if url.startswith("sqlite"):
         connect_args = {"check_same_thread": False}
 
-    return create_engine(
-        url,
-        connect_args=connect_args,
-        pool_pre_ping=True
-    )
+    return create_engine(url, connect_args=connect_args, pool_pre_ping=True)
 
 
 engine = get_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
 
 def get_db():
