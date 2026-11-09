@@ -10,16 +10,14 @@ Service functions for:
 """
 
 import calendar
-from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
+
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
-from backend.app.models.entities import (
-    Flat, Bill, BillLine, FlatLedgerEntry, BillingRule
-)
+from backend.app.models.entities import Bill, BillingRule, BillLine, Flat, FlatLedgerEntry
 
 
 def round_currency(val: Decimal) -> Decimal:
@@ -32,10 +30,10 @@ def get_effective_date() -> datetime:
     try:
         dt = datetime.fromisoformat(settings.DEMO_AS_OF_DATE.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except Exception:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
 
 def calculate_principal(area_sqft: Decimal, rate_per_sqft: Decimal = Decimal("6.50")) -> Decimal:
@@ -44,10 +42,7 @@ def calculate_principal(area_sqft: Decimal, rate_per_sqft: Decimal = Decimal("6.
 
 
 def calculate_demo_late_fee(
-    principal: Decimal,
-    days_overdue: int,
-    annual_rate_pct: Decimal = Decimal("18.00"),
-    year: Optional[int] = None
+    principal: Decimal, days_overdue: int, annual_rate_pct: Decimal = Decimal("18.00"), year: int | None = None
 ) -> Decimal:
     """
     Illustrative Demo Late Fee Formula:
@@ -56,7 +51,7 @@ def calculate_demo_late_fee(
     """
     if days_overdue <= 0 or principal <= Decimal("0.00"):
         return Decimal("0.00")
-    
+
     days_in_year = Decimal("366") if (year and calendar.isleap(year)) else Decimal("365")
     daily_rate = (annual_rate_pct / Decimal("100")) / days_in_year
     interest = principal * daily_rate * Decimal(days_overdue)
@@ -68,6 +63,7 @@ class OverdueEvaluation:
     Overdue calculation result separating calendar overdue days from interest-eligible days.
     Supports backward-compatible unpacking as (calendar_overdue_days, late_fee).
     """
+
     def __init__(self, calendar_overdue_days: int, late_fee: Decimal, interest_eligible_days: int = 0):
         self.calendar_overdue_days = calendar_overdue_days
         self.late_fee = late_fee
@@ -88,9 +84,7 @@ class OverdueEvaluation:
 
 
 def evaluate_bill_overdue_and_interest(
-    bill: Bill,
-    rule: Optional[BillingRule] = None,
-    as_of: Optional[datetime] = None
+    bill: Bill, rule: BillingRule | None = None, as_of: datetime | None = None
 ) -> OverdueEvaluation:
     """
     Calculates overdue days and applicable late fee with strict grace period adherence:
@@ -108,14 +102,20 @@ def evaluate_bill_overdue_and_interest(
 
     bill_due = bill.due_date
     if bill_due.tzinfo is None:
-        bill_due = bill_due.replace(tzinfo=timezone.utc)
+        bill_due = bill_due.replace(tzinfo=UTC)
     if as_of.tzinfo is None:
-        as_of = as_of.replace(tzinfo=timezone.utc)
+        as_of = as_of.replace(tzinfo=UTC)
 
     calendar_overdue_days = max(0, (as_of.date() - bill_due.date()).days)
 
-    grace_days = rule.grace_period_days if rule else settings.DEFAULT_GRACE_PERIOD_DAYS
-    rate_pa = rule.late_fee_percentage_pa if rule else Decimal(str(settings.DEMO_LATE_FEE_PERCENTAGE_PA))
+    grace_days = (
+        rule.grace_period_days if rule and rule.grace_period_days is not None else settings.DEFAULT_GRACE_PERIOD_DAYS
+    )
+    rate_pa = (
+        rule.late_fee_percentage_pa
+        if rule and rule.late_fee_percentage_pa is not None
+        else Decimal(str(settings.DEMO_LATE_FEE_PERCENTAGE_PA))
+    )
 
     if calendar_overdue_days <= grace_days:
         # Grace period active: no late fee accrued
@@ -132,23 +132,23 @@ def generate_flat_bill(
     flat_id: str,
     period_month: int,
     period_year: int,
-    issue_date: Optional[datetime] = None,
-    due_date: Optional[datetime] = None
+    issue_date: datetime | None = None,
+    due_date: datetime | None = None,
 ) -> Bill:
     flat = db.query(Flat).filter(Flat.id == flat_id).first()
     if not flat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flat not found.")
 
     # Check for duplicate bill in this period
-    existing = db.query(Bill).filter(
-        Bill.flat_id == flat_id,
-        Bill.period_month == period_month,
-        Bill.period_year == period_year
-    ).first()
+    existing = (
+        db.query(Bill)
+        .filter(Bill.flat_id == flat_id, Bill.period_month == period_month, Bill.period_year == period_year)
+        .first()
+    )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Bill for flat {flat.flat_number} for period {period_month}/{period_year} already exists (Bill ID: {existing.id})."
+            detail=f"Bill for flat {flat.flat_number} for period {period_month}/{period_year} already exists (Bill ID: {existing.id}).",
         )
 
     # Active billing rule
@@ -162,10 +162,10 @@ def generate_flat_bill(
     if not issue_date:
         issue_date = now
     if not due_date:
-        due_day = rule.due_day_of_month if rule else 15
+        due_day = rule.due_day_of_month if rule and rule.due_day_of_month is not None else 15
         # Compute due date based on rule
         try:
-            due_date = datetime(period_year, period_month, due_day, 0, 0, tzinfo=timezone.utc)
+            due_date = datetime(period_year, period_month, due_day, 0, 0, tzinfo=UTC)
         except ValueError:
             due_date = issue_date + timedelta(days=15)
 
@@ -184,7 +184,7 @@ def generate_flat_bill(
         total_amount=principal,
         paid_amount=Decimal("0.00"),
         balance_amount=principal,
-        status="ISSUED"
+        status="ISSUED",
     )
     db.add(bill)
     db.flush()
@@ -194,14 +194,17 @@ def generate_flat_bill(
         bill_id=bill.id,
         line_type="PRINCIPAL",
         description=f"Monthly Maintenance ({flat.area_sqft} sq ft @ ₹{rate}/sq ft)",
-        amount=principal
+        amount=principal,
     )
     db.add(line)
 
     # Record in Flat Ledger
-    last_ledger = db.query(FlatLedgerEntry).filter(
-        FlatLedgerEntry.flat_id == flat.id
-    ).order_by(FlatLedgerEntry.created_at.desc()).first()
+    last_ledger = (
+        db.query(FlatLedgerEntry)
+        .filter(FlatLedgerEntry.flat_id == flat.id)
+        .order_by(FlatLedgerEntry.created_at.desc())
+        .first()
+    )
     prev_balance = last_ledger.balance_after if last_ledger else Decimal("0.00")
     new_balance = round_currency(prev_balance + principal)
 
@@ -212,7 +215,7 @@ def generate_flat_bill(
         balance_after=new_balance,
         description=f"Maintenance Bill - {period_month:02d}/{period_year}",
         reference_id=bill.id,
-        created_at=issue_date
+        created_at=issue_date,
     )
     db.add(ledger_entry)
     db.commit()
@@ -220,7 +223,10 @@ def generate_flat_bill(
     return bill
 
 
-def get_flat_ledger(db: Session, flat_id: str) -> List[FlatLedgerEntry]:
-    return db.query(FlatLedgerEntry).filter(
-        FlatLedgerEntry.flat_id == flat_id
-    ).order_by(FlatLedgerEntry.created_at.asc()).all()
+def get_flat_ledger(db: Session, flat_id: str) -> list[FlatLedgerEntry]:
+    return (
+        db.query(FlatLedgerEntry)
+        .filter(FlatLedgerEntry.flat_id == flat_id)
+        .order_by(FlatLedgerEntry.created_at.asc())
+        .all()
+    )

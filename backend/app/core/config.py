@@ -5,10 +5,10 @@ Centralizes configuration parameters, environment variables, database URLs,
 session expiry policies, and fail-closed production safety guards.
 """
 
-import os
 import json
+import os
 import secrets
-from typing import List, Union
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     API_PREFIX: str = "/api/v1"
     SECRET_KEY: str = ""
-    ALLOWED_ORIGINS: Union[str, List[str]] = [
+    ALLOWED_ORIGINS: str | list[str] = [
         "http://localhost:5173",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
@@ -69,11 +69,7 @@ class Settings(BaseSettings):
     # Demo SLA Timers (Hours per urgency)
     DEMO_SLA_HOURS: dict = {"CRITICAL": 1, "HIGH": 4, "MEDIUM": 24, "LOW": 48}
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     def model_post_init(self, __context):
         if not self.SECRET_KEY:
@@ -95,11 +91,21 @@ class Settings(BaseSettings):
         """
         if self.APP_ENV.lower() == "production":
             insecure_markers = [
-                "super-secret", "change-in-production", "example",
-                "placeholder", "secret-key", "default", "password", "123456"
+                "super-secret",
+                "change-in-production",
+                "example",
+                "placeholder",
+                "secret-key",
+                "default",
+                "password",
+                "123456",
             ]
             key_lower = self.SECRET_KEY.lower()
-            if any(marker in key_lower for marker in insecure_markers) or len(self.SECRET_KEY) < 32 or len(set(self.SECRET_KEY)) < 8:
+            if (
+                any(marker in key_lower for marker in insecure_markers)
+                or len(self.SECRET_KEY) < 32
+                or len(set(self.SECRET_KEY)) < 8
+            ):
                 raise RuntimeError(
                     "FATAL SECURITY VIOLATION: Production deployment cannot use a default, placeholder, "
                     "or weak SECRET_KEY. Please configure a strong, random 32+ character SECRET_KEY with high entropy."

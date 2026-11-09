@@ -8,21 +8,20 @@ Verifies:
 - Character n-gram TF-IDF duplicate candidate finder
 """
 
-import os
 import csv
-from collections import Counter
+import os
 import unittest
-from unittest.mock import patch, MagicMock
+from collections import Counter
+from unittest.mock import MagicMock, patch
 
-from backend.app.ml.emergency import detect_emergency
 from backend.app.ml.classifier import (
-    predict_category_and_urgency,
-    train_model,
+    DEFAULT_DATA_PATH,
     VALID_CATEGORIES,
     VALID_URGENCIES,
-    DEFAULT_DATA_PATH,
+    predict_category_and_urgency,
 )
 from backend.app.ml.duplicates import find_duplicate_candidates
+from backend.app.ml.emergency import detect_emergency
 
 
 class TestComplaintsDataset(unittest.TestCase):
@@ -31,7 +30,7 @@ class TestComplaintsDataset(unittest.TestCase):
     def setUp(self):
         self.assertTrue(os.path.exists(DEFAULT_DATA_PATH), f"Missing dataset at {DEFAULT_DATA_PATH}")
         self.rows = []
-        with open(DEFAULT_DATA_PATH, mode="r", encoding="utf-8-sig") as f:
+        with open(DEFAULT_DATA_PATH, encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             self.fieldnames = list(reader.fieldnames or [])
             self.rows = list(reader)
@@ -203,10 +202,7 @@ class TestClassifier(unittest.TestCase):
     @patch("backend.app.ml.classifier._call_groq_api")
     def test_groq_success_provider(self, mock_groq):
         mock_groq.return_value = {"category": "ELECTRICAL", "urgency": "HIGH"}
-        res = predict_category_and_urgency(
-            "AC switchboard sparking violently",
-            groq_api_key="gsk_test_mock_key_123"
-        )
+        res = predict_category_and_urgency("AC switchboard sparking violently", groq_api_key="gsk_test_mock_key_123")
         self.assertEqual(res["category"], "ELECTRICAL")
         self.assertEqual(res["urgency"], "HIGH")
         self.assertEqual(res["provider"], "groq")
@@ -217,10 +213,7 @@ class TestClassifier(unittest.TestCase):
     def test_groq_failure_triggers_fallback(self, mock_groq):
         # Groq returns None on error or timeout
         mock_groq.return_value = None
-        res = predict_category_and_urgency(
-            "Water pipe burst in kitchen ceiling",
-            groq_api_key="gsk_test_failing_key"
-        )
+        res = predict_category_and_urgency("Water pipe burst in kitchen ceiling", groq_api_key="gsk_test_failing_key")
         self.assertEqual(res["category"], "PLUMBING")
         self.assertEqual(res["provider"], "local_nb")
         self.assertTrue(res["fallback_used"])
@@ -232,13 +225,10 @@ class TestClassifier(unittest.TestCase):
         resp_429 = MagicMock(status_code=429, headers={"retry-after": "1.5"})
         resp_200 = MagicMock(
             status_code=200,
-            json=lambda: {"choices": [{"message": {"content": '{"category": "PLUMBING", "urgency": "HIGH"}'}}]}
+            json=lambda: {"choices": [{"message": {"content": '{"category": "PLUMBING", "urgency": "HIGH"}'}}]},
         )
         mock_post.side_effect = [resp_429, resp_200]
-        res = predict_category_and_urgency(
-            "Kitchen pipe leaking under sink",
-            groq_api_key="gsk_test_key_429"
-        )
+        res = predict_category_and_urgency("Kitchen pipe leaking under sink", groq_api_key="gsk_test_key_429")
         self.assertEqual(res["provider"], "groq")
         self.assertEqual(res["category"], "PLUMBING")
         self.assertEqual(res["urgency"], "HIGH")
@@ -248,10 +238,10 @@ class TestClassifier(unittest.TestCase):
     def test_groq_timeout_triggers_local_fallback(self, mock_post):
         """Groq timeout triggers clean fallback to local scikit-learn model."""
         import httpx
+
         mock_post.side_effect = httpx.TimeoutException("Read timeout after 5.0s")
         res = predict_category_and_urgency(
-            "Main water pipe burst flooding kitchen",
-            groq_api_key="gsk_test_key_timeout"
+            "Main water pipe burst flooding kitchen", groq_api_key="gsk_test_key_timeout"
         )
         self.assertEqual(res["provider"], "local_nb")
         self.assertTrue(res["fallback_used"])
@@ -261,10 +251,7 @@ class TestClassifier(unittest.TestCase):
     def test_groq_5xx_server_error_triggers_local_fallback(self, mock_post):
         """Groq 500/503 server error triggers clean fallback to local model."""
         mock_post.return_value = MagicMock(status_code=503, text="Service Unavailable")
-        res = predict_category_and_urgency(
-            "Main water pipe burst flooding kitchen",
-            groq_api_key="gsk_test_key_503"
-        )
+        res = predict_category_and_urgency("Main water pipe burst flooding kitchen", groq_api_key="gsk_test_key_503")
         self.assertEqual(res["provider"], "local_nb")
         self.assertTrue(res["fallback_used"])
         self.assertEqual(res["category"], "PLUMBING")
@@ -273,12 +260,10 @@ class TestClassifier(unittest.TestCase):
     def test_groq_malformed_json_triggers_local_fallback(self, mock_post):
         """Groq response with broken JSON triggers clean fallback to local model."""
         mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {"choices": [{"message": {"content": "INVALID_JSON_NO_BRACKETS"}}]}
+            status_code=200, json=lambda: {"choices": [{"message": {"content": "INVALID_JSON_NO_BRACKETS"}}]}
         )
         res = predict_category_and_urgency(
-            "Main water pipe burst flooding kitchen",
-            groq_api_key="gsk_test_key_broken_json"
+            "Main water pipe burst flooding kitchen", groq_api_key="gsk_test_key_broken_json"
         )
         self.assertEqual(res["provider"], "local_nb")
         self.assertTrue(res["fallback_used"])
@@ -289,11 +274,10 @@ class TestClassifier(unittest.TestCase):
         """Groq response with invalid category triggers local fallback."""
         mock_post.return_value = MagicMock(
             status_code=200,
-            json=lambda: {"choices": [{"message": {"content": '{"category": "ASTRONOMY", "urgency": "HIGH"}'}}]}
+            json=lambda: {"choices": [{"message": {"content": '{"category": "ASTRONOMY", "urgency": "HIGH"}'}}]},
         )
         res = predict_category_and_urgency(
-            "Main water pipe burst flooding kitchen",
-            groq_api_key="gsk_test_key_invalid_cat"
+            "Main water pipe burst flooding kitchen", groq_api_key="gsk_test_key_invalid_cat"
         )
         self.assertEqual(res["provider"], "local_nb")
         self.assertTrue(res["fallback_used"])
@@ -303,12 +287,10 @@ class TestClassifier(unittest.TestCase):
     def test_groq_missing_key_triggers_local_fallback(self, mock_post):
         """Groq response missing urgency key triggers local fallback."""
         mock_post.return_value = MagicMock(
-            status_code=200,
-            json=lambda: {"choices": [{"message": {"content": '{"category": "PLUMBING"}'}}]}
+            status_code=200, json=lambda: {"choices": [{"message": {"content": '{"category": "PLUMBING"}'}}]}
         )
         res = predict_category_and_urgency(
-            "Main water pipe burst flooding kitchen",
-            groq_api_key="gsk_test_key_missing_key"
+            "Main water pipe burst flooding kitchen", groq_api_key="gsk_test_key_missing_key"
         )
         self.assertEqual(res["provider"], "local_nb")
         self.assertTrue(res["fallback_used"])
@@ -333,11 +315,13 @@ class TestClassifier(unittest.TestCase):
         Simulate human help desk correction beating late AI classification via version locking.
         Human correction increments version to 2; stale AI update with version 1 is rejected.
         """
-        from fastapi import HTTPException
-        from backend.app.services.complaints import correct_classification
-        from backend.app.models.entities import Complaint, User, Flat
-        from backend.app.core.database import SessionLocal
         import uuid
+
+        from fastapi import HTTPException
+
+        from backend.app.core.database import SessionLocal
+        from backend.app.models.entities import Complaint, Flat, User
+        from backend.app.services.complaints import correct_classification
 
         db = SessionLocal()
         try:
@@ -356,7 +340,7 @@ class TestClassifier(unittest.TestCase):
                 category="GENERAL",
                 urgency="LOW",
                 status="SUBMITTED",
-                version=1
+                version=1,
             )
             db.add(comp)
             db.commit()
@@ -370,7 +354,7 @@ class TestClassifier(unittest.TestCase):
                 reason="Verified sparking wires hazard",
                 expected_version=1,
                 actor_user=admin,
-                actor_role="HELPDESK"
+                actor_role="HELPDESK",
             )
             db.commit()
             db.refresh(comp)
@@ -387,7 +371,7 @@ class TestClassifier(unittest.TestCase):
                     reason="Late AI inference result",
                     expected_version=1,
                     actor_user=admin,
-                    actor_role="HELPDESK"
+                    actor_role="HELPDESK",
                 )
             self.assertEqual(ctx.exception.status_code, 409)
             self.assertIn("optimistic lock conflict", ctx.exception.detail.lower())

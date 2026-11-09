@@ -1,6 +1,6 @@
-from decimal import Decimal
-from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
+
 from pydantic import BaseModel
 
 
@@ -32,7 +32,7 @@ class BillResponse(BaseModel):
     balance_amount: Decimal
     balance_amount_inr: str
     status: str
-    lines: List[BillLineResponse] = []
+    lines: list[BillLineResponse] = []
 
 
 class LedgerEntryResponse(BaseModel):
@@ -44,7 +44,7 @@ class LedgerEntryResponse(BaseModel):
     balance_after: Decimal
     balance_after_inr: str
     description: str
-    reference_id: Optional[str] = None
+    reference_id: str | None = None
     created_at: datetime
 
 
@@ -61,9 +61,9 @@ class FlatBillingSummaryResponse(BaseModel):
     estimated_late_fee: Decimal
     estimated_late_fee_inr: str
     late_fee_notice: str
-    unpaid_bills: List[BillResponse] = []
-    latest_bill: Optional[BillResponse] = None
-    recent_ledger: List[LedgerEntryResponse] = []
+    unpaid_bills: list[BillResponse] = []
+    latest_bill: BillResponse | None = None
+    recent_ledger: list[LedgerEntryResponse] = []
 
 
 class GenerateBillRequest(BaseModel):

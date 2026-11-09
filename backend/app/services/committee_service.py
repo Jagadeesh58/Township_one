@@ -1,40 +1,36 @@
 import csv
 import io
-from datetime import datetime, timezone, date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, Dict, Any, List
+from datetime import UTC, date, datetime
+from decimal import ROUND_HALF_UP, Decimal
+
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from backend.app.core.config import settings
 from backend.app.models.entities import (
-    Bill,
-    Payment,
-    FlatLedgerEntry,
-    Complaint,
-    ComplaintEvent,
     BankRow,
-    BankPosting,
+    Bill,
+    Complaint,
 )
 from backend.app.schemas.committee import (
-    CommitteeReportResponse,
-    FinancialMetrics,
-    DuesAgeingBands,
-    ComplaintsMetrics,
-    PaymentMatchingMetrics,
     ClientTargetComparison,
+    CommitteeReportResponse,
+    ComplaintsMetrics,
+    DuesAgeingBands,
+    FinancialMetrics,
+    PaymentMatchingMetrics,
 )
 
 
 def get_committee_report_data(
-    db: Session,
-    period_str: Optional[str] = None,
-    as_of: Optional[datetime] = None
+    db: Session, period_str: str | None = None, as_of: datetime | None = None
 ) -> CommitteeReportResponse:
-    now_utc = datetime.now(timezone.utc)
-    cutoff = as_of or getattr(settings, "DEMO_AS_OF_DATE", now_utc)
-    if isinstance(cutoff, str):
-        cutoff = datetime.fromisoformat(cutoff.replace("Z", "+00:00"))
+    now_utc = datetime.now(UTC)
+    if as_of is not None:
+        cutoff = as_of
+    elif hasattr(settings, "DEMO_AS_OF_DATE") and settings.DEMO_AS_OF_DATE:
+        cutoff = datetime.fromisoformat(settings.DEMO_AS_OF_DATE.replace("Z", "+00:00"))
+    else:
+        cutoff = now_utc
 
     period = period_str or f"{cutoff.year}-{cutoff.month:02d}"
     cutoff_date = cutoff.date()
@@ -42,15 +38,9 @@ def get_committee_report_data(
     # 1. Financial Metrics
     cutoff_naive = cutoff.replace(tzinfo=None) if cutoff.tzinfo else cutoff
     bills_query = db.query(Bill).filter(Bill.issue_date <= cutoff_naive).all()
-    total_billed = sum((b.total_amount for b in bills_query), Decimal("0.00"))
-    total_collected_from_bills = sum((b.paid_amount for b in bills_query), Decimal("0.00"))
-    total_outstanding = sum((b.balance_amount for b in bills_query), Decimal("0.00"))
-
-    # Also check payments table
-    payments_sum = db.query(func.coalesce(func.sum(Payment.amount), Decimal("0.00"))).filter(
-        Payment.status == "SUCCESS",
-        Payment.created_at <= cutoff_naive
-    ).scalar() or Decimal("0.00")
+    total_billed: Decimal = sum((Decimal(str(b.total_amount)) for b in bills_query), Decimal("0.00"))
+    total_collected_from_bills: Decimal = sum((Decimal(str(b.paid_amount)) for b in bills_query), Decimal("0.00"))
+    total_outstanding: Decimal = sum((Decimal(str(b.balance_amount)) for b in bills_query), Decimal("0.00"))
 
     collection_rate = Decimal("0.00")
     if total_billed > Decimal("0.00"):
@@ -131,10 +121,11 @@ def get_committee_report_data(
     for c in complaints:
         if c.status not in ("RESOLVED", "CLOSED"):
             target_hours = sla_map_hours.get(c.urgency, 48)
-            created_naive = c.created_at.replace(tzinfo=None) if c.created_at.tzinfo else c.created_at
-            elapsed_hours = (cutoff_naive - created_naive).total_seconds() / 3600.0
-            if elapsed_hours > target_hours:
-                overdue_count += 1
+            if c.created_at is not None:
+                created_naive = c.created_at.replace(tzinfo=None) if c.created_at.tzinfo else c.created_at
+                elapsed_hours = (cutoff_naive - created_naive).total_seconds() / 3600.0
+                if elapsed_hours > target_hours:
+                    overdue_count += 1
 
     complaints_metrics = ComplaintsMetrics(
         total_complaints=total_complaints,
@@ -221,31 +212,83 @@ def generate_committee_csv(report: CommitteeReportResponse) -> str:
 
     writer.writerow(["Category", "Metric", "Value", "Unit", "Definition / Notes"])
     f = report.financials
-    writer.writerow(["Financials", "Total Billed", str(f.total_billed), "INR", "Sum of all bills generated on or before cutoff"])
-    writer.writerow(["Financials", "Total Collected", str(f.total_collected), "INR", "Sum of all payments credited against bills on or before cutoff"])
+    writer.writerow(
+        ["Financials", "Total Billed", str(f.total_billed), "INR", "Sum of all bills generated on or before cutoff"]
+    )
+    writer.writerow(
+        [
+            "Financials",
+            "Total Collected",
+            str(f.total_collected),
+            "INR",
+            "Sum of all payments credited against bills on or before cutoff",
+        ]
+    )
     writer.writerow(["Financials", "Total Outstanding", str(f.total_outstanding), "INR", "Sum of open bill balances"])
-    writer.writerow(["Financials", "Collection Rate", f"{f.collection_rate_percent}%", "%", "Total Collected / Total Billed"])
-    writer.writerow(["Financials Ageing", "0-30 Days Overdue", str(f.ageing.band_0_30_days), "INR", "Overdue <= 30 days"])
-    writer.writerow(["Financials Ageing", "31-60 Days Overdue", str(f.ageing.band_31_60_days), "INR", "Overdue 31 to 60 days"])
-    writer.writerow(["Financials Ageing", "61-90 Days Overdue", str(f.ageing.band_61_90_days), "INR", "Overdue 61 to 90 days"])
-    writer.writerow(["Financials Ageing", "90+ Days Overdue", str(f.ageing.band_90_plus_days), "INR", "Overdue > 90 days"])
+    writer.writerow(
+        ["Financials", "Collection Rate", f"{f.collection_rate_percent}%", "%", "Total Collected / Total Billed"]
+    )
+    writer.writerow(
+        ["Financials Ageing", "0-30 Days Overdue", str(f.ageing.band_0_30_days), "INR", "Overdue <= 30 days"]
+    )
+    writer.writerow(
+        ["Financials Ageing", "31-60 Days Overdue", str(f.ageing.band_31_60_days), "INR", "Overdue 31 to 60 days"]
+    )
+    writer.writerow(
+        ["Financials Ageing", "61-90 Days Overdue", str(f.ageing.band_61_90_days), "INR", "Overdue 61 to 90 days"]
+    )
+    writer.writerow(
+        ["Financials Ageing", "90+ Days Overdue", str(f.ageing.band_90_plus_days), "INR", "Overdue > 90 days"]
+    )
     writer.writerow([])
 
     c = report.complaints
-    writer.writerow(["Complaints", "Total Registered", c.total_complaints, "Tickets", "All tickets logged up to cutoff"])
-    writer.writerow(["Complaints", "Open / Unresolved", c.open_unresolved_count, "Tickets", "Active tickets pending action"])
-    writer.writerow(["Complaints", "Closed / Resolved", c.closed_resolved_count, "Tickets", "Tickets marked Resolved or Closed"])
-    writer.writerow(["Complaints", "Overdue vs SLA", c.overdue_count, "Tickets", "Tickets exceeding SLA target response/resolution"])
+    writer.writerow(
+        ["Complaints", "Total Registered", c.total_complaints, "Tickets", "All tickets logged up to cutoff"]
+    )
+    writer.writerow(
+        ["Complaints", "Open / Unresolved", c.open_unresolved_count, "Tickets", "Active tickets pending action"]
+    )
+    writer.writerow(
+        ["Complaints", "Closed / Resolved", c.closed_resolved_count, "Tickets", "Tickets marked Resolved or Closed"]
+    )
+    writer.writerow(
+        ["Complaints", "Overdue vs SLA", c.overdue_count, "Tickets", "Tickets exceeding SLA target response/resolution"]
+    )
     writer.writerow(["Complaints", "Reopen Rate", f"{c.reopened_rate_percent}%", "%", "Tickets reopened by resident"])
-    writer.writerow(["Complaints", "Mean Resolution Time", str(c.mean_resolution_hours or "N/A"), "Hours", "Average hours from creation to resolution"])
-    writer.writerow(["Complaints", "Median Resolution Time", str(c.median_resolution_hours or "N/A"), "Hours", "Median hours from creation to resolution"])
+    writer.writerow(
+        [
+            "Complaints",
+            "Mean Resolution Time",
+            str(c.mean_resolution_hours or "N/A"),
+            "Hours",
+            "Average hours from creation to resolution",
+        ]
+    )
+    writer.writerow(
+        [
+            "Complaints",
+            "Median Resolution Time",
+            str(c.median_resolution_hours or "N/A"),
+            "Hours",
+            "Median hours from creation to resolution",
+        ]
+    )
     writer.writerow([])
 
     p = report.payment_matching
-    writer.writerow(["Bank Matching", "Total Statement Rows", p.total_rows_imported, "Rows", "Imported canonical statement lines"])
-    writer.writerow(["Bank Matching", "Auto-Matched Postings", p.auto_matched_count, "Rows", "Strict zero-inference auto-postings"])
-    writer.writerow(["Bank Matching", "Review Queue Rows", p.review_queue_count, "Rows", "Rows held for accounts verification"])
-    writer.writerow(["Bank Matching", "Auto-Match Coverage", f"{p.auto_match_coverage_percent}%", "%", "Auto-matched / Total Rows"])
+    writer.writerow(
+        ["Bank Matching", "Total Statement Rows", p.total_rows_imported, "Rows", "Imported canonical statement lines"]
+    )
+    writer.writerow(
+        ["Bank Matching", "Auto-Matched Postings", p.auto_matched_count, "Rows", "Strict zero-inference auto-postings"]
+    )
+    writer.writerow(
+        ["Bank Matching", "Review Queue Rows", p.review_queue_count, "Rows", "Rows held for accounts verification"]
+    )
+    writer.writerow(
+        ["Bank Matching", "Auto-Match Coverage", f"{p.auto_match_coverage_percent}%", "%", "Auto-matched / Total Rows"]
+    )
     writer.writerow([])
 
     writer.writerow(["Client Targets vs Demo Status"])
@@ -257,17 +300,13 @@ def generate_committee_csv(report: CommitteeReportResponse) -> str:
 
 def generate_committee_pdf(report: CommitteeReportResponse) -> bytes:
     """Generates a print-ready PDF governance report using reportlab."""
-    from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40
-    )
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -306,12 +345,14 @@ def generate_committee_pdf(report: CommitteeReportResponse) -> bytes:
 
     # Header
     elements.append(Paragraph("Township One — Committee Governance Report", title_style))
-    elements.append(Paragraph(
-        f"<b>Reporting Period:</b> {report.reporting_period} &nbsp;|&nbsp; "
-        f"<b>Data Cutoff:</b> {report.data_cutoff_time} &nbsp;|&nbsp; "
-        f"<b>Timezone:</b> {report.timezone}",
-        body_style
-    ))
+    elements.append(
+        Paragraph(
+            f"<b>Reporting Period:</b> {report.reporting_period} &nbsp;|&nbsp; "
+            f"<b>Data Cutoff:</b> {report.data_cutoff_time} &nbsp;|&nbsp; "
+            f"<b>Timezone:</b> {report.timezone}",
+            body_style,
+        )
+    )
     elements.append(Spacer(1, 10))
 
     # Financial Summary Table
@@ -328,14 +369,18 @@ def generate_committee_pdf(report: CommitteeReportResponse) -> bytes:
         ["Ageing: 90+ Days Overdue", f"₹{f.ageing.band_90_plus_days:,.2f}", "Legal / recovery"],
     ]
     t_fin = Table(fin_data, colWidths=[200, 160, 160])
-    t_fin.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#F1F5F9")),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor("#1A2438")),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ('ALIGN', (1, 0), (2, -1), 'RIGHT'),
-    ]))
+    t_fin.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F1F5F9")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1A2438")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("ALIGN", (1, 0), (2, -1), "RIGHT"),
+            ]
+        )
+    )
     elements.append(t_fin)
     elements.append(Spacer(1, 10))
 
@@ -353,14 +398,18 @@ def generate_committee_pdf(report: CommitteeReportResponse) -> bytes:
         ["Median Resolution Time", f"{c.median_resolution_hours or 0.0} hrs", "50th percentile"],
     ]
     t_comp = Table(comp_data, colWidths=[200, 160, 160])
-    t_comp.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#F1F5F9")),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor("#1A2438")),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ('ALIGN', (1, 0), (2, -1), 'RIGHT'),
-    ]))
+    t_comp.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F1F5F9")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1A2438")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("ALIGN", (1, 0), (2, -1), "RIGHT"),
+            ]
+        )
+    )
     elements.append(t_comp)
     elements.append(Spacer(1, 10))
 
@@ -374,23 +423,29 @@ def generate_committee_pdf(report: CommitteeReportResponse) -> bytes:
         ["Review Queue (Held for Verification)", str(p.review_queue_count), "Zero false auto-postings"],
     ]
     t_bank = Table(bank_data, colWidths=[200, 160, 160])
-    t_bank.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#F1F5F9")),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor("#1A2438")),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-        ('ALIGN', (1, 0), (2, -1), 'RIGHT'),
-    ]))
+    t_bank.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F1F5F9")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1A2438")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("ALIGN", (1, 0), (2, -1), "RIGHT"),
+            ]
+        )
+    )
     elements.append(t_bank)
     elements.append(Spacer(1, 10))
 
     # Notice banner
-    elements.append(Paragraph(
-        "<b>Governance Notice:</b> All figures reflect demo reference calculations. "
-        "Committee reports provide aggregated statistics only; individual resident financial or personal records are excluded from committee exports.",
-        notice_style
-    ))
+    elements.append(
+        Paragraph(
+            "<b>Governance Notice:</b> All figures reflect demo reference calculations. "
+            "Committee reports provide aggregated statistics only; individual resident financial or personal records are excluded from committee exports.",
+            notice_style,
+        )
+    )
 
     doc.build(elements)
     return buffer.getvalue()

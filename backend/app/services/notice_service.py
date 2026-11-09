@@ -1,28 +1,21 @@
-from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime
+
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
 from backend.app.models.entities import (
-    Notice,
-    NoticeRevision,
-    NoticeRead,
-    Tower,
-    Flat,
-    FlatMembership,
     AuditEvent,
+    Notice,
+    NoticeRead,
+    NoticeRevision,
 )
 from backend.app.schemas.notices import (
     NoticeCreate,
-    NoticeRevisionResponse,
 )
 from backend.app.services.amenity_service import get_effective_now
 
 
-def resolve_language_body(
-    revision: NoticeRevision,
-    lang: str = "en"
-) -> Tuple[str, bool, Optional[str]]:
+def resolve_language_body(revision: NoticeRevision, lang: str = "en") -> tuple[str, bool, str | None]:
     """
     Returns (body_text, is_fallback, fallback_label).
     If requested language is unavailable, gracefully falls back to English with clear indicator.
@@ -37,11 +30,7 @@ def resolve_language_body(
     return revision.body_en, False, None
 
 
-def create_notice(
-    db: Session,
-    payload: NoticeCreate,
-    author_user_id: str
-) -> Notice:
+def create_notice(db: Session, payload: NoticeCreate, author_user_id: str) -> Notice:
     now = get_effective_now()
     publish_at = payload.publish_at or now
 
@@ -92,18 +81,18 @@ def create_notice(
 
 
 def update_notice_create_revision(
-    db: Session,
-    notice_id: str,
-    payload: NoticeCreate,
-    author_user_id: str
+    db: Session, notice_id: str, payload: NoticeCreate, author_user_id: str
 ) -> NoticeRevision:
     notice = db.query(Notice).filter(Notice.id == notice_id).first()
     if not notice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notice not found.")
 
-    latest_rev = db.query(NoticeRevision).filter(
-        NoticeRevision.notice_id == notice_id
-    ).order_by(NoticeRevision.revision_number.desc()).first()
+    latest_rev = (
+        db.query(NoticeRevision)
+        .filter(NoticeRevision.notice_id == notice_id)
+        .order_by(NoticeRevision.revision_number.desc())
+        .first()
+    )
 
     next_rev_num = (latest_rev.revision_number + 1) if latest_rev else 1
     now = get_effective_now()
@@ -148,11 +137,7 @@ def update_notice_create_revision(
     return new_revision
 
 
-def withdraw_notice(
-    db: Session,
-    notice_id: str,
-    author_user_id: str
-) -> Notice:
+def withdraw_notice(db: Session, notice_id: str, author_user_id: str) -> Notice:
     notice = db.query(Notice).filter(Notice.id == notice_id).first()
     if not notice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notice not found.")
@@ -172,22 +157,22 @@ def withdraw_notice(
     return notice
 
 
-def record_notice_read(
-    db: Session,
-    revision_id: str,
-    user_id: str
-) -> NoticeRead:
-    existing = db.query(NoticeRead).filter(
-        NoticeRead.notice_revision_id == revision_id,
-        NoticeRead.user_id == user_id,
-    ).first()
+def record_notice_read(db: Session, revision_id: str, user_id: str) -> NoticeRead:
+    existing = (
+        db.query(NoticeRead)
+        .filter(
+            NoticeRead.notice_revision_id == revision_id,
+            NoticeRead.user_id == user_id,
+        )
+        .first()
+    )
     if existing:
         return existing
 
     read_record = NoticeRead(
         notice_revision_id=revision_id,
         user_id=user_id,
-        read_at=datetime.now(timezone.utc),
+        read_at=datetime.now(UTC),
     )
     db.add(read_record)
     db.flush()

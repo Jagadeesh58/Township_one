@@ -9,9 +9,9 @@ Test suite verifying:
 - Precision across boundary values: ₹0.01, ₹0.10, ₹999.99, ₹1,000.00
 """
 
-from decimal import Decimal, ROUND_HALF_UP
-import pytest
-from backend.app.services.billing import round_currency, calculate_principal, calculate_demo_late_fee
+from decimal import Decimal
+
+from backend.app.services.billing import calculate_principal, round_currency
 
 
 def test_round_currency_half_up_rules():

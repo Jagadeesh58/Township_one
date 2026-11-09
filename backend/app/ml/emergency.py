@@ -13,13 +13,13 @@ Supports English, Hindi (Devanagari and romanized transliteration), and Marathi
 """
 
 import re
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 
 class EmergencyResult(TypedDict):
     is_emergency: bool
-    trigger: Optional[str]
-    matched_text: Optional[str]
+    trigger: str | None
+    matched_text: str | None
     language: str
 
 
@@ -110,17 +110,72 @@ def detect_language(text: str) -> str:
 
     if has_devanagari:
         # Distinguish Marathi from Hindi in Devanagari
-        marathi_markers = ["आहे", "नाही", "झाली", "झाला", "पडत", "अडकले", "अडकली", "गळती", "विजेचा", "धूर", "ठिणगी", "मध्ये", "होते", "करावे", "तपासा"]
+        marathi_markers = [
+            "आहे",
+            "नाही",
+            "झाली",
+            "झाला",
+            "पडत",
+            "अडकले",
+            "अडकली",
+            "गळती",
+            "विजेचा",
+            "धूर",
+            "ठिणगी",
+            "मध्ये",
+            "होते",
+            "करावे",
+            "तपासा",
+        ]
         if any(marker in text for marker in marathi_markers):
             return "mr"
         return "hi"
 
     # Latin romanized script detection
-    marathi_roman = ["ahe", "ahet", "zala", "zali", "jhali", "adakle", "adakli", "dhur", "galati", "vijecha", "madhe", "majha", "majhya", "kela", "keli", "lavkar", "pathva", "basla"]
+    marathi_roman = [
+        "ahe",
+        "ahet",
+        "zala",
+        "zali",
+        "jhali",
+        "adakle",
+        "adakli",
+        "dhur",
+        "galati",
+        "vijecha",
+        "madhe",
+        "majha",
+        "majhya",
+        "kela",
+        "keli",
+        "lavkar",
+        "pathva",
+        "basla",
+    ]
     if any(re.search(rf"\b{word}\b", lowered) for word in marathi_roman):
         return "mr"
 
-    hindi_roman = ["hai", "hain", "nahi", "gaya", "gayi", "phasi", "fase", "dhua", "dhuan", "karo", "bhejo", "jaldi", "bachao", "raha", "rahi", "hua", "hui", "laga", "chingari"]
+    hindi_roman = [
+        "hai",
+        "hain",
+        "nahi",
+        "gaya",
+        "gayi",
+        "phasi",
+        "fase",
+        "dhua",
+        "dhuan",
+        "karo",
+        "bhejo",
+        "jaldi",
+        "bachao",
+        "raha",
+        "rahi",
+        "hua",
+        "hui",
+        "laga",
+        "chingari",
+    ]
     if any(re.search(rf"\b{word}\b", lowered) for word in hindi_roman):
         return "hi"
 
@@ -130,7 +185,7 @@ def detect_language(text: str) -> str:
 def detect_emergency(text: str) -> EmergencyResult:
     """
     Deterministic safety trigger detector.
-    
+
     Returns structured verdict with trigger name, matched snippet, and detected language.
     Applies conservative negation: when ambiguous or uncertain, escalates to True.
     """

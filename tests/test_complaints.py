@@ -14,16 +14,14 @@ Verifies:
 """
 
 import io
-from datetime import datetime, timezone
-from PIL import Image
-import pytest
-from fastapi.testclient import TestClient
 
-from backend.app.main import app
+from fastapi.testclient import TestClient
+from PIL import Image
+
 from backend.app.core.database import SessionLocal
+from backend.app.main import app
 from backend.app.models.entities import (
-    User, Flat, Tower, Complaint, ComplaintEvent, ComplaintAttachment,
-    SafetyEvent, IncidentGroup, StaffMember, StaffShift, StaffTeam
+    Flat,
 )
 
 
@@ -55,6 +53,7 @@ def create_test_image_bytes(format="JPEG", size=(200, 200), color=(255, 0, 0)) -
 # 1. Resident Complaint Submission & Scoping
 # -----------------------------------------------------------------------------
 
+
 def test_resident_raise_routine_complaint_and_scoping():
     """Swati Joshi (T12-0408) raises a complaint; verifies auto-triage, assignment, and flat isolation."""
     client_swati, headers_swati = get_authenticated_client("9876543211")
@@ -70,7 +69,7 @@ def test_resident_raise_routine_complaint_and_scoping():
         "flat_id": flat_swati.id,
         "title": "Kitchen sink pipe dripping steadily",
         "description": "The drain pipe underneath the kitchen sink has a steady drip into the cabinet.",
-        "language": "en"
+        "language": "en",
     }
 
     resp = client_swati.post("/api/v1/complaints", data=data, files=files, headers=headers_swati)
@@ -100,7 +99,7 @@ def test_resident_raise_routine_complaint_and_scoping():
     forbidden_resp = client_swati.post(
         "/api/v1/complaints",
         data={"flat_id": flat_neeraj.id, "title": "Sneak complaint", "description": "Trying to lodge for another flat"},
-        headers=headers_swati
+        headers=headers_swati,
     )
     assert forbidden_resp.status_code == 403
 
@@ -108,6 +107,7 @@ def test_resident_raise_routine_complaint_and_scoping():
 # -----------------------------------------------------------------------------
 # 2. Emergency Rule Detection & Safety Escalation Invariant
 # -----------------------------------------------------------------------------
+
 
 def test_emergency_detector_safety_escalation_and_invariants():
     """Emergency keywords unconditionally set CRITICAL urgency and SafetyEvent; cannot be downgraded."""
@@ -121,7 +121,7 @@ def test_emergency_detector_safety_escalation_and_invariants():
         "flat_id": flat.id,
         "title": "Smoke coming from meter box",
         "description": "Heavy black smoke and burning smell from corridor electrical meter box. Real fire hazard!",
-        "language": "en"
+        "language": "en",
     }
 
     resp = client_swati.post("/api/v1/complaints", data=data, headers=headers_swati)
@@ -140,9 +140,9 @@ def test_emergency_detector_safety_escalation_and_invariants():
             "category": "ELECTRICAL",
             "urgency": "LOW",
             "reason": "False alarm attempt",
-            "expected_version": comp_data["version"]
+            "expected_version": comp_data["version"],
         },
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert downgrade_resp.status_code == 400
     assert "Cannot lower urgency on a verified safety escalation" in downgrade_resp.json()["error"]["message"]
@@ -151,6 +151,7 @@ def test_emergency_detector_safety_escalation_and_invariants():
 # -----------------------------------------------------------------------------
 # 3. Explicit Lifecycle Transition State Machine
 # -----------------------------------------------------------------------------
+
 
 def test_explicit_lifecycle_transitions_and_conflict_errors():
     """Tests legal transitions succeed, while illegal transitions return HTTP 409 Conflict."""
@@ -164,7 +165,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     create_resp = client_swati.post(
         "/api/v1/complaints",
         data={"flat_id": flat.id, "title": "Intercom dead", "description": "Intercom buzzer not working for 2 days"},
-        headers=headers_swati
+        headers=headers_swati,
     )
     assert create_resp.status_code == 201
     comp = create_resp.json()
@@ -175,7 +176,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     illegal_resp = client_admin.post(
         f"/api/v1/complaints/{c_id}/transition",
         json={"status": "CLOSED", "notes": "Premature close", "expected_version": version},
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert illegal_resp.status_code == 409
 
@@ -183,7 +184,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     prog_resp = client_admin.post(
         f"/api/v1/complaints/{c_id}/transition",
         json={"status": "IN_PROGRESS", "notes": "Technician dispatched", "expected_version": version},
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert prog_resp.status_code == 200
     version = prog_resp.json()["version"]
@@ -194,7 +195,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     backward_resp = client_admin.post(
         f"/api/v1/complaints/{c_id}/transition",
         json={"status": "SUBMITTED", "notes": "Cannot go backwards", "expected_version": version},
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert backward_resp.status_code == 409
 
@@ -202,7 +203,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     res_resp = client_admin.post(
         f"/api/v1/complaints/{c_id}/transition",
         json={"status": "RESOLVED", "notes": "Wiring reconnected, intercom verified", "expected_version": version},
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert res_resp.status_code == 200
     version = res_resp.json()["version"]
@@ -213,7 +214,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     rate_resp = client_swati.post(
         f"/api/v1/complaints/{c_id}/rate",
         json={"rating": 5, "feedback": "Quick and polite technician!"},
-        headers=headers_swati
+        headers=headers_swati,
     )
     assert rate_resp.status_code == 200
     assert rate_resp.json()["rating"] == 5
@@ -222,7 +223,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     close_resp = client_admin.post(
         f"/api/v1/complaints/{c_id}/transition",
         json={"status": "CLOSED", "notes": "Resident confirmed fix"},
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert close_resp.status_code == 200
     assert close_resp.json()["status"] == "CLOSED"
@@ -231,7 +232,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
     reopen_resp = client_swati.post(
         f"/api/v1/complaints/{c_id}/reopen",
         json={"reason": "Intercom stopped working again this morning"},
-        headers=headers_swati
+        headers=headers_swati,
     )
     assert reopen_resp.status_code == 200
     assert reopen_resp.json()["status"] == "REOPEN_REQUESTED"
@@ -240,6 +241,7 @@ def test_explicit_lifecycle_transitions_and_conflict_errors():
 # -----------------------------------------------------------------------------
 # 4. Optimistic Concurrency Locking on Help Desk Corrections
 # -----------------------------------------------------------------------------
+
 
 def test_optimistic_concurrency_locking_on_correction():
     """Help Desk classification correction fails with HTTP 409 if version is stale."""
@@ -251,8 +253,12 @@ def test_optimistic_concurrency_locking_on_correction():
 
     create_resp = client_swati.post(
         "/api/v1/complaints",
-        data={"flat_id": flat.id, "title": "Water smells bad", "description": "Tap water is discolored and has foul smell"},
-        headers=headers_swati
+        data={
+            "flat_id": flat.id,
+            "title": "Water smells bad",
+            "description": "Tap water is discolored and has foul smell",
+        },
+        headers=headers_swati,
     )
     comp = create_resp.json()
     c_id = comp["id"]
@@ -266,9 +272,9 @@ def test_optimistic_concurrency_locking_on_correction():
             "category": "WATER_SUPPLY",
             "urgency": "HIGH",
             "reason": "Water quality hazard",
-            "expected_version": stale_version
+            "expected_version": stale_version,
         },
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert stale_resp.status_code == 409
     assert "Optimistic lock conflict" in stale_resp.json()["error"]["message"]
@@ -280,9 +286,9 @@ def test_optimistic_concurrency_locking_on_correction():
             "category": "WATER_SUPPLY",
             "urgency": "HIGH",
             "reason": "Water quality hazard verified",
-            "expected_version": current_version
+            "expected_version": current_version,
         },
-        headers=headers_admin
+        headers=headers_admin,
     )
     assert success_resp.status_code == 200
     assert success_resp.json()["category"] == "WATER_SUPPLY"
@@ -293,6 +299,7 @@ def test_optimistic_concurrency_locking_on_correction():
 # -----------------------------------------------------------------------------
 # 5. Duplicate Detection & Incident Group Linking
 # -----------------------------------------------------------------------------
+
 
 def test_duplicate_candidate_detection_and_incident_grouping():
     """Detects near-duplicate tickets and links them without closing either ticket."""
@@ -305,8 +312,12 @@ def test_duplicate_candidate_detection_and_incident_grouping():
     # Ticket 1: Lift #2 jerky movement in Tower 7
     t1_resp = client_neeraj.post(
         "/api/v1/complaints",
-        data={"flat_id": flat.id, "title": "Tower 7 Lift 2 jerky stopping", "description": "Passenger lift 2 stops with loud thud at floor 12"},
-        headers=headers_neeraj
+        data={
+            "flat_id": flat.id,
+            "title": "Tower 7 Lift 2 jerky stopping",
+            "description": "Passenger lift 2 stops with loud thud at floor 12",
+        },
+        headers=headers_neeraj,
     )
     assert t1_resp.status_code == 201
     t1_id = t1_resp.json()["id"]
@@ -314,8 +325,12 @@ def test_duplicate_candidate_detection_and_incident_grouping():
     # Ticket 2: Similar lift fault in Tower 7
     t2_resp = client_neeraj.post(
         "/api/v1/complaints",
-        data={"flat_id": flat.id, "title": "Tower 7 Lift #2 abnormal vibration", "description": "Lift 2 shaking and vibrating heavily between 10th and 12th floor"},
-        headers=headers_neeraj
+        data={
+            "flat_id": flat.id,
+            "title": "Tower 7 Lift #2 abnormal vibration",
+            "description": "Lift 2 shaking and vibrating heavily between 10th and 12th floor",
+        },
+        headers=headers_neeraj,
     )
     assert t2_resp.status_code == 201
     t2_id = t2_resp.json()["id"]
@@ -330,9 +345,7 @@ def test_duplicate_candidate_detection_and_incident_grouping():
 
     # Link Ticket 2 as duplicate of Ticket 1
     link_resp = client_admin.post(
-        f"/api/v1/complaints/{t2_id}/link-duplicate",
-        json={"target_complaint_id": t1_id},
-        headers=headers_admin
+        f"/api/v1/complaints/{t2_id}/link-duplicate", json={"target_complaint_id": t1_id}, headers=headers_admin
     )
     assert link_resp.status_code == 200
     assert link_resp.json()["status"] == "LINKED"
@@ -348,6 +361,7 @@ def test_duplicate_candidate_detection_and_incident_grouping():
 # 6. Private Photo Security & Streaming Access Control
 # -----------------------------------------------------------------------------
 
+
 def test_private_photo_streaming_and_signed_url():
     """Verifies that photos are served with signed URLs or authenticated sessions, blocking unauthenticated access."""
     client_swati, headers_swati = get_authenticated_client("9876543211")
@@ -360,7 +374,7 @@ def test_private_photo_streaming_and_signed_url():
     data = {
         "flat_id": flat.id,
         "title": "Broken window latch",
-        "description": "Balcony sliding window latch is snapped and will not lock"
+        "description": "Balcony sliding window latch is snapped and will not lock",
     }
 
     create_resp = client_swati.post("/api/v1/complaints", data=data, files=files, headers=headers_swati)

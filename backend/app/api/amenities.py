@@ -1,27 +1,26 @@
-from datetime import date, datetime
-from typing import List, Optional
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
 from backend.app.core.security import get_current_user
 from backend.app.models.entities import (
-    User,
     Amenity,
-    AmenitySlot,
-    AmenityRule,
-    AmenityClosure,
     AmenityBooking,
-    FlatMembership,
+    AmenityClosure,
+    AmenityRule,
+    AmenitySlot,
+    User,
 )
 from backend.app.schemas.amenities import (
-    AmenityResponse,
-    AmenitySlotResponse,
-    AmenityRuleResponse,
-    AmenityClosureCreate,
-    AmenityClosureResponse,
     AmenityBookingCreate,
     AmenityBookingResponse,
+    AmenityClosureCreate,
+    AmenityClosureResponse,
+    AmenityResponse,
+    AmenityRuleResponse,
+    AmenitySlotResponse,
 )
 from backend.app.services.amenity_service import (
     book_amenity_slot,
@@ -33,34 +32,43 @@ from backend.app.services.amenity_service import (
 router = APIRouter(prefix="/amenities", tags=["amenities"])
 
 
-def get_user_roles(user: User) -> List[str]:
+def get_user_roles(user: User) -> list[str]:
     return [r.role_code for r in user.role_assignments]
 
 
-@router.get("", response_model=List[AmenityResponse])
+@router.get("", response_model=list[AmenityResponse])
 def list_amenities(db: Session = Depends(get_db)):
     amenities = db.query(Amenity).all()
     return amenities
 
 
-@router.get("/{amenity_id}/slots", response_model=List[AmenitySlotResponse])
+@router.get("/{amenity_id}/slots", response_model=list[AmenitySlotResponse])
 def list_amenity_slots(
     amenity_id: str,
-    target_date: Optional[date] = Query(None),
+    target_date: date | None = Query(None),
     db: Session = Depends(get_db),
 ):
     query_date = target_date or get_effective_now().date()
-    slots = db.query(AmenitySlot).filter(
-        AmenitySlot.amenity_id == amenity_id,
-        AmenitySlot.slot_date == query_date,
-    ).order_by(AmenitySlot.start_time.asc()).all()
+    slots = (
+        db.query(AmenitySlot)
+        .filter(
+            AmenitySlot.amenity_id == amenity_id,
+            AmenitySlot.slot_date == query_date,
+        )
+        .order_by(AmenitySlot.start_time.asc())
+        .all()
+    )
 
     # Check for active closures
-    closures = db.query(AmenityClosure).filter(
-        AmenityClosure.amenity_id == amenity_id,
-        AmenityClosure.start_date <= query_date,
-        AmenityClosure.end_date >= query_date,
-    ).all()
+    closures = (
+        db.query(AmenityClosure)
+        .filter(
+            AmenityClosure.amenity_id == amenity_id,
+            AmenityClosure.start_date <= query_date,
+            AmenityClosure.end_date >= query_date,
+        )
+        .all()
+    )
 
     result = []
     for slot in slots:
@@ -69,18 +77,20 @@ def list_amenity_slots(
         closure_reason = closure.reason if closure else None
         available = max(0, slot.capacity - slot.booked_count) if not is_closed else 0
 
-        result.append(AmenitySlotResponse(
-            id=slot.id,
-            amenity_id=slot.amenity_id,
-            slot_date=slot.slot_date,
-            start_time=slot.start_time,
-            end_time=slot.end_time,
-            capacity=slot.capacity,
-            booked_count=slot.booked_count,
-            available_spots=available,
-            is_closed=is_closed,
-            closure_reason=closure_reason,
-        ))
+        result.append(
+            AmenitySlotResponse(
+                id=slot.id,
+                amenity_id=slot.amenity_id,
+                slot_date=slot.slot_date,
+                start_time=slot.start_time,
+                end_time=slot.end_time,
+                capacity=slot.capacity,
+                booked_count=slot.booked_count,
+                available_spots=available,
+                is_closed=is_closed,
+                closure_reason=closure_reason,
+            )
+        )
 
     return result
 
@@ -100,9 +110,9 @@ def get_amenity_rules(amenity_id: str, db: Session = Depends(get_db)):
     return rule
 
 
-@router.get("/bookings", response_model=List[AmenityBookingResponse])
+@router.get("/bookings", response_model=list[AmenityBookingResponse])
 def list_bookings(
-    flat_id: Optional[str] = Query(None),
+    flat_id: str | None = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -126,23 +136,25 @@ def list_bookings(
     for b in bookings:
         slot = b.slot
         amenity = slot.amenity if slot else None
-        result.append(AmenityBookingResponse(
-            id=b.id,
-            flat_id=b.flat_id,
-            slot_id=b.slot_id,
-            user_id=b.user_id,
-            amenity_name=amenity.name if amenity else None,
-            slot_date=slot.slot_date if slot else None,
-            start_time=slot.start_time if slot else None,
-            end_time=slot.end_time if slot else None,
-            status=b.status,
-            fee=b.fee,
-            fee_status=b.fee_status,
-            idempotency_key=b.idempotency_key,
-            version=b.version,
-            created_at=b.created_at,
-            cancelled_at=b.cancelled_at,
-        ))
+        result.append(
+            AmenityBookingResponse(
+                id=b.id,
+                flat_id=b.flat_id,
+                slot_id=b.slot_id,
+                user_id=b.user_id,
+                amenity_name=amenity.name if amenity else None,
+                slot_date=slot.slot_date if slot else None,
+                start_time=slot.start_time if slot else None,
+                end_time=slot.end_time if slot else None,
+                status=b.status,
+                fee=b.fee,
+                fee_status=b.fee_status,
+                idempotency_key=b.idempotency_key,
+                version=b.version,
+                created_at=b.created_at,
+                cancelled_at=b.cancelled_at,
+            )
+        )
 
     return result
 

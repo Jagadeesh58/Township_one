@@ -1,10 +1,8 @@
-from datetime import datetime, timezone, timedelta
-import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
 from backend.app.core.database import SessionLocal
-from backend.app.models.entities import Notice, NoticeRevision, NoticeRead, Tower, OTPChallenge
+from backend.app.main import app
+from backend.app.models.entities import Notice, OTPChallenge
 
 
 def get_auth_client(phone: str) -> tuple[TestClient, dict]:
@@ -26,7 +24,7 @@ def get_auth_client(phone: str) -> tuple[TestClient, dict]:
 
 def test_tower_targeting_scoping():
     neeraj_client, neeraj_headers = get_auth_client("9876543210")  # Neeraj (Tower 7)
-    swati_client, swati_headers = get_auth_client("9876543211")    # Swati (Tower 12)
+    swati_client, swati_headers = get_auth_client("9876543211")  # Swati (Tower 12)
 
     # 1. Neeraj (Tower 7 resident) sees both global AGM notice and Tower 7 lift notice
     neeraj_res = neeraj_client.get("/api/v1/notices", headers=neeraj_headers)

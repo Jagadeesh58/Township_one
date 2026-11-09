@@ -12,9 +12,10 @@ Comprehensive verification of server-side role boundaries:
 """
 
 from fastapi.testclient import TestClient
-from backend.app.main import app
+
 from backend.app.core.database import SessionLocal
-from backend.app.models.entities import User, Flat, Bill, OTPChallenge, Complaint
+from backend.app.main import app
+from backend.app.models.entities import Flat, OTPChallenge
 
 client = TestClient(app)
 
@@ -71,8 +72,7 @@ def test_csrf_missing_on_mutating_requests_returns_403():
 
     # Mutating POST request
     resp = admin_client.post(
-        "/api/v1/complaints",
-        data={"flat_id": "dummy", "title": "Test", "description": "Test complaint"}
+        "/api/v1/complaints", data={"flat_id": "dummy", "title": "Test", "description": "Test complaint"}
     )
     assert resp.status_code == 403, f"Expected 403 without CSRF token, got {resp.status_code}"
     assert "CSRF" in resp.text or "Forbidden" in resp.text
@@ -92,8 +92,7 @@ def test_guard_cannot_access_complaints_or_billing():
 
     # Guard cannot raise resident complaint
     resp = guard_client.post(
-        "/api/v1/complaints",
-        data={"flat_id": flat.id, "title": "Guard test", "description": "Guard should not post"}
+        "/api/v1/complaints", data={"flat_id": flat.id, "title": "Guard test", "description": "Guard should not post"}
     )
     assert resp.status_code == 403, f"Guard raising complaint got {resp.status_code}"
 
@@ -109,7 +108,7 @@ def test_guard_cannot_access_complaints_or_billing():
 def test_resident_cannot_access_other_flat_complaints_or_photos_or_bills():
     """Resident must be strictly restricted to their own flat's data (403 or IDOR-safe 404)."""
     neeraj_client, neeraj_user, _ = get_auth_client("9876543210")  # T07-1203
-    swati_client, swati_user, _ = get_auth_client("9876543211")    # T12-0408
+    swati_client, swati_user, _ = get_auth_client("9876543211")  # T12-0408
 
     db = SessionLocal()
     neeraj_flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
@@ -122,8 +121,8 @@ def test_resident_cannot_access_other_flat_complaints_or_photos_or_bills():
         data={
             "flat_id": swati_flat.id,
             "title": "Kitchen drain blockage in T12",
-            "description": "Kitchen pipe leaking water heavily into lower cabinet"
-        }
+            "description": "Kitchen pipe leaking water heavily into lower cabinet",
+        },
     )
     assert swati_comp_resp.status_code == 201
     swati_comp_id = swati_comp_resp.json()["id"]
@@ -150,7 +149,7 @@ def test_helpdesk_cannot_access_bank_statement_or_financial_commit():
     resp = helpdesk_client.post(
         "/api/v1/bank/imports/preview",
         files={"file": ("stmt.csv", sample_csv.encode("utf-8"), "text/csv")},
-        data={"account_no": "98765432100012"}
+        data={"account_no": "98765432100012"},
     )
     assert resp.status_code == 403, f"Helpdesk bank preview got {resp.status_code}, expected 403"
 
@@ -160,8 +159,7 @@ def test_helpdesk_cannot_access_bank_statement_or_financial_commit():
 
     # Helpdesk cannot execute bank row commit
     resp = helpdesk_client.post(
-        "/api/v1/bank/imports/commit",
-        json={"bank_account_no": "98765432100012", "import_file_id": "dummy"}
+        "/api/v1/bank/imports/commit", json={"bank_account_no": "98765432100012", "import_file_id": "dummy"}
     )
     assert resp.status_code == 403, f"Helpdesk bank commit got {resp.status_code}, expected 403"
 
@@ -178,26 +176,21 @@ def test_accounts_cannot_alter_complaint_lifecycle_or_classification():
     # Create complaint
     c_resp = neeraj_client.post(
         "/api/v1/complaints",
-        data={"flat_id": flat.id, "title": "Lobby light fused", "description": "Floor 12 lobby light fused"}
+        data={"flat_id": flat.id, "title": "Lobby light fused", "description": "Floor 12 lobby light fused"},
     )
     c_id = c_resp.json()["id"]
 
     # Accounts staff attempts to transition status -> 403
     resp = accounts_client.post(
         f"/api/v1/complaints/{c_id}/transition",
-        json={"status": "IN_PROGRESS", "notes": "Accounts attempting transition"}
+        json={"status": "IN_PROGRESS", "notes": "Accounts attempting transition"},
     )
     assert resp.status_code == 403, f"Accounts altering status got {resp.status_code}, expected 403"
 
     # Accounts staff attempts to correct AI classification -> 403
     resp = accounts_client.post(
         f"/api/v1/complaints/{c_id}/correct-classification",
-        json={
-            "expected_version": 1,
-            "category": "ELECTRICAL",
-            "urgency": "HIGH",
-            "reason": "Accounts reclassifying"
-        }
+        json={"expected_version": 1, "category": "ELECTRICAL", "urgency": "HIGH", "reason": "Accounts reclassifying"},
     )
     assert resp.status_code == 403, f"Accounts correcting classification got {resp.status_code}, expected 403"
 
@@ -217,7 +210,7 @@ def test_committee_aggregate_boundaries_and_denial_of_flat_level_actions():
     # Committee cannot raise a complaint on a flat they don't reside in
     resp = committee_client.post(
         "/api/v1/complaints",
-        data={"flat_id": flat.id, "title": "Committee unauthorized ticket", "description": "Testing permission denial"}
+        data={"flat_id": flat.id, "title": "Committee unauthorized ticket", "description": "Testing permission denial"},
     )
     assert resp.status_code == 403, f"Committee raising complaint got {resp.status_code}, expected 403"
 
@@ -229,7 +222,7 @@ def test_committee_aggregate_boundaries_and_denial_of_flat_level_actions():
             "bill_id": "dummy-bill",
             "amount": "1000.00",
             "payment_method": "UPI",
-            "idempotency_key": "comm-chk-1"
-        }
+            "idempotency_key": "comm-chk-1",
+        },
     )
     assert resp.status_code == 403, f"Committee paying resident bill got {resp.status_code}, expected 403"

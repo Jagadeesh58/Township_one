@@ -6,14 +6,14 @@ character n-gram TF-IDF cosine similarity. Character n-grams robustly capture
 misspellings, compound words, and script variations in multilingual resident text.
 """
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-import numpy as np
+from datetime import UTC, datetime
+from typing import Any
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-def _extract_text(complaint: Dict[str, Any]) -> str:
+def _extract_text(complaint: dict[str, Any]) -> str:
     """Extracts text representation from complaint dictionary."""
     if "text" in complaint and complaint["text"]:
         return str(complaint["text"]).strip()
@@ -24,16 +24,16 @@ def _extract_text(complaint: Dict[str, Any]) -> str:
 
 def find_duplicate_candidates(
     new_text: str,
-    existing_complaints: List[Dict[str, Any]],
+    existing_complaints: list[dict[str, Any]],
     threshold: float = 0.45,
     max_candidates: int = 5,
-    tower_id: Optional[str] = None,
-    time_window_hours: Optional[float] = None,
-    reference_time: Optional[datetime] = None,
-) -> List[Dict[str, Any]]:
+    tower_id: str | None = None,
+    time_window_hours: float | None = None,
+    reference_time: datetime | None = None,
+) -> list[dict[str, Any]]:
     """
     Finds existing complaints similar to new_text using char n-gram TF-IDF cosine similarity.
-    
+
     Filters candidates by optional tower and time window if specified, scores candidates,
     filters by similarity >= threshold, and returns top candidates sorted descending.
     """
@@ -42,8 +42,8 @@ def find_duplicate_candidates(
         return []
 
     # Filter by tower if specified and present
-    filtered_complaints: List[Dict[str, Any]] = []
-    ref_time = reference_time or datetime.now(timezone.utc)
+    filtered_complaints: list[dict[str, Any]] = []
+    ref_time = reference_time or datetime.now(UTC)
 
     for item in existing_complaints:
         # Tower isolation filter
@@ -61,7 +61,7 @@ def find_duplicate_candidates(
                     item_time = None
             if isinstance(item_time, datetime):
                 if item_time.tzinfo is None:
-                    item_time = item_time.replace(tzinfo=timezone.utc)
+                    item_time = item_time.replace(tzinfo=UTC)
                 delta_hours = abs((ref_time - item_time).total_seconds()) / 3600.0
                 if delta_hours > time_window_hours:
                     continue
@@ -90,7 +90,7 @@ def find_duplicate_candidates(
 
     # Pair with complaints, filter above threshold, sort descending
     scored_candidates = []
-    for comp, score in zip(filtered_complaints, similarities):
+    for comp, score in zip(filtered_complaints, similarities, strict=False):
         score_val = float(score)
         if score_val >= threshold:
             candidate_copy = dict(comp)

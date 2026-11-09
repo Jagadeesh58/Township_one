@@ -10,17 +10,18 @@ Test suite verifying:
 
 import os
 import uuid
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.app.core.database import Base, SessionLocal
 from backend.app.main import app
-from backend.app.core.database import SessionLocal, Base
-from backend.app.models.entities import Bill, Payment, OTPChallenge, Flat, Tower
+from backend.app.models.entities import Bill, Flat, OTPChallenge, Payment, Tower
 
 client = TestClient(app)
 
@@ -49,7 +50,7 @@ def test_concurrent_identical_idempotency_requests():
 
     db = SessionLocal()
     try:
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         test_bill = Bill(
             id=str(uuid.uuid4()),
             flat_id=flat_id,
@@ -65,7 +66,7 @@ def test_concurrent_identical_idempotency_requests():
             total_amount=Decimal("3500.00"),
             paid_amount=Decimal("0.00"),
             balance_amount=Decimal("3500.00"),
-            status="ISSUED"
+            status="ISSUED",
         )
         db.add(test_bill)
         db.commit()
@@ -87,8 +88,8 @@ def test_concurrent_identical_idempotency_requests():
                 "bill_id": bill_id,
                 "amount": pay_amount,
                 "test_outcome": "SUCCESS",
-                "idempotency_key": concurrent_key
-            }
+                "idempotency_key": concurrent_key,
+            },
         )
 
     # Launch 5 concurrent threads with identical key
@@ -122,7 +123,7 @@ def test_sequential_over_allocation_prevented():
 
     db = SessionLocal()
     try:
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         test_bill = Bill(
             id=str(uuid.uuid4()),
             flat_id=flat_id,
@@ -138,7 +139,7 @@ def test_sequential_over_allocation_prevented():
             total_amount=Decimal("4500.00"),
             paid_amount=Decimal("0.00"),
             balance_amount=Decimal("4500.00"),
-            status="ISSUED"
+            status="ISSUED",
         )
         db.add(test_bill)
         db.commit()
@@ -156,8 +157,8 @@ def test_sequential_over_allocation_prevented():
             "bill_id": bill_id,
             "amount": balance,
             "test_outcome": "SUCCESS",
-            "idempotency_key": f"IDEM-SEQ-1-{uuid.uuid4()}"
-        }
+            "idempotency_key": f"IDEM-SEQ-1-{uuid.uuid4()}",
+        },
     )
     assert p1.status_code == 200
 
@@ -170,8 +171,8 @@ def test_sequential_over_allocation_prevented():
             "bill_id": bill_id,
             "amount": 1000.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": f"IDEM-SEQ-2-{uuid.uuid4()}"
-        }
+            "idempotency_key": f"IDEM-SEQ-2-{uuid.uuid4()}",
+        },
     )
     assert p2.status_code == 400
     assert "already fully paid" in p2.json()["error"]["message"]
@@ -194,7 +195,7 @@ def test_concurrent_payments_prevent_over_allocation():
 
     db = SessionLocal()
     try:
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         test_bill = Bill(
             id=str(uuid.uuid4()),
             flat_id=flat_id,
@@ -210,7 +211,7 @@ def test_concurrent_payments_prevent_over_allocation():
             total_amount=Decimal("4000.00"),
             paid_amount=Decimal("0.00"),
             balance_amount=Decimal("4000.00"),
-            status="ISSUED"
+            status="ISSUED",
         )
         db.add(test_bill)
         db.commit()
@@ -229,8 +230,8 @@ def test_concurrent_payments_prevent_over_allocation():
                 "bill_id": bill_id,
                 "amount": balance,
                 "test_outcome": "SUCCESS",
-                "idempotency_key": f"IDEM-OVERALLOC-{i}-{uuid.uuid4()}"
-            }
+                "idempotency_key": f"IDEM-OVERALLOC-{i}-{uuid.uuid4()}",
+            },
         )
 
     results = []
@@ -275,12 +276,19 @@ def test_postgresql_with_for_update_row_locking():
     if not flat:
         tower = Tower(id=str(uuid.uuid4()), tower_number="T99", name="Test Tower", total_floors=10, total_flats=40)
         init_db.add(tower)
-        flat = Flat(id=str(uuid.uuid4()), tower_id=tower.id, flat_number="T99-0101", floor_number=1, area_sqft=Decimal("1000.00"), bhk_type="2BHK")
+        flat = Flat(
+            id=str(uuid.uuid4()),
+            tower_id=tower.id,
+            flat_number="T99-0101",
+            floor_number=1,
+            area_sqft=Decimal("1000.00"),
+            bhk_type="2BHK",
+        )
         init_db.add(flat)
         init_db.commit()
 
     test_bill_id = str(uuid.uuid4())
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     bill = Bill(
         id=test_bill_id,
         flat_id=flat.id,
@@ -296,7 +304,7 @@ def test_postgresql_with_for_update_row_locking():
         total_amount=Decimal("5000.00"),
         paid_amount=Decimal("0.00"),
         balance_amount=Decimal("5000.00"),
-        status="ISSUED"
+        status="ISSUED",
     )
     init_db.add(bill)
     init_db.commit()

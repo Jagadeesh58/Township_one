@@ -1,10 +1,11 @@
 import os
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.app.core.config import settings
-from backend.app.core.database import Base, get_db, SessionLocal
+from backend.app.core.database import SessionLocal, get_db
 from backend.app.main import app
 from seed.seed_data import seed_database
 
@@ -40,7 +41,7 @@ if test_db_url.startswith("postgresql") and not os.environ.get("TEST_DATABASE_UR
 test_engine = create_engine(
     test_db_url,
     connect_args={"check_same_thread": False} if test_db_url.startswith("sqlite") else {},
-    pool_pre_ping=True
+    pool_pre_ping=True,
 )
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
@@ -69,6 +70,7 @@ def reset_test_db_per_module():
 @pytest.fixture(autouse=True)
 def isolate_test_state():
     from backend.app.core.security import REVOKED_TOKENS
+
     REVOKED_TOKENS.clear()
     yield
     REVOKED_TOKENS.clear()

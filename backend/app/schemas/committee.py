@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, Dict, Any, List
+
 from pydantic import BaseModel
 
 
@@ -27,9 +27,9 @@ class ComplaintsMetrics(BaseModel):
     overdue_count: int
     reopened_count: int
     reopened_rate_percent: Decimal
-    mean_resolution_hours: Optional[Decimal] = None
-    median_resolution_hours: Optional[Decimal] = None
-    mean_first_response_hours: Optional[Decimal] = None
+    mean_resolution_hours: Decimal | None = None
+    median_resolution_hours: Decimal | None = None
+    mean_first_response_hours: Decimal | None = None
 
 
 class PaymentMatchingMetrics(BaseModel):
@@ -56,5 +56,5 @@ class CommitteeReportResponse(BaseModel):
     financials: FinancialMetrics
     complaints: ComplaintsMetrics
     payment_matching: PaymentMatchingMetrics
-    client_targets: List[ClientTargetComparison]
-    kpi_definitions: Dict[str, str]
+    client_targets: list[ClientTargetComparison]
+    kpi_definitions: dict[str, str]

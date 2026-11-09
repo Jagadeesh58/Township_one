@@ -10,13 +10,22 @@ Responsibility:
 - Verify safe mode idempotency and partial seed protection.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
-import os
+
 import pytest
-from backend.app.core.database import SessionLocal, engine, Base
+
+from backend.app.core.database import SessionLocal
 from backend.app.models.entities import (
-    Tower, Flat, StaffMember, Gate, Bill, Complaint, User, UserRoleAssignment, FlatMembership
+    Bill,
+    Complaint,
+    Flat,
+    FlatMembership,
+    Gate,
+    StaffMember,
+    Tower,
+    User,
+    UserRoleAssignment,
 )
 from seed.seed_data import is_safe_local_database, seed_database
 
@@ -45,10 +54,11 @@ def test_sample_flat_t07_1203_exact_values():
         assert flat.area_sqft == Decimal("1150.00")
 
         # Check owner membership
-        membership = db.query(FlatMembership).filter(
-            FlatMembership.flat_id == flat.id,
-            FlatMembership.member_type == "OWNER"
-        ).first()
+        membership = (
+            db.query(FlatMembership)
+            .filter(FlatMembership.flat_id == flat.id, FlatMembership.member_type == "OWNER")
+            .first()
+        )
         assert membership is not None
         assert membership.user.name == "Neeraj Kulkarni"
         assert membership.can_pay_bills is True
@@ -208,6 +218,7 @@ def test_seed_safety_rejects_remote_database_urls():
 
 def test_seed_safe_mode_rejects_remote_database_engine():
     """Verify seed_database in both safe and reset-demo mode rejects remote database engines before touching them."""
+
     class DummyRemoteEngine:
         url = "postgresql://admin:secret@ep-cool-cloud.us-east-2.aws.neon.tech/prod_db"
 

@@ -12,25 +12,32 @@ Tests verifying:
 - Standalone auto-match coverage percentage metric
 """
 
-import io
 import csv
-from decimal import Decimal
-from datetime import datetime, timezone
+import io
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import SessionLocal
 from backend.app.models.entities import (
-    BankAccount, BankImportFile, BankRow, BankPosting, Flat, Bill, BillLine,
-    Payment, FlatLedgerEntry, RegisteredUPI, User
+    BankAccount,
+    BankImportFile,
+    BankPosting,
+    BankRow,
+    Bill,
+    BillLine,
+    Flat,
+    FlatLedgerEntry,
+    Payment,
+    RegisteredUPI,
+    User,
 )
-from backend.app.services.bank_matching import (
-    preview_bank_statement, commit_bank_statement, handle_review_action
-)
+from backend.app.services.bank_matching import commit_bank_statement, handle_review_action, preview_bank_statement
 from backend.app.services.billing import round_currency
-from tests.bank_corpus.generate_corpus import generate_corpus, write_corpus_csv
+from tests.bank_corpus.generate_corpus import generate_corpus
 
 
 def provision_corpus_environment(db: Session, account_no: str = "98765432100012"):
@@ -44,7 +51,7 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
             account_no=account_no,
             bank_name="HDFC Bank - Township One Operations",
             ifsc_code="HDFC0001234",
-            is_active=True
+            is_active=True,
         )
         db.add(bank_acc)
         db.flush()
@@ -65,9 +72,9 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
     db.query(BankImportFile).delete(synchronize_session=False)
     db.query(FlatLedgerEntry).filter(FlatLedgerEntry.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
     db.query(Payment).filter(Payment.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
-    db.query(BillLine).filter(BillLine.bill_id.in_(
-        db.query(Bill.id).filter(Bill.flat_id.in_(target_flat_ids))
-    )).delete(synchronize_session=False)
+    db.query(BillLine).filter(BillLine.bill_id.in_(db.query(Bill.id).filter(Bill.flat_id.in_(target_flat_ids)))).delete(
+        synchronize_session=False
+    )
     db.query(Bill).filter(Bill.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
     db.query(RegisteredUPI).filter(RegisteredUPI.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
     db.commit()
@@ -78,10 +85,21 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
         f_num1 = f"T01-{fl:02d}01"
         amt1 = Decimal("10660.00")
         f1 = flats[f_num1]
-        b1 = Bill(flat_id=f1.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                  issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                  area_sqft=Decimal("1640.00"), rate_per_sqft=Decimal("6.50"), principal_amount=amt1,
-                  total_amount=amt1, paid_amount=Decimal("0.00"), balance_amount=amt1, status="ISSUED")
+        b1 = Bill(
+            flat_id=f1.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("1640.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=amt1,
+            total_amount=amt1,
+            paid_amount=Decimal("0.00"),
+            balance_amount=amt1,
+            status="ISSUED",
+        )
         db.add(b1)
         db.add(RegisteredUPI(flat_id=f1.id, upi_id=f"resident.t01.{fl:02d}01@okhdfcbank", is_verified=True))
 
@@ -89,10 +107,21 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
         f_num2 = f"T01-{fl:02d}02"
         amt2 = Decimal("9230.00")
         f2 = flats[f_num2]
-        b2 = Bill(flat_id=f2.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                  issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                  area_sqft=Decimal("1420.00"), rate_per_sqft=Decimal("6.50"), principal_amount=amt2,
-                  total_amount=amt2, paid_amount=Decimal("0.00"), balance_amount=amt2, status="ISSUED")
+        b2 = Bill(
+            flat_id=f2.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("1420.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=amt2,
+            total_amount=amt2,
+            paid_amount=Decimal("0.00"),
+            balance_amount=amt2,
+            status="ISSUED",
+        )
         db.add(b2)
         db.add(RegisteredUPI(flat_id=f2.id, upi_id=f"resident.t01.{fl:02d}02@okaxis", is_verified=True))
 
@@ -100,10 +129,21 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
         f_num3 = f"T01-{fl:02d}03"
         amt3 = Decimal("7475.00")
         f3 = flats[f_num3]
-        b3 = Bill(flat_id=f3.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                  issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                  area_sqft=Decimal("1150.00"), rate_per_sqft=Decimal("6.50"), principal_amount=amt3,
-                  total_amount=amt3, paid_amount=Decimal("0.00"), balance_amount=amt3, status="ISSUED")
+        b3 = Bill(
+            flat_id=f3.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("1150.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=amt3,
+            total_amount=amt3,
+            paid_amount=Decimal("0.00"),
+            balance_amount=amt3,
+            status="ISSUED",
+        )
         db.add(b3)
         db.add(RegisteredUPI(flat_id=f3.id, upi_id=f"resident.t01.{fl:02d}03@icici", is_verified=True))
 
@@ -111,10 +151,21 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
         f_num4 = f"T01-{fl:02d}04"
         amt4 = Decimal("6370.00")
         f4 = flats[f_num4]
-        b4 = Bill(flat_id=f4.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                  issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                  area_sqft=Decimal("980.00"), rate_per_sqft=Decimal("6.50"), principal_amount=amt4,
-                  total_amount=amt4, paid_amount=Decimal("0.00"), balance_amount=amt4, status="ISSUED")
+        b4 = Bill(
+            flat_id=f4.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("980.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=amt4,
+            total_amount=amt4,
+            paid_amount=Decimal("0.00"),
+            balance_amount=amt4,
+            status="ISSUED",
+        )
         db.add(b4)
         db.add(RegisteredUPI(flat_id=f4.id, upi_id=f"resident.t01.{fl:02d}04@paytm", is_verified=True))
 
@@ -122,43 +173,98 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
     for fl in range(1, 16):
         if fl <= 10:
             f2_1 = flats[f"T02-{fl:02d}01"]
-            b2_1 = Bill(flat_id=f2_1.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                        issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                        area_sqft=Decimal("1640.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("10660.00"),
-                        total_amount=Decimal("10660.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("10660.00"), status="ISSUED")
+            b2_1 = Bill(
+                flat_id=f2_1.id,
+                billing_rule_version="v1.0-demo",
+                period_month=11,
+                period_year=2026,
+                issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+                due_date=datetime(2026, 11, 15, tzinfo=UTC),
+                area_sqft=Decimal("1640.00"),
+                rate_per_sqft=Decimal("6.50"),
+                principal_amount=Decimal("10660.00"),
+                total_amount=Decimal("10660.00"),
+                paid_amount=Decimal("0.00"),
+                balance_amount=Decimal("10660.00"),
+                status="ISSUED",
+            )
             db.add(b2_1)
             db.add(RegisteredUPI(flat_id=f2_1.id, upi_id=f"user.t02.{fl:02d}01@okhdfcbank", is_verified=True))
 
             f2_2 = flats[f"T02-{fl:02d}02"]
-            b2_2 = Bill(flat_id=f2_2.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                        issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                        area_sqft=Decimal("1420.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("9230.00"),
-                        total_amount=Decimal("9230.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("9230.00"), status="ISSUED")
+            b2_2 = Bill(
+                flat_id=f2_2.id,
+                billing_rule_version="v1.0-demo",
+                period_month=11,
+                period_year=2026,
+                issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+                due_date=datetime(2026, 11, 15, tzinfo=UTC),
+                area_sqft=Decimal("1420.00"),
+                rate_per_sqft=Decimal("6.50"),
+                principal_amount=Decimal("9230.00"),
+                total_amount=Decimal("9230.00"),
+                paid_amount=Decimal("0.00"),
+                balance_amount=Decimal("9230.00"),
+                status="ISSUED",
+            )
             db.add(b2_2)
             db.add(RegisteredUPI(flat_id=f2_2.id, upi_id=f"user.t02.{fl:02d}02@okaxis", is_verified=True))
 
             f2_3 = flats[f"T02-{fl:02d}03"]
-            b2_3 = Bill(flat_id=f2_3.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                        issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                        area_sqft=Decimal("1150.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("7475.00"),
-                        total_amount=Decimal("7475.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("7475.00"), status="ISSUED")
+            b2_3 = Bill(
+                flat_id=f2_3.id,
+                billing_rule_version="v1.0-demo",
+                period_month=11,
+                period_year=2026,
+                issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+                due_date=datetime(2026, 11, 15, tzinfo=UTC),
+                area_sqft=Decimal("1150.00"),
+                rate_per_sqft=Decimal("6.50"),
+                principal_amount=Decimal("7475.00"),
+                total_amount=Decimal("7475.00"),
+                paid_amount=Decimal("0.00"),
+                balance_amount=Decimal("7475.00"),
+                status="ISSUED",
+            )
             db.add(b2_3)
             db.add(RegisteredUPI(flat_id=f2_3.id, upi_id=f"user.t02.{fl:02d}03@icici", is_verified=True))
 
         # Flat-ref-only on unit 4
         f2_4 = flats[f"T02-{fl:02d}04"]
-        b2_4 = Bill(flat_id=f2_4.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                    issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                    area_sqft=Decimal("980.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("6370.00"),
-                    total_amount=Decimal("6370.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("6370.00"), status="ISSUED")
+        b2_4 = Bill(
+            flat_id=f2_4.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("980.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=Decimal("6370.00"),
+            total_amount=Decimal("6370.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("6370.00"),
+            status="ISSUED",
+        )
         db.add(b2_4)
 
         # Tower 3 unit 3 flat-ref-only
         f3_3 = flats[f"T03-{fl:02d}03"]
-        b3_3 = Bill(flat_id=f3_3.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                    issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                    area_sqft=Decimal("1150.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("7475.00"),
-                    total_amount=Decimal("7475.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("7475.00"), status="ISSUED")
+        b3_3 = Bill(
+            flat_id=f3_3.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("1150.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=Decimal("7475.00"),
+            total_amount=Decimal("7475.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("7475.00"),
+            status="ISSUED",
+        )
         db.add(b3_3)
 
     # Reused UPI (Tower 4: T04-0101 and T04-0102 share shared.family@okhdfcbank)
@@ -170,32 +276,76 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
     # Tower 5: Partial, overpayment, cheque, bounce flats
     for fl in range(1, 21):
         f5_1 = flats[f"T05-{fl:02d}01"]
-        b5_1 = Bill(flat_id=f5_1.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                    issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                    area_sqft=Decimal("1640.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("10660.00"),
-                    total_amount=Decimal("10660.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("10660.00"), status="ISSUED")
+        b5_1 = Bill(
+            flat_id=f5_1.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("1640.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=Decimal("10660.00"),
+            total_amount=Decimal("10660.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("10660.00"),
+            status="ISSUED",
+        )
         db.add(b5_1)
         db.add(RegisteredUPI(flat_id=f5_1.id, upi_id=f"resident.t05.{fl:02d}01@okhdfcbank", is_verified=True))
 
         f5_2 = flats[f"T05-{fl:02d}02"]
-        b5_2 = Bill(flat_id=f5_2.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                    issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                    area_sqft=Decimal("1420.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("9230.00"),
-                    total_amount=Decimal("9230.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("9230.00"), status="ISSUED")
+        b5_2 = Bill(
+            flat_id=f5_2.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("1420.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=Decimal("9230.00"),
+            total_amount=Decimal("9230.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("9230.00"),
+            status="ISSUED",
+        )
         db.add(b5_2)
         db.add(RegisteredUPI(flat_id=f5_2.id, upi_id=f"resident.t05.{fl:02d}02@okaxis", is_verified=True))
 
     # Tower 6: Ambiguity flats (each flat has TWO active open bills with identical balance)
     for fl in range(1, 21):
         f6 = flats[f"T06-{fl:02d}01"]
-        b6_a = Bill(flat_id=f6.id, billing_rule_version="v1.0-demo", period_month=10, period_year=2026,
-                    issue_date=datetime(2026, 10, 1, tzinfo=timezone.utc), due_date=datetime(2026, 10, 15, tzinfo=timezone.utc),
-                    area_sqft=Decimal("1640.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("10660.00"),
-                    total_amount=Decimal("10660.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("10660.00"), status="ISSUED")
-        b6_b = Bill(flat_id=f6.id, billing_rule_version="v1.0-demo", period_month=11, period_year=2026,
-                    issue_date=datetime(2026, 11, 1, tzinfo=timezone.utc), due_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
-                    area_sqft=Decimal("1640.00"), rate_per_sqft=Decimal("6.50"), principal_amount=Decimal("10660.00"),
-                    total_amount=Decimal("10660.00"), paid_amount=Decimal("0.00"), balance_amount=Decimal("10660.00"), status="ISSUED")
+        b6_a = Bill(
+            flat_id=f6.id,
+            billing_rule_version="v1.0-demo",
+            period_month=10,
+            period_year=2026,
+            issue_date=datetime(2026, 10, 1, tzinfo=UTC),
+            due_date=datetime(2026, 10, 15, tzinfo=UTC),
+            area_sqft=Decimal("1640.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=Decimal("10660.00"),
+            total_amount=Decimal("10660.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("10660.00"),
+            status="ISSUED",
+        )
+        b6_b = Bill(
+            flat_id=f6.id,
+            billing_rule_version="v1.0-demo",
+            period_month=11,
+            period_year=2026,
+            issue_date=datetime(2026, 11, 1, tzinfo=UTC),
+            due_date=datetime(2026, 11, 15, tzinfo=UTC),
+            area_sqft=Decimal("1640.00"),
+            rate_per_sqft=Decimal("6.50"),
+            principal_amount=Decimal("10660.00"),
+            total_amount=Decimal("10660.00"),
+            paid_amount=Decimal("0.00"),
+            balance_amount=Decimal("10660.00"),
+            status="ISSUED",
+        )
         db.add(b6_a)
         db.add(b6_b)
         db.add(RegisteredUPI(flat_id=f6.id, upi_id=f"resident.t06.{fl:02d}01@okhdfcbank", is_verified=True))
@@ -290,8 +440,16 @@ def test_corpus_processing_and_zero_false_automatic_postings():
 
         csv_buf = io.StringIO()
         fieldnames = [
-            "account_no", "txn_date", "value_date", "narration", "direction",
-            "amount", "currency", "utr", "payer_upi", "flat_ref"
+            "account_no",
+            "txn_date",
+            "value_date",
+            "narration",
+            "direction",
+            "amount",
+            "currency",
+            "utr",
+            "payer_upi",
+            "flat_ref",
         ]
         writer = csv.DictWriter(csv_buf, fieldnames=fieldnames)
         writer.writeheader()
@@ -301,18 +459,18 @@ def test_corpus_processing_and_zero_false_automatic_postings():
 
         # Commit statement
         result = commit_bank_statement(
-            db=db,
-            content=csv_content,
-            filename="corpus_bank_statement_385.csv",
-            uploaded_by_user_id=admin.id
+            db=db, content=csv_content, filename="corpus_bank_statement_385.csv", uploaded_by_user_id=admin.id
         )
 
         assert result["status"] == "COMMITTED"
         assert result["total_rows"] == len(corpus_rows)
 
-        committed_rows = db.query(BankRow).filter(
-            BankRow.import_file_id == result["import_file_id"]
-        ).order_by(BankRow.original_row_number.asc()).all()
+        committed_rows = (
+            db.query(BankRow)
+            .filter(BankRow.import_file_id == result["import_file_id"])
+            .order_by(BankRow.original_row_number.asc())
+            .all()
+        )
         assert len(committed_rows) == len(corpus_rows)
 
         # Build lookup of corpus expectations
@@ -339,13 +497,19 @@ def test_corpus_processing_and_zero_false_automatic_postings():
                 # Every AUTO row creates exactly 1 payment and 1 ledger entry
                 payment_count = db.query(Payment).filter(Payment.id == b_row.matched_payment_id).count()
                 assert payment_count == 1, f"Row #{b_row.original_row_number} expected 1 payment, got {payment_count}"
-                ledger_count = db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == b_row.matched_payment_id).count()
-                assert ledger_count == 1, f"Row #{b_row.original_row_number} expected 1 ledger entry, got {ledger_count}"
+                ledger_count = (
+                    db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == b_row.matched_payment_id).count()
+                )
+                assert ledger_count == 1, (
+                    f"Row #{b_row.original_row_number} expected 1 ledger entry, got {ledger_count}"
+                )
 
             # ASSERTION B: EVERY NON-AUTO ROW HAS ZERO POSTINGS & NON-EMPTY REASON
             if actual_decision in ["REVIEW", "DUPLICATE_NO_OP", "INVALID"]:
                 held_count += 1
-                assert b_row.matched_payment_id is None, f"Non-auto row #{b_row.original_row_number} has matched_payment_id!"
+                assert b_row.matched_payment_id is None, (
+                    f"Non-auto row #{b_row.original_row_number} has matched_payment_id!"
+                )
                 assert b_row.review_status != "AUTO_POSTED"
                 assert b_row.decision_reason is not None and len(b_row.decision_reason.strip()) > 0, (
                     f"Held row #{b_row.original_row_number} has an empty reason!"
@@ -433,6 +597,7 @@ def test_concurrent_approval_safety():
         # Concurrent execution of APPROVE
         def run_approval(idx: int):
             import time
+
             for attempt in range(5):
                 worker_db = SessionLocal()
                 try:
@@ -441,7 +606,7 @@ def test_concurrent_approval_safety():
                         bank_row_id=row_id,
                         action="APPROVE",
                         reviewer_user_id=admin.id,
-                        reason=f"Approved by worker {idx}"
+                        reason=f"Approved by worker {idx}",
                     )
                     return True
                 except Exception as e:
@@ -494,10 +659,11 @@ def test_ledger_reconciliation():
         payment_ids = [r.matched_payment_id for r in rows if r.matched_payment_id]
         assert len(payment_ids) == 2
 
-        ledger_entries = db.query(FlatLedgerEntry).filter(
-            FlatLedgerEntry.reference_id.in_(payment_ids),
-            FlatLedgerEntry.entry_type == "CREDIT"
-        ).all()
+        ledger_entries = (
+            db.query(FlatLedgerEntry)
+            .filter(FlatLedgerEntry.reference_id.in_(payment_ids), FlatLedgerEntry.entry_type == "CREDIT")
+            .all()
+        )
 
         ledger_total = sum(e.amount for e in ledger_entries)
         assert ledger_total == expected_total
@@ -531,16 +697,18 @@ def test_review_action_handlers_full_lifecycle():
         # 2. CORRECT_MAPPING (map to T01-0104 which has an open bill of 6370.00)
         target_flat = db.query(Flat).filter(Flat.flat_number == "T01-0104").first()
         assert target_flat is not None
-        target_bill = db.query(Bill).filter(
-            Bill.flat_id == target_flat.id,
-            Bill.balance_amount == Decimal("6370.00")
-        ).first()
+        target_bill = (
+            db.query(Bill).filter(Bill.flat_id == target_flat.id, Bill.balance_amount == Decimal("6370.00")).first()
+        )
 
         row = handle_review_action(
-            db, row.id, "CORRECT_MAPPING", admin.id,
+            db,
+            row.id,
+            "CORRECT_MAPPING",
+            admin.id,
             target_flat_id=target_flat.id,
             target_bill_id=target_bill.id if target_bill else None,
-            reason="Donor confirmed flat is T01-0104"
+            reason="Donor confirmed flat is T01-0104",
         )
         assert row.review_status == "CORRECTED"
         assert row.matched_flat_id == target_flat.id
@@ -583,8 +751,8 @@ def test_settle_existing_checkout_without_duplicate_payment():
             status="PENDING",
             transaction_reference="TXN-CHECKOUT-PENDING-001",
             idempotency_key="IDEM-TEST-CHECKOUT-001",
-            paid_at=datetime.now(timezone.utc),
-            payer_user_id=admin.id
+            paid_at=datetime.now(UTC),
+            payer_user_id=admin.id,
         )
         db.add(pending_payment)
         db.commit()
@@ -670,7 +838,12 @@ def test_flat_ref_only_rows_never_auto_post():
             "98765432100012,2026-11-08 12:00:00,2026-11-08,IMPS FROM BANK FOR T01-0103 MAINTENANCE,CREDIT,7475.00,INR,UTRNARRREF002,,\n"
         )
         res = commit_bank_statement(db, csv_payload, "test_flat_ref_only.csv", admin.id)
-        rows = db.query(BankRow).filter(BankRow.import_file_id == res["import_file_id"]).order_by(BankRow.original_row_number.asc()).all()
+        rows = (
+            db.query(BankRow)
+            .filter(BankRow.import_file_id == res["import_file_id"])
+            .order_by(BankRow.original_row_number.asc())
+            .all()
+        )
         assert len(rows) == 2
 
         # Row 1: Explicit flat_ref only
@@ -688,7 +861,9 @@ def test_flat_ref_only_rows_never_auto_post():
         assert r2.matched_payment_id is None
 
         # ZERO payments created for either row
-        assert db.query(Payment).filter(Payment.transaction_reference.in_(["UTRFLATREF001", "UTRNARRREF002"])).count() == 0
+        assert (
+            db.query(Payment).filter(Payment.transaction_reference.in_(["UTRFLATREF001", "UTRNARRREF002"])).count() == 0
+        )
     finally:
         db.close()
 
@@ -714,7 +889,12 @@ def test_partial_payment_approval_path_and_overpayment_held():
             "98765432100012,2026-11-08 15:00:00,2026-11-08,UPI/OVERPAY/T05-0102,CREDIT,15000.00,INR,UTROVERPAY002,resident.t05.0102@okaxis,T05-0102\n"
         )
         res = commit_bank_statement(db, csv_payload, "test_partial_overpay.csv", admin.id)
-        rows = db.query(BankRow).filter(BankRow.import_file_id == res["import_file_id"]).order_by(BankRow.original_row_number.asc()).all()
+        rows = (
+            db.query(BankRow)
+            .filter(BankRow.import_file_id == res["import_file_id"])
+            .order_by(BankRow.original_row_number.asc())
+            .all()
+        )
         assert len(rows) == 2
 
         partial_row, overpay_row = rows[0], rows[1]
@@ -733,7 +913,7 @@ def test_partial_payment_approval_path_and_overpayment_held():
             bank_row_id=partial_row.id,
             action="APPROVE",
             reviewer_user_id=admin.id,
-            reason="Approved partial payment"
+            reason="Approved partial payment",
         )
         assert approved_row.review_status == "APPROVED"
         assert approved_row.matched_payment_id is not None
@@ -743,22 +923,20 @@ def test_partial_payment_approval_path_and_overpayment_held():
         assert bill_partial.balance_amount == Decimal("6660.00")
         assert bill_partial.status == "PARTIALLY_PAID"
 
-        ledger_entry = db.query(FlatLedgerEntry).filter(
-            FlatLedgerEntry.reference_id == approved_row.matched_payment_id
-        ).first()
+        ledger_entry = (
+            db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == approved_row.matched_payment_id).first()
+        )
         assert ledger_entry is not None
         assert ledger_entry.entry_type == "CREDIT"
         assert ledger_entry.amount == Decimal("4000.00")
 
         # Concurrency safety: Approving again is safe and posts no duplicate
-        handle_review_action(
-            db=db,
-            bank_row_id=partial_row.id,
-            action="APPROVE",
-            reviewer_user_id=admin.id
-        )
+        handle_review_action(db=db, bank_row_id=partial_row.id, action="APPROVE", reviewer_user_id=admin.id)
         assert db.query(Payment).filter(Payment.transaction_reference == "UTRPARTIAL001").count() == 1
-        assert db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == approved_row.matched_payment_id).count() == 1
+        assert (
+            db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == approved_row.matched_payment_id).count()
+            == 1
+        )
 
         # 2. Attempt Overpayment Approval -> Must fail and remain HELD
         flat_overpay = db.query(Flat).filter(Flat.flat_number == "T05-0102").first()
@@ -771,7 +949,7 @@ def test_partial_payment_approval_path_and_overpayment_held():
                 bank_row_id=overpay_row.id,
                 action="APPROVE",
                 reviewer_user_id=admin.id,
-                reason="Attempting to approve excess payment"
+                reason="Attempting to approve excess payment",
             )
 
         db.refresh(overpay_row)
@@ -797,6 +975,7 @@ def test_concurrent_import_and_approval_duplicate_prevention():
     - Two threads concurrently approve the same held bank row -> exactly 1 BankPosting and 1 ledger entry.
     """
     import time
+
     db = SessionLocal()
     try:
         provision_corpus_environment(db)
@@ -814,10 +993,7 @@ def test_concurrent_import_and_approval_duplicate_prevention():
                 worker_db = SessionLocal()
                 try:
                     res = commit_bank_statement(
-                        db=worker_db,
-                        content=import_csv,
-                        filename="concurrent_import.csv",
-                        uploaded_by_user_id=admin.id
+                        db=worker_db, content=import_csv, filename="concurrent_import.csv", uploaded_by_user_id=admin.id
                     )
                     return res["status"]
                 except Exception as e:
@@ -863,7 +1039,7 @@ def test_concurrent_import_and_approval_duplicate_prevention():
                         bank_row_id=held_row_id,
                         action="APPROVE",
                         reviewer_user_id=admin.id,
-                        reason=f"Approved by concurrent worker {idx}"
+                        reason=f"Approved by concurrent worker {idx}",
                     )
                     return True
                 except Exception as e:
@@ -909,22 +1085,19 @@ def test_alembic_bank_postings_upgrade_and_downgrade():
 
         # 1. Upgrade to head
         res_head = subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            env=env, capture_output=True, text=True
+            [sys.executable, "-m", "alembic", "upgrade", "head"], env=env, capture_output=True, text=True
         )
         assert res_head.returncode == 0, f"Alembic upgrade head failed: {res_head.stderr}"
 
         # 2. Downgrade 1 step
         res_down = subprocess.run(
-            [sys.executable, "-m", "alembic", "downgrade", "-1"],
-            env=env, capture_output=True, text=True
+            [sys.executable, "-m", "alembic", "downgrade", "-1"], env=env, capture_output=True, text=True
         )
         assert res_down.returncode == 0, f"Alembic downgrade failed: {res_down.stderr}"
 
         # 3. Upgrade back to head
         res_up = subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            env=env, capture_output=True, text=True
+            [sys.executable, "-m", "alembic", "upgrade", "head"], env=env, capture_output=True, text=True
         )
         assert res_up.returncode == 0, f"Alembic upgrade failed: {res_up.stderr}"
     finally:
@@ -933,5 +1106,3 @@ def test_alembic_bank_postings_upgrade_and_downgrade():
                 os.remove(temp_db_path)
             except OSError:
                 pass
-
-

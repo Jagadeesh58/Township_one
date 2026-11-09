@@ -11,29 +11,45 @@ Provides:
 """
 
 import csv
+import hashlib
 import io
 import re
 import uuid
-import hashlib
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from datetime import datetime, timezone
-from typing import Optional, Union, Dict, Any, List
+from typing import Any
 
-from sqlalchemy.orm import Session
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from backend.app.models.entities import (
-    BankAccount, BankImportFile, BankRow, BankPosting, Flat, Bill, Payment,
-    FlatLedgerEntry, Receipt, RegisteredUPI, AuditEvent, User
+    AuditEvent,
+    BankAccount,
+    BankImportFile,
+    BankPosting,
+    BankRow,
+    Bill,
+    Flat,
+    FlatLedgerEntry,
+    Payment,
+    Receipt,
+    RegisteredUPI,
+    User,
 )
 from backend.app.schemas.bank import BankMatchReason
 from backend.app.services.billing import round_currency
 
-
 EXPECTED_HEADERS = [
-    "account_no", "txn_date", "value_date", "narration",
-    "direction", "amount", "currency", "utr", "payer_upi", "flat_ref"
+    "account_no",
+    "txn_date",
+    "value_date",
+    "narration",
+    "direction",
+    "amount",
+    "currency",
+    "utr",
+    "payer_upi",
+    "flat_ref",
 ]
 
 DATE_FORMATS = [
@@ -44,18 +60,18 @@ DATE_FORMATS = [
     "%d/%m/%Y %H:%M:%S",
     "%d/%m/%Y",
     "%Y/%m/%d %H:%M:%S",
-    "%Y/%m/%d"
+    "%Y/%m/%d",
 ]
 
 
-def parse_statement_date(date_str: Optional[str]) -> Optional[datetime]:
+def parse_statement_date(date_str: str | None) -> datetime | None:
     if not date_str or not date_str.strip():
         return None
     cleaned = date_str.strip()
     try:
         dt = datetime.fromisoformat(cleaned.replace("Z", "+00:00"))
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except Exception:
         pass
@@ -63,13 +79,13 @@ def parse_statement_date(date_str: Optional[str]) -> Optional[datetime]:
     for fmt in DATE_FORMATS:
         try:
             dt = datetime.strptime(cleaned, fmt)
-            return dt.replace(tzinfo=timezone.utc)
+            return dt.replace(tzinfo=UTC)
         except ValueError:
             continue
     return None
 
 
-def calculate_content_sha256(content: Union[str, bytes]) -> tuple[bytes, str]:
+def calculate_content_sha256(content: str | bytes) -> tuple[bytes, str]:
     if isinstance(content, str):
         content_bytes = content.encode("utf-8")
     else:
@@ -78,11 +94,8 @@ def calculate_content_sha256(content: Union[str, bytes]) -> tuple[bytes, str]:
 
 
 def preview_bank_statement(
-    db: Session,
-    content: Union[str, bytes],
-    filename: str,
-    bank_account_no: Optional[str] = None
-) -> Dict[str, Any]:
+    db: Session, content: str | bytes, filename: str, bank_account_no: str | None = None
+) -> dict[str, Any]:
     """
     Non-mutating preview function.
     Validates CSV headers, date, amount, direction, currency, known account, and required fields.
@@ -101,19 +114,15 @@ def preview_bank_statement(
         raise ValueError(f"Missing required CSV headers: {', '.join(missing_headers)}")
 
     # Check for duplicate file SHA256 in DB
-    existing_file = db.query(BankImportFile).filter(
-        BankImportFile.file_sha256 == file_sha256
-    ).first()
+    existing_file = db.query(BankImportFile).filter(BankImportFile.file_sha256 == file_sha256).first()
     is_duplicate_file = existing_file is not None
 
     # Load active bank accounts for quick validation
-    active_accounts = {
-        acc.account_no: acc for acc in db.query(BankAccount).filter(BankAccount.is_active == True).all()
-    }
+    active_accounts = {acc.account_no: acc for acc in db.query(BankAccount).filter(BankAccount.is_active == True).all()}
 
     # Pre-fetch lookup caches for candidate evaluation
     all_registered_upis = db.query(RegisteredUPI).filter(RegisteredUPI.is_verified == True).all()
-    upi_map: Dict[str, List[str]] = {}
+    upi_map: dict[str, list[str]] = {}
     for r in all_registered_upis:
         k = r.upi_id.strip().lower()
         upi_map.setdefault(k, []).append(r.flat_id)
@@ -125,13 +134,13 @@ def preview_bank_statement(
     invalid_rows = 0
     total_credit = Decimal("0.00")
     total_debit = Decimal("0.00")
-    processed_rows: List[Dict[str, Any]] = []
+    processed_rows: list[dict[str, Any]] = []
 
-    seen_utrs: Dict[str, Dict[str, Any]] = {}
+    seen_utrs: dict[str, dict[str, Any]] = {}
 
     for row_idx, raw in enumerate(reader, start=1):
         total_rows += 1
-        errors: List[str] = []
+        errors: list[str] = []
 
         acc_no = (raw.get("account_no") or "").strip()
         txn_date_str = (raw.get("txn_date") or "").strip()
@@ -158,7 +167,7 @@ def preview_bank_statement(
         parsed_val_date = parse_statement_date(value_date_str) if value_date_str else parsed_txn_date
 
         # Amount validation
-        amount_decimal: Optional[Decimal] = None
+        amount_decimal: Decimal | None = None
         if not amount_str:
             errors.append("amount is required")
         else:
@@ -211,28 +220,30 @@ def preview_bank_statement(
                 narration=narration,
                 seen_utrs=seen_utrs,
                 upi_map=upi_map,
-                all_flats=all_flats
+                all_flats=all_flats,
             )
 
-        processed_rows.append({
-            "row_number": row_idx,
-            "raw_row": raw,
-            "account_no": acc_no,
-            "txn_date": parsed_txn_date.isoformat() if parsed_txn_date else None,
-            "value_date": parsed_val_date.isoformat() if parsed_val_date else None,
-            "narration": narration,
-            "direction": direction_str,
-            "amount": str(amount_decimal) if amount_decimal else amount_str,
-            "currency": currency_str,
-            "utr": utr_str,
-            "payer_upi": payer_upi_str,
-            "flat_ref": flat_ref_str,
-            "is_valid": is_valid,
-            "errors": errors,
-            "candidate_decision": candidate_decision,
-            "candidate_reason": candidate_reason,
-            "candidate_action": candidate_action
-        })
+        processed_rows.append(
+            {
+                "row_number": row_idx,
+                "raw_row": raw,
+                "account_no": acc_no,
+                "txn_date": parsed_txn_date.isoformat() if parsed_txn_date else None,
+                "value_date": parsed_val_date.isoformat() if parsed_val_date else None,
+                "narration": narration,
+                "direction": direction_str,
+                "amount": str(amount_decimal) if amount_decimal else amount_str,
+                "currency": currency_str,
+                "utr": utr_str,
+                "payer_upi": payer_upi_str,
+                "flat_ref": flat_ref_str,
+                "is_valid": is_valid,
+                "errors": errors,
+                "candidate_decision": candidate_decision,
+                "candidate_reason": candidate_reason,
+                "candidate_action": candidate_action,
+            }
+        )
 
     return {
         "filename": filename,
@@ -243,7 +254,7 @@ def preview_bank_statement(
         "invalid_rows": invalid_rows,
         "total_credit": total_credit,
         "total_debit": total_debit,
-        "rows": processed_rows
+        "rows": processed_rows,
     }
 
 
@@ -257,9 +268,9 @@ def evaluate_candidate_decision(
     payer_upi: str,
     flat_ref: str,
     narration: str,
-    seen_utrs: Dict[str, Dict[str, Any]],
-    upi_map: Dict[str, List[str]],
-    all_flats: Dict[str, str]
+    seen_utrs: dict[str, dict[str, Any]],
+    upi_map: dict[str, list[str]],
+    all_flats: dict[str, str],
 ) -> tuple[str, str, str]:
     """
     Evaluates row level deterministic matching logic:
@@ -308,7 +319,7 @@ def evaluate_candidate_decision(
     seen_utrs[utr] = {"signature": evidence_signature, "decision": "PENDING"}
 
     # 6. Flat Identification (by flat_ref, payer_upi, or narration)
-    matched_flat_id: Optional[str] = None
+    matched_flat_id: str | None = None
     flat_ref_upper = flat_ref.strip().upper()
     upi_clean = payer_upi.strip().lower()
 
@@ -360,10 +371,12 @@ def evaluate_candidate_decision(
         return "REVIEW", BankMatchReason.AMOUNT_ONLY_REVIEW.value, "HOLD"
 
     # 7. Bill Balance Matching (Only reachable when both registered UPI and flat_ref match the same flat)
-    open_bills = db.query(Bill).filter(
-        Bill.flat_id == matched_flat_id,
-        Bill.balance_amount > Decimal("0.00")
-    ).order_by(Bill.due_date.asc()).all()
+    open_bills = (
+        db.query(Bill)
+        .filter(Bill.flat_id == matched_flat_id, Bill.balance_amount > Decimal("0.00"))
+        .order_by(Bill.due_date.asc())
+        .all()
+    )
 
     if not open_bills:
         return "REVIEW", BankMatchReason.OVERPAYMENT_ALL_BILLS_PAID.value, "HOLD"
@@ -384,12 +397,8 @@ def evaluate_candidate_decision(
 
 
 def commit_bank_statement(
-    db: Session,
-    content: Union[str, bytes],
-    filename: str,
-    uploaded_by_user_id: str,
-    bank_account_no: Optional[str] = None
-) -> Dict[str, Any]:
+    db: Session, content: str | bytes, filename: str, uploaded_by_user_id: str, bank_account_no: str | None = None
+) -> dict[str, Any]:
     """
     Idempotent commit matching service keyed by (account_no, file_sha256).
     Preserves invalid rows with reasons.
@@ -408,37 +417,41 @@ def commit_bank_statement(
         raise ValueError(f"Missing required CSV headers: {', '.join(missing_headers)}")
 
     # 1. Determine Township Bank Account
-    target_bank_account: Optional[BankAccount] = None
+    target_bank_account: BankAccount | None = None
     if bank_account_no:
-        target_bank_account = db.query(BankAccount).filter(
-            BankAccount.account_no == bank_account_no,
-            BankAccount.is_active == True
-        ).first()
+        target_bank_account = (
+            db.query(BankAccount)
+            .filter(BankAccount.account_no == bank_account_no, BankAccount.is_active == True)
+            .first()
+        )
 
-    first_row_acc: Optional[str] = None
+    first_row_acc: str | None = None
     rows_data = list(reader)
     if rows_data:
         first_row_acc = (rows_data[0].get("account_no") or "").strip()
 
     if not target_bank_account and first_row_acc:
-        target_bank_account = db.query(BankAccount).filter(
-            BankAccount.account_no == first_row_acc,
-            BankAccount.is_active == True
-        ).first()
+        target_bank_account = (
+            db.query(BankAccount).filter(BankAccount.account_no == first_row_acc, BankAccount.is_active == True).first()
+        )
 
     if not target_bank_account:
         raise ValueError("No recognized active bank account found for statement import.")
 
     # 2. File-Level Idempotency check: (account_no, file_sha256)
-    existing_import = db.query(BankImportFile).filter(
-        BankImportFile.bank_account_id == target_bank_account.id,
-        BankImportFile.file_sha256 == file_sha256
-    ).first()
+    existing_import = (
+        db.query(BankImportFile)
+        .filter(BankImportFile.bank_account_id == target_bank_account.id, BankImportFile.file_sha256 == file_sha256)
+        .first()
+    )
 
     if existing_import:
-        existing_rows = db.query(BankRow).filter(
-            BankRow.import_file_id == existing_import.id
-        ).order_by(BankRow.original_row_number.asc()).all()
+        existing_rows = (
+            db.query(BankRow)
+            .filter(BankRow.import_file_id == existing_import.id)
+            .order_by(BankRow.original_row_number.asc())
+            .all()
+        )
 
         return {
             "status": "ALREADY_PROCESSED",
@@ -458,10 +471,10 @@ def commit_bank_statement(
                     "decision_reason": r.decision_reason,
                     "review_status": r.review_status,
                     "matched_payment_id": r.matched_payment_id,
-                    "matched_bill_id": r.matched_bill_id
+                    "matched_bill_id": r.matched_bill_id,
                 }
                 for r in existing_rows
-            ]
+            ],
         }
 
     # 3. Create BankImportFile record
@@ -470,20 +483,18 @@ def commit_bank_statement(
         filename=filename,
         file_sha256=file_sha256,
         uploaded_by_user_id=uploaded_by_user_id,
-        uploaded_at=datetime.now(timezone.utc),
+        uploaded_at=datetime.now(UTC),
         total_rows=0,
         accepted_rows=0,
-        invalid_rows=0
+        invalid_rows=0,
     )
     db.add(import_file)
     db.flush()
 
     # Pre-fetch lookup caches
-    active_accounts = {
-        acc.account_no: acc for acc in db.query(BankAccount).filter(BankAccount.is_active == True).all()
-    }
+    active_accounts = {acc.account_no: acc for acc in db.query(BankAccount).filter(BankAccount.is_active == True).all()}
     all_registered_upis = db.query(RegisteredUPI).filter(RegisteredUPI.is_verified == True).all()
-    upi_map: Dict[str, List[str]] = {}
+    upi_map: dict[str, list[str]] = {}
     for r in all_registered_upis:
         k = r.upi_id.strip().lower()
         upi_map.setdefault(k, []).append(r.flat_id)
@@ -493,12 +504,12 @@ def commit_bank_statement(
     total_rows = 0
     accepted_rows = 0
     invalid_rows = 0
-    seen_utrs: Dict[str, Dict[str, Any]] = {}
-    committed_rows: List[BankRow] = []
+    seen_utrs: dict[str, dict[str, Any]] = {}
+    committed_rows: list[BankRow] = []
 
     for row_idx, raw in enumerate(rows_data, start=1):
         total_rows += 1
-        errors: List[str] = []
+        errors: list[str] = []
 
         acc_no = (raw.get("account_no") or "").strip()
         txn_date_str = (raw.get("txn_date") or "").strip()
@@ -523,7 +534,7 @@ def commit_bank_statement(
 
         parsed_val_date = parse_statement_date(value_date_str) if value_date_str else parsed_txn_date
 
-        amount_decimal: Optional[Decimal] = None
+        amount_decimal: Decimal | None = None
         if not amount_str:
             errors.append("amount is required")
         else:
@@ -562,11 +573,9 @@ def commit_bank_statement(
             parse_status="ACCEPTED" if is_valid else "INVALID",
             parse_errors=errors if errors else None,
             review_status="PENDING",
-            audit_trail=[{
-                "action": "IMPORTED",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "user_id": uploaded_by_user_id
-            }]
+            audit_trail=[
+                {"action": "IMPORTED", "timestamp": datetime.now(UTC).isoformat(), "user_id": uploaded_by_user_id}
+            ],
         )
 
         if not is_valid:
@@ -590,7 +599,7 @@ def commit_bank_statement(
                 narration=narration,
                 seen_utrs=seen_utrs,
                 upi_map=upi_map,
-                all_flats=all_flats
+                all_flats=all_flats,
             )
 
             bank_row.decision = decision
@@ -598,7 +607,7 @@ def commit_bank_statement(
             bank_row.next_action = action
 
             # Flat linking
-            resolved_flat_id: Optional[str] = None
+            resolved_flat_id: str | None = None
             if flat_ref_str.strip().upper() in all_flats:
                 resolved_flat_id = all_flats[flat_ref_str.strip().upper()]
             elif payer_upi_str.strip().lower() in upi_map:
@@ -614,20 +623,18 @@ def commit_bank_statement(
 
             # If AUTO_MATCH: execute post payment logic immediately in this transaction
             if decision == "AUTO_MATCH" and resolved_flat_id:
-                open_bill = db.query(Bill).filter(
-                    Bill.flat_id == resolved_flat_id,
-                    Bill.balance_amount == amount_decimal
-                ).order_by(Bill.due_date.asc()).first()
+                open_bill = (
+                    db.query(Bill)
+                    .filter(Bill.flat_id == resolved_flat_id, Bill.balance_amount == amount_decimal)
+                    .order_by(Bill.due_date.asc())
+                    .first()
+                )
 
                 if open_bill:
                     db.add(bank_row)
                     db.flush()
                     post_res = post_bank_payment(
-                        db=db,
-                        bank_row=bank_row,
-                        bill=open_bill,
-                        user_id=uploaded_by_user_id,
-                        actor_role="SYSTEM"
+                        db=db, bank_row=bank_row, bill=open_bill, user_id=uploaded_by_user_id, actor_role="SYSTEM"
                     )
                     if post_res:
                         bank_row.review_status = "AUTO_POSTED"
@@ -667,20 +674,16 @@ def commit_bank_statement(
                 "decision_reason": r.decision_reason,
                 "review_status": r.review_status,
                 "matched_payment_id": r.matched_payment_id,
-                "matched_bill_id": r.matched_bill_id
+                "matched_bill_id": r.matched_bill_id,
             }
             for r in committed_rows
-        ]
+        ],
     }
 
 
 def post_bank_payment(
-    db: Session,
-    bank_row: BankRow,
-    bill: Bill,
-    user_id: Optional[str] = None,
-    actor_role: str = "SYSTEM"
-) -> Payment:
+    db: Session, bank_row: BankRow, bill: Bill, user_id: str | None = None, actor_role: str = "SYSTEM"
+) -> Payment | None:
     """
     Executes post-payment logic in active DB transaction with row lock on Bill.
     Updates Bill, creates Payment & FlatLedgerEntry, records AuditEvent.
@@ -699,22 +702,23 @@ def post_bank_payment(
         raise ValueError("Payment amount must be greater than zero.")
 
     # 2. Check if settling an existing checkout
-    existing_payment: Optional[Payment] = None
+    existing_payment: Payment | None = None
     if bank_row.utr:
-        existing_payment = db.query(Payment).filter(
-            Payment.bill_id == locked_bill.id,
-            Payment.transaction_reference == bank_row.utr
-        ).first()
+        existing_payment = (
+            db.query(Payment)
+            .filter(Payment.bill_id == locked_bill.id, Payment.transaction_reference == bank_row.utr)
+            .first()
+        )
 
     if not existing_payment:
         # Check if there is an existing PENDING payment on this bill with identical amount
-        existing_payment = db.query(Payment).filter(
-            Payment.bill_id == locked_bill.id,
-            Payment.amount == payment_amount,
-            Payment.status == "PENDING"
-        ).first()
+        existing_payment = (
+            db.query(Payment)
+            .filter(Payment.bill_id == locked_bill.id, Payment.amount == payment_amount, Payment.status == "PENDING")
+            .first()
+        )
 
-    now_dt = datetime.now(timezone.utc)
+    now_dt = datetime.now(UTC)
     txn_time = bank_row.txn_date or now_dt
 
     already_settled = False
@@ -726,9 +730,7 @@ def post_bank_payment(
         existing_payment.paid_at = txn_time
         payment = existing_payment
 
-        existing_ledger = db.query(FlatLedgerEntry).filter(
-            FlatLedgerEntry.reference_id == payment.id
-        ).first()
+        existing_ledger = db.query(FlatLedgerEntry).filter(FlatLedgerEntry.reference_id == payment.id).first()
         if existing_ledger:
             already_settled = True
     else:
@@ -748,7 +750,7 @@ def post_bank_payment(
             paid_at=txn_time,
             receipt_number=receipt_no,
             payer_user_id=user_id,
-            created_at=now_dt
+            created_at=now_dt,
         )
         db.add(payment)
         db.flush()
@@ -770,7 +772,7 @@ def post_bank_payment(
             amount=payment_amount,
             payment_mode="BANK_TRANSFER",
             transaction_reference=utr_ref,
-            issued_at=txn_time
+            issued_at=txn_time,
         )
         db.add(receipt)
 
@@ -784,16 +786,21 @@ def post_bank_payment(
                     utr=bank_row.utr,
                     bank_row_id=bank_row.id,
                     payment_id=payment.id,
-                    created_at=now_dt
+                    created_at=now_dt,
                 )
                 db.add(posting)
                 db.flush()
         except IntegrityError:
-            existing_posting = db.query(BankPosting).filter(
-                BankPosting.bank_account_id == bank_row.bank_account_id,
-                BankPosting.utr == bank_row.utr
-            ).first()
-            prev_row = db.query(BankRow).filter(BankRow.id == existing_posting.bank_row_id).first() if existing_posting else None
+            existing_posting = (
+                db.query(BankPosting)
+                .filter(BankPosting.bank_account_id == bank_row.bank_account_id, BankPosting.utr == bank_row.utr)
+                .first()
+            )
+            prev_row = (
+                db.query(BankRow).filter(BankRow.id == existing_posting.bank_row_id).first()
+                if existing_posting
+                else None
+            )
             prev_flat = prev_row.flat_ref.upper() if (prev_row and prev_row.flat_ref) else ""
             prev_amt = f"{prev_row.amount:.2f}" if (prev_row and prev_row.amount) else ""
             curr_flat = bank_row.flat_ref.upper() if bank_row.flat_ref else ""
@@ -810,10 +817,11 @@ def post_bank_payment(
                 bank_row.review_status = "HELD"
             return None
     elif bank_row.utr and already_settled:
-        existing_posting = db.query(BankPosting).filter(
-            BankPosting.bank_account_id == bank_row.bank_account_id,
-            BankPosting.utr == bank_row.utr
-        ).first()
+        existing_posting = (
+            db.query(BankPosting)
+            .filter(BankPosting.bank_account_id == bank_row.bank_account_id, BankPosting.utr == bank_row.utr)
+            .first()
+        )
         if not existing_posting:
             posting = BankPosting(
                 id=str(uuid.uuid4()),
@@ -821,24 +829,29 @@ def post_bank_payment(
                 utr=bank_row.utr,
                 bank_row_id=bank_row.id,
                 payment_id=payment.id,
-                created_at=now_dt
+                created_at=now_dt,
             )
             db.add(posting)
             db.flush()
 
     if not already_settled:
         # 3. Update Bill balances
-        locked_bill.paid_amount = round_currency(locked_bill.paid_amount + payment_amount)
-        locked_bill.balance_amount = round_currency(locked_bill.total_amount - locked_bill.paid_amount)
+        paid = locked_bill.paid_amount if locked_bill.paid_amount is not None else Decimal("0.00")
+        total = locked_bill.total_amount if locked_bill.total_amount is not None else Decimal("0.00")
+        locked_bill.paid_amount = round_currency(paid + payment_amount)
+        locked_bill.balance_amount = round_currency(total - locked_bill.paid_amount)
         if locked_bill.balance_amount == Decimal("0.00"):
             locked_bill.status = "PAID"
         else:
             locked_bill.status = "PARTIALLY_PAID"
 
         # 4. Post Dual-Entry Credit to Flat Ledger
-        last_ledger = db.query(FlatLedgerEntry).filter(
-            FlatLedgerEntry.flat_id == locked_bill.flat_id
-        ).order_by(FlatLedgerEntry.created_at.desc(), FlatLedgerEntry.id.desc()).first()
+        last_ledger = (
+            db.query(FlatLedgerEntry)
+            .filter(FlatLedgerEntry.flat_id == locked_bill.flat_id)
+            .order_by(FlatLedgerEntry.created_at.desc(), FlatLedgerEntry.id.desc())
+            .first()
+        )
 
         prev_balance = last_ledger.balance_after if last_ledger else Decimal("0.00")
         new_balance = round_currency(prev_balance - payment_amount)
@@ -850,7 +863,7 @@ def post_bank_payment(
             balance_after=new_balance,
             description=f"Bank Statement Credit - UTR {bank_row.utr or 'N/A'}",
             reference_id=payment.id,
-            created_at=txn_time
+            created_at=txn_time,
         )
         db.add(ledger_entry)
 
@@ -872,10 +885,10 @@ def post_bank_payment(
             "payment_id": payment.id,
             "amount": str(payment_amount),
             "new_balance": str(locked_bill.balance_amount),
-            "status": locked_bill.status
+            "status": locked_bill.status,
         },
         reason=f"Auto-match verified: UTR {bank_row.utr} posted to Bill {locked_bill.id}",
-        created_at=now_dt
+        created_at=now_dt,
     )
     db.add(audit)
     db.flush()
@@ -888,9 +901,9 @@ def handle_review_action(
     bank_row_id: str,
     action: str,
     reviewer_user_id: str,
-    target_flat_id: Optional[str] = None,
-    target_bill_id: Optional[str] = None,
-    reason: Optional[str] = None
+    target_flat_id: str | None = None,
+    target_bill_id: str | None = None,
+    reason: str | None = None,
 ) -> BankRow:
     """
     Review action handler for human-in-the-loop accounts workflow:
@@ -916,12 +929,12 @@ def handle_review_action(
     if bank_row.review_status in ["APPROVED", "AUTO_POSTED"]:
         return bank_row
 
-    now_dt = datetime.now(timezone.utc)
+    now_dt = datetime.now(UTC)
     old_state = {
         "review_status": bank_row.review_status,
         "matched_flat_id": bank_row.matched_flat_id,
         "matched_bill_id": bank_row.matched_bill_id,
-        "matched_payment_id": bank_row.matched_payment_id
+        "matched_payment_id": bank_row.matched_payment_id,
     }
 
     if action == "APPROVE":
@@ -934,22 +947,20 @@ def handle_review_action(
             raise ValueError("Cannot approve row without an assigned flat.")
 
         # Determine target bill
-        target_bill: Optional[Bill] = None
+        target_bill: Bill | None = None
         if target_bill_id:
-            target_bill = db.query(Bill).filter(
-                Bill.id == target_bill_id,
-                Bill.flat_id == chosen_flat_id
-            ).first()
+            target_bill = db.query(Bill).filter(Bill.id == target_bill_id, Bill.flat_id == chosen_flat_id).first()
         elif bank_row.matched_bill_id:
-            target_bill = db.query(Bill).filter(
-                Bill.id == bank_row.matched_bill_id,
-                Bill.flat_id == chosen_flat_id
-            ).first()
+            target_bill = (
+                db.query(Bill).filter(Bill.id == bank_row.matched_bill_id, Bill.flat_id == chosen_flat_id).first()
+            )
         else:
-            target_bill = db.query(Bill).filter(
-                Bill.flat_id == chosen_flat_id,
-                Bill.balance_amount > Decimal("0.00")
-            ).order_by(Bill.due_date.asc()).first()
+            target_bill = (
+                db.query(Bill)
+                .filter(Bill.flat_id == chosen_flat_id, Bill.balance_amount > Decimal("0.00"))
+                .order_by(Bill.due_date.asc())
+                .first()
+            )
 
         if not target_bill:
             raise ValueError("No open bill found to allocate approved payment.")
@@ -958,15 +969,13 @@ def handle_review_action(
             bank_row.review_status = "HELD"
             bank_row.correction_reason = reason or "Overpayment exceeds bill balance; held for accounts review"
             db.commit()
-            raise ValueError(f"Cannot approve overpayment of {bank_row.amount} which exceeds open bill balance of {target_bill.balance_amount}. Row remains HELD.")
+            raise ValueError(
+                f"Cannot approve overpayment of {bank_row.amount} which exceeds open bill balance of {target_bill.balance_amount}. Row remains HELD."
+            )
 
         # Execute posting logic
         post_res = post_bank_payment(
-            db=db,
-            bank_row=bank_row,
-            bill=target_bill,
-            user_id=reviewer_user_id,
-            actor_role="ACCOUNTS"
+            db=db, bank_row=bank_row, bill=target_bill, user_id=reviewer_user_id, actor_role="ACCOUNTS"
         )
         if post_res:
             bank_row.review_status = "APPROVED"
@@ -1009,10 +1018,10 @@ def handle_review_action(
             "review_status": bank_row.review_status,
             "matched_flat_id": bank_row.matched_flat_id,
             "matched_bill_id": bank_row.matched_bill_id,
-            "matched_payment_id": bank_row.matched_payment_id
+            "matched_payment_id": bank_row.matched_payment_id,
         },
         reason=bank_row.correction_reason,
-        created_at=now_dt
+        created_at=now_dt,
     )
     db.add(audit)
     db.commit()

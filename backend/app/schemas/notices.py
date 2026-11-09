@@ -1,18 +1,18 @@
 from datetime import datetime
-from typing import Optional, List
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NoticeCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)
     body_en: str = Field(..., min_length=5)
-    body_hi: Optional[str] = None
-    body_mr: Optional[str] = None
+    body_hi: str | None = None
+    body_mr: str | None = None
     audience: str = "ALL"  # ALL, TOWER
-    tower_id: Optional[str] = None
+    tower_id: str | None = None
     severity: str = "NORMAL"  # NORMAL, CRITICAL
-    publish_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
+    publish_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class NoticeRevisionResponse(BaseModel):
@@ -22,15 +22,15 @@ class NoticeRevisionResponse(BaseModel):
     title: str
     body: str
     body_en: str
-    body_hi: Optional[str] = None
-    body_mr: Optional[str] = None
+    body_hi: str | None = None
+    body_mr: str | None = None
     is_fallback_language: bool = False
-    fallback_language_label: Optional[str] = None
+    fallback_language_label: str | None = None
     publish_at: datetime
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     audience: str
-    tower_id: Optional[str] = None
-    tower_number: Optional[str] = None
+    tower_id: str | None = None
+    tower_number: str | None = None
     severity: str
     created_at: datetime
     is_read: bool = False

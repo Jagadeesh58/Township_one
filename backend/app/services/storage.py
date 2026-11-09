@@ -9,21 +9,19 @@ Enforces zero-static exposure:
 - Generates time-bounded HMAC signed access URLs (expires in <= 5 minutes).
 """
 
-import os
-import io
-import time
-import hmac
 import hashlib
+import hmac
+import io
+import os
+import time
 import uuid
-from PIL import Image, ImageOps
+
 from fastapi import HTTPException, status
+from PIL import Image
+
 from backend.app.core.config import settings
 
-ALLOWED_MIME_TYPES = {
-    "image/jpeg": "JPEG",
-    "image/png": "PNG",
-    "image/webp": "WEBP"
-}
+ALLOWED_MIME_TYPES = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 MAX_DIMENSION = 4000
 
@@ -41,8 +39,7 @@ def save_complaint_photo(file_bytes: bytes, original_filename: str) -> tuple[str
     """
     if len(file_bytes) > MAX_FILE_SIZE:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="File size exceeds the 5 MB maximum limit."
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File size exceeds the 5 MB maximum limit."
         )
 
     # Validate image using Pillow
@@ -52,7 +49,7 @@ def save_complaint_photo(file_bytes: bytes, original_filename: str) -> tuple[str
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Invalid image file format. Only valid JPEG, PNG, and WebP are accepted."
+            detail="Invalid image file format. Only valid JPEG, PNG, and WebP are accepted.",
         )
 
     # Re-open for transformation (verify() destroys image state)
@@ -60,22 +57,21 @@ def save_complaint_photo(file_bytes: bytes, original_filename: str) -> tuple[str
     format_name = image.format
     if not format_name:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Unable to determine image format."
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unable to determine image format."
         )
 
     mime_type = Image.MIME.get(format_name)
     if mime_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Unsupported image format '{format_name}'. Only JPEG, PNG, and WebP are allowed."
+            detail=f"Unsupported image format '{format_name}'. Only JPEG, PNG, and WebP are allowed.",
         )
 
     width, height = image.size
     if width > MAX_DIMENSION or height > MAX_DIMENSION:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Image dimensions ({width}x{height}) exceed maximum allowed {MAX_DIMENSION}x{MAX_DIMENSION}."
+            detail=f"Image dimensions ({width}x{height}) exceed maximum allowed {MAX_DIMENSION}x{MAX_DIMENSION}.",
         )
 
     # Strip EXIF and re-encode to clean bytes buffer
@@ -102,7 +98,7 @@ def save_complaint_photo(file_bytes: bytes, original_filename: str) -> tuple[str
 def generate_signed_photo_url(storage_key: str, expires_seconds: int = 300) -> str:
     """Generates an HMAC-SHA256 signed URL valid for <= 5 minutes."""
     expiry_timestamp = int(time.time()) + expires_seconds
-    data_to_sign = f"{storage_key}:{expiry_timestamp}".encode("utf-8")
+    data_to_sign = f"{storage_key}:{expiry_timestamp}".encode()
     signature = hmac.new(settings.SECRET_KEY.encode("utf-8"), data_to_sign, hashlib.sha256).hexdigest()
     return f"{settings.API_PREFIX}/complaints/photos/{storage_key}?exp={expiry_timestamp}&sig={signature}"
 
@@ -112,6 +108,6 @@ def verify_signed_photo_token(storage_key: str, exp: int, sig: str) -> bool:
     now = int(time.time())
     if now > exp:
         return False
-    data_to_sign = f"{storage_key}:{exp}".encode("utf-8")
+    data_to_sign = f"{storage_key}:{exp}".encode()
     expected_sig = hmac.new(settings.SECRET_KEY.encode("utf-8"), data_to_sign, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected_sig, sig)

@@ -9,10 +9,12 @@ Responsibility:
 """
 
 import os
+
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
+
 from backend.app.core.config import Settings, settings
+from backend.app.main import app
 
 client = TestClient(app)
 
@@ -50,10 +52,7 @@ def test_database_url_separation():
 
 def test_production_guard_rejects_default_secret():
     """Verify production mode rejects default or insecure secret key."""
-    prod_settings = Settings(
-        APP_ENV="production",
-        SECRET_KEY="placeholder-insecure-secret-key-32chars"
-    )
+    prod_settings = Settings(APP_ENV="production", SECRET_KEY="placeholder-insecure-secret-key-32chars")
     with pytest.raises(RuntimeError) as exc_info:
         prod_settings.validate_production_guards()
     assert "FATAL SECURITY VIOLATION" in str(exc_info.value)
@@ -61,19 +60,11 @@ def test_production_guard_rejects_default_secret():
 
 def test_production_guard_rejects_weak_secret_and_debug_true():
     """Verify production mode rejects short secrets and debug=True."""
-    weak_settings = Settings(
-        APP_ENV="production",
-        SECRET_KEY="short-secret",
-        DEBUG=False
-    )
+    weak_settings = Settings(APP_ENV="production", SECRET_KEY="short-secret", DEBUG=False)
     with pytest.raises(RuntimeError):
         weak_settings.validate_production_guards()
 
-    debug_settings = Settings(
-        APP_ENV="production",
-        SECRET_KEY="a" * 32,
-        DEBUG=True
-    )
+    debug_settings = Settings(APP_ENV="production", SECRET_KEY="a" * 32, DEBUG=True)
     with pytest.raises(RuntimeError):
         debug_settings.validate_production_guards()
 

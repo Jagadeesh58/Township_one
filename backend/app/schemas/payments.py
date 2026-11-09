@@ -1,7 +1,7 @@
-from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -20,9 +20,11 @@ class PaymentInitiateRequest(BaseModel):
     payment_method: str = "TEST_UPI"
     test_outcome: PaymentOutcomeEnum = Field(
         PaymentOutcomeEnum.SUCCESS,
-        description="Explicit test outcome: SUCCESS, PENDING, FAILED, EXPIRED. Invalid values rejected."
+        description="Explicit test outcome: SUCCESS, PENDING, FAILED, EXPIRED. Invalid values rejected.",
     )
-    idempotency_key: str = Field(..., min_length=8, max_length=100, description="Mandatory client-generated idempotency key (min 8 chars)")
+    idempotency_key: str = Field(
+        ..., min_length=8, max_length=100, description="Mandatory client-generated idempotency key (min 8 chars)"
+    )
 
     @field_validator("idempotency_key")
     @classmethod
@@ -58,5 +60,5 @@ class PaymentResponse(BaseModel):
     payment_method: str
     transaction_reference: str
     paid_at: datetime
-    receipt_number: Optional[str] = None
-    receipt: Optional[ReceiptResponse] = None
+    receipt_number: str | None = None
+    receipt: ReceiptResponse | None = None

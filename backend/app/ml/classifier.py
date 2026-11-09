@@ -13,7 +13,7 @@ import json
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import joblib
 import numpy as np
@@ -26,8 +26,14 @@ from backend.app.core.config import settings
 logger = logging.getLogger(__name__)
 
 VALID_CATEGORIES = [
-    "PLUMBING", "ELECTRICAL", "LIFT", "CLEANLINESS",
-    "WATER_SUPPLY", "SECURITY", "COMMON_AREA", "GENERAL"
+    "PLUMBING",
+    "ELECTRICAL",
+    "LIFT",
+    "CLEANLINESS",
+    "WATER_SUPPLY",
+    "SECURITY",
+    "COMMON_AREA",
+    "GENERAL",
 ]
 
 VALID_URGENCIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
@@ -37,26 +43,28 @@ DEFAULT_DATA_PATH = os.path.join(os.path.dirname(__file__), "data", "complaints_
 DEFAULT_MODEL_PATH = os.path.join(os.path.dirname(__file__), "data", "classifier_model.joblib")
 
 # In-memory cached model artifacts
-_LOADED_MODELS: Optional[Tuple[Pipeline, Pipeline]] = None
+_LOADED_MODELS: tuple[Pipeline, Pipeline] | None = None
 
 
 def build_pipeline() -> Pipeline:
     """Constructs scikit-learn feature union and multinomial naive bayes pipeline."""
-    features = FeatureUnion([
-        ("word", TfidfVectorizer(ngram_range=(1, 3), analyzer="word", min_df=1)),
-        ("char", TfidfVectorizer(ngram_range=(3, 5), analyzer="char_wb", min_df=1)),
-    ])
-    return Pipeline([
-        ("features", features),
-        ("clf", MultinomialNB(alpha=0.1)),
-    ])
+    features = FeatureUnion(
+        [
+            ("word", TfidfVectorizer(ngram_range=(1, 3), analyzer="word", min_df=1)),
+            ("char", TfidfVectorizer(ngram_range=(3, 5), analyzer="char_wb", min_df=1)),
+        ]
+    )
+    return Pipeline(
+        [
+            ("features", features),
+            ("clf", MultinomialNB(alpha=0.1)),
+        ]
+    )
 
 
 def train_model(
-    csv_path: Optional[str] = None,
-    save_path: Optional[str] = None,
-    random_seed: int = 42
-) -> Tuple[Pipeline, Pipeline]:
+    csv_path: str | None = None, save_path: str | None = None, random_seed: int = 42
+) -> tuple[Pipeline, Pipeline]:
     """Trains category and urgency pipelines from complaints dataset and persists artifacts reproducibly."""
     np.random.seed(random_seed)
 
@@ -64,11 +72,11 @@ def train_model(
     if not os.path.exists(csv_file):
         raise FileNotFoundError(f"Training dataset not found at {csv_file}")
 
-    X: List[str] = []
-    y_cat: List[str] = []
-    y_urg: List[str] = []
+    X: list[str] = []
+    y_cat: list[str] = []
+    y_urg: list[str] = []
 
-    with open(csv_file, mode="r", encoding="utf-8-sig") as f:
+    with open(csv_file, encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             X.append(str(row.get("text", "")))
@@ -90,7 +98,7 @@ def train_model(
     return cat_pipeline, urg_pipeline
 
 
-def get_local_models(model_path: Optional[str] = None) -> Tuple[Pipeline, Pipeline]:
+def get_local_models(model_path: str | None = None) -> tuple[Pipeline, Pipeline]:
     """Retrieves cached pipelines or loads/trains from persistent storage."""
     global _LOADED_MODELS
     if _LOADED_MODELS is not None:
@@ -108,11 +116,7 @@ def get_local_models(model_path: Optional[str] = None) -> Tuple[Pipeline, Pipeli
     return train_model(save_path=path)
 
 
-def _call_groq_api(
-    text: str,
-    api_key: str,
-    model_id: str
-) -> Optional[Dict[str, Any]]:
+def _call_groq_api(text: str, api_key: str, model_id: str) -> dict[str, Any] | None:
     """
     Calls Groq chat completions endpoint with 5s timeout, 1 retry, and 429 backoff.
     Sends strictly the complaint text in resident prompt.
@@ -133,7 +137,7 @@ def _call_groq_api(
                     "You are a residential maintenance triage assistant for Township One. "
                     "Analyze the complaint text and classify it into exactly one category from: "
                     f"{VALID_CATEGORIES} and one urgency from: {VALID_URGENCIES}. "
-                    "Output JSON only: {\"category\": \"...\", \"urgency\": \"...\"}"
+                    'Output JSON only: {"category": "...", "urgency": "..."}'
                 ),
             },
             {
@@ -185,10 +189,8 @@ def _call_groq_api(
 
 
 def predict_category_and_urgency(
-    text: str,
-    groq_api_key: Optional[str] = None,
-    groq_model_id: Optional[str] = None
-) -> Dict[str, Any]:
+    text: str, groq_api_key: str | None = None, groq_model_id: str | None = None
+) -> dict[str, Any]:
     """
     Predicts category and urgency for resident complaint.
     Attempts Groq call if key is available; falls back cleanly to local model.

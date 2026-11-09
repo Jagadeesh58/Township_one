@@ -10,15 +10,17 @@ Test suite verifying:
 """
 
 import secrets
+from datetime import UTC
+
 import pytest
-from fastapi.testclient import TestClient
-from backend.app.main import app
-from backend.app.core.database import SessionLocal
-from backend.app.core.config import settings
-from backend.app.models.entities import Flat, User, RevokedToken
-from backend.app.core.security import verify_flat_access
-from backend.app.models.entities import OTPChallenge
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
+
+from backend.app.core.config import settings
+from backend.app.core.database import SessionLocal
+from backend.app.core.security import verify_flat_access
+from backend.app.main import app
+from backend.app.models.entities import Flat, OTPChallenge, RevokedToken, User
 
 client = TestClient(app)
 
@@ -33,7 +35,12 @@ def test_request_otp_success():
     # Verify salted hash is stored, never plain text OTP
     db = SessionLocal()
     try:
-        challenge = db.query(OTPChallenge).filter(OTPChallenge.phone == "9876543210").order_by(OTPChallenge.created_at.desc()).first()
+        challenge = (
+            db.query(OTPChallenge)
+            .filter(OTPChallenge.phone == "9876543210")
+            .order_by(OTPChallenge.created_at.desc())
+            .first()
+        )
         assert challenge is not None
         assert challenge.otp_hash is not None
         assert challenge.salt is not None
@@ -82,7 +89,7 @@ def test_verify_otp_rate_limiting():
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543212"})  # Aamir Shaikh
     for _ in range(3):
         client.post("/api/v1/auth/otp/verify", json={"phone": "9876543212", "otp": "999999"})
-    
+
     resp = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543212", "otp": "999999"})
     assert resp.status_code == 429
     assert "Too many invalid attempts" in resp.json()["error"]["message"]
@@ -120,7 +127,7 @@ def test_cross_flat_access_idor_denied():
 
         with pytest.raises(HTTPException) as exc_info:
             verify_flat_access(user_neeraj, flat_swati.id, action="pay")
-        
+
         assert exc_info.value.status_code == 403
         assert "Access denied" in exc_info.value.detail
     finally:
@@ -203,12 +210,12 @@ def test_demo_hint_hidden_in_production(monkeypatch):
 def test_otp_request_rate_limiting():
     phone = "9876543302"  # Rajesh Nair
     # Persistent DB cleaning handled via SessionLocal
-    
+
     # Fire 5 requests
     for _ in range(5):
         resp = client.post("/api/v1/auth/otp/request", json={"phone": phone})
         assert resp.status_code == 200
-    
+
     # 6th request within window must be rejected
     rate_limited_resp = client.post("/api/v1/auth/otp/request", json={"phone": phone})
     assert rate_limited_resp.status_code == 429
@@ -218,6 +225,7 @@ def test_otp_request_rate_limiting():
 def test_database_persisted_revoked_token():
     phone = "9876543210"
     from backend.app.models.entities import OTPChallenge
+
     db = SessionLocal()
     try:
         db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
@@ -245,11 +253,11 @@ def test_database_persisted_revoked_token():
         db.close()
 
 
-
 def test_database_persisted_otp_challenge():
     """Verify OTP challenge is stored persistently in database table otp_challenges."""
     phone = "9876543210"
     from backend.app.models.entities import OTPChallenge
+
     db = SessionLocal()
     try:
         db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
@@ -260,9 +268,12 @@ def test_database_persisted_otp_challenge():
     assert resp.status_code == 200
 
     from backend.app.models.entities import OTPChallenge
+
     db = SessionLocal()
     try:
-        challenge = db.query(OTPChallenge).filter(OTPChallenge.phone == phone).order_by(OTPChallenge.created_at.desc()).first()
+        challenge = (
+            db.query(OTPChallenge).filter(OTPChallenge.phone == phone).order_by(OTPChallenge.created_at.desc()).first()
+        )
         assert challenge is not None
         assert challenge.otp_hash is not None
         assert len(challenge.otp_hash) == 64
@@ -315,7 +326,9 @@ def test_cookie_httponly_and_csrf_on_verify_otp():
 
     # Verify Set-Cookie header directives
     set_cookie_headers = [v for k, v in resp.headers.raw if k.decode("latin1").lower() == "set-cookie"]
-    session_header = next((h.decode("latin1") for h in set_cookie_headers if "township_session=" in h.decode("latin1")), "")
+    session_header = next(
+        (h.decode("latin1") for h in set_cookie_headers if "township_session=" in h.decode("latin1")), ""
+    )
     assert "httponly" in session_header.lower()
     assert "samesite=lax" in session_header.lower()
 
@@ -345,10 +358,7 @@ def test_csrf_invalid_on_post_returns_403():
     assert login_resp.status_code == 200
 
     # Attempt POST with mismatched CSRF header
-    resp = custom_client.post(
-        "/api/v1/auth/logout",
-        headers={"X-CSRF-Token": "invalid-tampered-csrf-token-12345"}
-    )
+    resp = custom_client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": "invalid-tampered-csrf-token-12345"})
     assert resp.status_code == 403
     assert "CSRF" in resp.json()["error"]["message"]
 
@@ -362,10 +372,7 @@ def test_csrf_valid_on_post_returns_200():
     csrf_token = login_resp.cookies.get("township_csrf")
 
     # POST with matching X-CSRF-Token header
-    resp = custom_client.post(
-        "/api/v1/auth/logout",
-        headers={"X-CSRF-Token": csrf_token}
-    )
+    resp = custom_client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": csrf_token})
     assert resp.status_code == 200
     assert "Logged out successfully" in resp.json()["message"]
 
@@ -374,6 +381,7 @@ def test_logout_clears_cookie_and_revokes_token():
     """Verify that logout deletes both session and CSRF cookies, and revokes access token."""
     phone = "9876543211"
     from backend.app.models.entities import OTPChallenge
+
     db = SessionLocal()
     try:
         db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
@@ -394,16 +402,15 @@ def test_logout_clears_cookie_and_revokes_token():
     assert me_resp.status_code == 200
 
     # Execute logout
-    logout_resp = custom_client.post(
-        "/api/v1/auth/logout",
-        headers={"X-CSRF-Token": csrf_token}
-    )
+    logout_resp = custom_client.post("/api/v1/auth/logout", headers={"X-CSRF-Token": csrf_token})
     assert logout_resp.status_code == 200
 
     # Verify session cookie was deleted/cleared in response
     set_cookie_headers = [v for k, v in logout_resp.headers.raw if k.decode("latin1").lower() == "set-cookie"]
-    session_header = next((h.decode("latin1") for h in set_cookie_headers if "township_session=" in h.decode("latin1")), "")
-    assert ('""' in session_header or 'max-age=0' in session_header.lower())
+    session_header = next(
+        (h.decode("latin1") for h in set_cookie_headers if "township_session=" in h.decode("latin1")), ""
+    )
+    assert '""' in session_header or "max-age=0" in session_header.lower()
 
     # Verify subsequent request is unauthorized
     post_logout_me = custom_client.get("/api/v1/auth/me")
@@ -412,7 +419,8 @@ def test_logout_clears_cookie_and_revokes_token():
 
 def test_expired_otp_fails():
     """Verify that an expired OTP challenge cannot be verified and returns 400."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta
+
     phone = "9876543213"
     db = SessionLocal()
     try:
@@ -427,9 +435,11 @@ def test_expired_otp_fails():
     # Backdate challenge expiry to the past
     db = SessionLocal()
     try:
-        challenge = db.query(OTPChallenge).filter(OTPChallenge.phone == phone).order_by(OTPChallenge.created_at.desc()).first()
+        challenge = (
+            db.query(OTPChallenge).filter(OTPChallenge.phone == phone).order_by(OTPChallenge.created_at.desc()).first()
+        )
         assert challenge is not None
-        challenge.expires_at = datetime.now(timezone.utc) - timedelta(seconds=10)
+        challenge.expires_at = datetime.now(UTC) - timedelta(seconds=10)
         db.commit()
     finally:
         db.close()
@@ -470,6 +480,7 @@ def test_server_restart_survival_otp_persisted():
 def test_ip_rate_limiting_exceeded():
     """Verify max 20 OTP requests per hour per IP address."""
     from backend.app.core.security import create_otp_challenge
+
     ip = "192.168.1.100"
     db = SessionLocal()
     try:
@@ -493,9 +504,6 @@ def test_ip_rate_limiting_exceeded():
 def test_bearer_only_request_rejected():
     """Verify that requests providing only Authorization: Bearer without session cookie are rejected with 401."""
     unauth_client = TestClient(app)
-    resp = unauth_client.get(
-        "/api/v1/auth/me",
-        headers={"Authorization": "Bearer sample-token-for-test"}
-    )
+    resp = unauth_client.get("/api/v1/auth/me", headers={"Authorization": "Bearer sample-token-for-test"})
     assert resp.status_code == 401
     assert "Authentication required" in resp.json()["error"]["message"]

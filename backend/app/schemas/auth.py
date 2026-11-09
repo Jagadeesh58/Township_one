@@ -1,4 +1,3 @@
-from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -14,7 +13,7 @@ class OTPVerify(BaseModel):
 class RoleAssignmentResponse(BaseModel):
     role_code: str
     scope_type: str
-    scope_id: Optional[str] = None
+    scope_id: str | None = None
 
 
 class FlatMembershipResponse(BaseModel):
@@ -32,9 +31,9 @@ class UserProfileResponse(BaseModel):
     id: str
     phone: str
     name: str
-    email: Optional[str] = None
-    roles: List[RoleAssignmentResponse]
-    flats: List[FlatMembershipResponse]
+    email: str | None = None
+    roles: list[RoleAssignmentResponse]
+    flats: list[FlatMembershipResponse]
 
 
 class AuthResponse(BaseModel):

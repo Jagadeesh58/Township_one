@@ -7,21 +7,29 @@ Endpoints for:
 - Bill retrieval, bill details, and flat ledger entries
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
-from backend.app.core.security import get_current_user, verify_flat_access, require_role
-from backend.app.models.entities import Flat, Bill, FlatLedgerEntry, BillingRule, User
-from backend.app.services.billing import (
-    evaluate_bill_overdue_and_interest, generate_flat_bill, get_flat_ledger, get_effective_date, round_currency
-)
+from backend.app.core.security import get_current_user, require_role, verify_flat_access
+from backend.app.models.entities import Bill, BillingRule, Flat, FlatLedgerEntry, User
 from backend.app.schemas.billing import (
-    BillResponse, FlatBillingSummaryResponse, LedgerEntryResponse,
-    GenerateBillRequest
+    BillLineResponse,
+    BillResponse,
+    FlatBillingSummaryResponse,
+    GenerateBillRequest,
+    LedgerEntryResponse,
+)
+from backend.app.services.billing import (
+    evaluate_bill_overdue_and_interest,
+    generate_flat_bill,
+    get_effective_date,
+    get_flat_ledger,
+    round_currency,
 )
 
 router = APIRouter(prefix="/billing", tags=["Billing & Maintenance"])
@@ -29,13 +37,13 @@ router = APIRouter(prefix="/billing", tags=["Billing & Maintenance"])
 
 def to_bill_response(bill: Bill) -> BillResponse:
     lines = [
-        {
-            "id": line.id,
-            "line_type": line.line_type,
-            "description": line.description,
-            "amount": Decimal(str(line.amount)),
-            "amount_inr": f"{Decimal(str(line.amount)):.2f}"
-        }
+        BillLineResponse(
+            id=line.id,
+            line_type=line.line_type,
+            description=line.description,
+            amount=Decimal(str(line.amount)),
+            amount_inr=f"{Decimal(str(line.amount)):.2f}",
+        )
         for line in bill.lines
     ]
     p_dec = Decimal(str(bill.principal_amount))
@@ -63,8 +71,8 @@ def to_bill_response(bill: Bill) -> BillResponse:
         paid_amount_inr=f"{pd_dec:.2f}",
         balance_amount=b_dec,
         balance_amount_inr=f"{b_dec:.2f}",
-        status=bill.status,
-        lines=lines
+        status=bill.status or "ISSUED",
+        lines=lines,
     )
 
 
@@ -81,15 +89,13 @@ def to_ledger_response(entry: FlatLedgerEntry) -> LedgerEntryResponse:
         balance_after_inr=f"{bal_dec:.2f}",
         description=entry.description,
         reference_id=entry.reference_id,
-        created_at=entry.created_at
+        created_at=entry.created_at or datetime.now(UTC),
     )
 
 
 @router.get("/flats/{flat_id}/summary", response_model=FlatBillingSummaryResponse)
 def get_flat_billing_summary(
-    flat_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    flat_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     # Strict server-side authorization: Blocks Committee, Guard, and unauthorized residents
     verify_flat_access(current_user, flat_id, action="read")
@@ -102,9 +108,9 @@ def get_flat_billing_summary(
     effective_now = get_effective_date()
 
     # Aggregate ALL bills for this flat
-    all_bills = db.query(Bill).filter(
-        Bill.flat_id == flat_id
-    ).order_by(Bill.period_year.desc(), Bill.period_month.desc()).all()
+    all_bills = (
+        db.query(Bill).filter(Bill.flat_id == flat_id).order_by(Bill.period_year.desc(), Bill.period_month.desc()).all()
+    )
 
     latest_bill = all_bills[0] if all_bills else None
 
@@ -129,9 +135,13 @@ def get_flat_billing_summary(
     total_outstanding = round_currency(total_outstanding)
     total_estimated_late_fee = round_currency(total_estimated_late_fee)
 
-    ledger_entries = db.query(FlatLedgerEntry).filter(
-        FlatLedgerEntry.flat_id == flat_id
-    ).order_by(FlatLedgerEntry.created_at.desc()).limit(15).all()
+    ledger_entries = (
+        db.query(FlatLedgerEntry)
+        .filter(FlatLedgerEntry.flat_id == flat_id)
+        .order_by(FlatLedgerEntry.created_at.desc())
+        .limit(15)
+        .all()
+    )
 
     return FlatBillingSummaryResponse(
         flat_id=flat.id,
@@ -148,27 +158,19 @@ def get_flat_billing_summary(
         late_fee_notice="Illustrative demo rule: 18.00% p.a. simple interest after 5-day grace period (Model Bye-Law No. 67 / MCS Act 1960 illustrative benchmark pending society general body resolution)",
         unpaid_bills=[to_bill_response(b) for b in unpaid_bills],
         latest_bill=to_bill_response(latest_bill) if latest_bill else None,
-        recent_ledger=[to_ledger_response(e) for e in ledger_entries]
+        recent_ledger=[to_ledger_response(e) for e in ledger_entries],
     )
 
 
-@router.get("/flats/{flat_id}/bills", response_model=List[BillResponse])
-def get_bills_for_flat(
-    flat_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@router.get("/flats/{flat_id}/bills", response_model=list[BillResponse])
+def get_bills_for_flat(flat_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     verify_flat_access(current_user, flat_id, action="read")
     bills = db.query(Bill).filter(Bill.flat_id == flat_id).order_by(Bill.issue_date.desc()).all()
     return [to_bill_response(b) for b in bills]
 
 
 @router.get("/bills/{bill_id}", response_model=BillResponse)
-def get_bill_detail(
-    bill_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def get_bill_detail(bill_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     bill = db.query(Bill).filter(Bill.id == bill_id).first()
     if not bill:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bill not found.")
@@ -176,12 +178,8 @@ def get_bill_detail(
     return to_bill_response(bill)
 
 
-@router.get("/flats/{flat_id}/ledger", response_model=List[LedgerEntryResponse])
-def get_ledger_for_flat(
-    flat_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+@router.get("/flats/{flat_id}/ledger", response_model=list[LedgerEntryResponse])
+def get_ledger_for_flat(flat_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     verify_flat_access(current_user, flat_id, action="read")
     entries = get_flat_ledger(db, flat_id)
     return [to_ledger_response(e) for e in entries]
@@ -191,13 +189,10 @@ def get_ledger_for_flat(
 def generate_bill(
     payload: GenerateBillRequest,
     current_user: User = Depends(require_role(["ACCOUNTS", "ADMIN"])),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     bill = generate_flat_bill(
-        db=db,
-        flat_id=payload.flat_id,
-        period_month=payload.period_month,
-        period_year=payload.period_year
+        db=db, flat_id=payload.flat_id, period_month=payload.period_month, period_year=payload.period_year
     )
     return to_bill_response(bill)
 
@@ -205,8 +200,7 @@ def generate_bill(
 # Authorized Committee Aggregate Endpoint (Security Fix C)
 @router.get("/committee/aggregate")
 def get_committee_aggregate(
-    current_user: User = Depends(require_role(["COMMITTEE", "ADMIN"])),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(require_role(["COMMITTEE", "ADMIN"])), db: Session = Depends(get_db)
 ):
     """Aggregate financial overview authorized for Committee members (zero individual flat PII)."""
     total_billed = db.query(func.coalesce(func.sum(Bill.total_amount), 0)).scalar()
@@ -226,5 +220,5 @@ def get_committee_aggregate(
         "total_collected_inr": f"{dec_collected:.2f}",
         "total_outstanding_inr": f"{Decimal(str(total_outstanding)):.2f}",
         "collection_efficiency_pct": str(eff_pct),
-        "as_of_date": get_effective_date().isoformat()
+        "as_of_date": get_effective_date().isoformat(),
     }

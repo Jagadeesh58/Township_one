@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -7,7 +7,7 @@ class ComplaintCreateRequest(BaseModel):
     flat_id: str
     title: str = Field(..., min_length=3, max_length=150)
     description: str = Field(..., min_length=5, max_length=2000)
-    language: Optional[str] = "en"
+    language: str | None = "en"
 
 
 class ComplaintEventResponse(BaseModel):
@@ -15,11 +15,11 @@ class ComplaintEventResponse(BaseModel):
 
     id: str
     event_type: str
-    from_status: Optional[str] = None
-    to_status: Optional[str] = None
-    notes: Optional[str] = None
+    from_status: str | None = None
+    to_status: str | None = None
+    notes: str | None = None
     created_at: datetime
-    actor_user_id: Optional[str] = None
+    actor_user_id: str | None = None
 
 
 class ClassificationDecisionResponse(BaseModel):
@@ -27,11 +27,11 @@ class ClassificationDecisionResponse(BaseModel):
 
     id: str
     provider: str
-    model_version: Optional[str] = None
-    prompt_version: Optional[str] = None
+    model_version: str | None = None
+    prompt_version: str | None = None
     predicted_category: str
     predicted_urgency: str
-    confidence: Optional[float] = None
+    confidence: float | None = None
     fallback_used: bool = False
     needs_human_review: bool = False
     created_at: datetime
@@ -43,9 +43,9 @@ class ComplaintResponse(BaseModel):
     id: str
     ticket_number: str
     flat_id: str
-    flat_number: Optional[str] = None
-    tower_id: Optional[str] = None
-    tower_name: Optional[str] = None
+    flat_number: str | None = None
+    tower_id: str | None = None
+    tower_name: str | None = None
     title: str
     description: str
     category: str
@@ -54,27 +54,27 @@ class ComplaintResponse(BaseModel):
     version: int = 1
     is_safety_escalation: bool = False
     language: str = "en"
-    assigned_staff_id: Optional[str] = None
-    assigned_staff_name: Optional[str] = None
-    assigned_team: Optional[str] = None
+    assigned_staff_id: str | None = None
+    assigned_staff_name: str | None = None
+    assigned_team: str | None = None
     created_at: datetime
-    first_response_at: Optional[datetime] = None
-    resolved_at: Optional[datetime] = None
-    closed_at: Optional[datetime] = None
-    rating: Optional[int] = None
-    feedback: Optional[str] = None
-    reopen_reason: Optional[str] = None
-    photo_url: Optional[str] = None
-    sla_remaining_minutes: Optional[int] = None
+    first_response_at: datetime | None = None
+    resolved_at: datetime | None = None
+    closed_at: datetime | None = None
+    rating: int | None = None
+    feedback: str | None = None
+    reopen_reason: str | None = None
+    photo_url: str | None = None
+    sla_remaining_minutes: int | None = None
     is_overdue: bool = False
-    events: Optional[List[ComplaintEventResponse]] = None
-    classification_decision: Optional[ClassificationDecisionResponse] = None
+    events: list[ComplaintEventResponse] | None = None
+    classification_decision: ClassificationDecisionResponse | None = None
 
 
 class StatusTransitionRequest(BaseModel):
     status: str
-    notes: Optional[str] = None
-    expected_version: Optional[int] = None
+    notes: str | None = None
+    expected_version: int | None = None
 
 
 class ClassificationCorrectionRequest(BaseModel):
@@ -86,7 +86,7 @@ class ClassificationCorrectionRequest(BaseModel):
 
 class RatingRequest(BaseModel):
     rating: int = Field(..., ge=1, le=5)
-    feedback: Optional[str] = None
+    feedback: str | None = None
 
 
 class ReopenRequest(BaseModel):
@@ -99,7 +99,7 @@ class LinkDuplicateRequest(BaseModel):
 
 class SafetyEventActionRequest(BaseModel):
     action: str  # ACKNOWLEDGE, DISMISS
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class SafetyEventResponse(BaseModel):
@@ -108,8 +108,8 @@ class SafetyEventResponse(BaseModel):
     id: str
     complaint_id: str
     event_type: str
-    details: Optional[str] = None
+    details: str | None = None
     status: str
     created_at: datetime
-    ticket_number: Optional[str] = None
-    flat_number: Optional[str] = None
+    ticket_number: str | None = None
+    flat_number: str | None = None

@@ -1,7 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -36,21 +37,21 @@ class BankRowPreviewItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     original_row_number: int
-    txn_date: Optional[str] = None
-    value_date: Optional[str] = None
-    narration: Optional[str] = None
-    direction: Optional[str] = None
-    amount: Optional[Decimal] = None
+    txn_date: str | None = None
+    value_date: str | None = None
+    narration: str | None = None
+    direction: str | None = None
+    amount: Decimal | None = None
     currency: str = "INR"
-    utr: Optional[str] = None
-    payer_upi: Optional[str] = None
-    flat_ref: Optional[str] = None
-    decision: Optional[str] = None
-    decision_reason: Optional[str] = None
+    utr: str | None = None
+    payer_upi: str | None = None
+    flat_ref: str | None = None
+    decision: str | None = None
+    decision_reason: str | None = None
     parse_status: str = "ACCEPTED"
-    parse_errors: Optional[List[str]] = None
-    matched_flat_number: Optional[str] = None
-    matched_bill_id: Optional[str] = None
+    parse_errors: list[str] | None = None
+    matched_flat_number: str | None = None
+    matched_bill_id: str | None = None
 
 
 class BankImportPreviewResponse(BaseModel):
@@ -66,7 +67,7 @@ class BankImportPreviewResponse(BaseModel):
     auto_match_count: int
     review_count: int
     duplicate_count: int
-    rows: List[BankRowPreviewItem]
+    rows: list[BankRowPreviewItem]
 
 
 class BankImportCommitResponse(BaseModel):
@@ -90,32 +91,32 @@ class BankRowResponse(BaseModel):
     id: str
     import_file_id: str
     original_row_number: int
-    txn_date: Optional[datetime] = None
-    value_date: Optional[datetime] = None
-    narration: Optional[str] = None
-    direction: Optional[str] = None
-    amount: Optional[Decimal] = None
+    txn_date: datetime | None = None
+    value_date: datetime | None = None
+    narration: str | None = None
+    direction: str | None = None
+    amount: Decimal | None = None
     currency: str = "INR"
-    utr: Optional[str] = None
-    payer_upi: Optional[str] = None
-    flat_ref: Optional[str] = None
-    decision: Optional[str] = None
-    decision_reason: Optional[str] = None
+    utr: str | None = None
+    payer_upi: str | None = None
+    flat_ref: str | None = None
+    decision: str | None = None
+    decision_reason: str | None = None
     review_status: str
-    matched_flat_id: Optional[str] = None
-    matched_flat_number: Optional[str] = None
-    matched_bill_id: Optional[str] = None
-    matched_payment_id: Optional[str] = None
-    correction_reason: Optional[str] = None
-    raw_row: Optional[Dict[str, Any]] = None
-    audit_trail: Optional[List[Any]] = None
+    matched_flat_id: str | None = None
+    matched_flat_number: str | None = None
+    matched_bill_id: str | None = None
+    matched_payment_id: str | None = None
+    correction_reason: str | None = None
+    raw_row: dict[str, Any] | None = None
+    audit_trail: list[Any] | None = None
 
 
 class ReviewActionRequest(BaseModel):
     action: str  # APPROVE, REJECT, HOLD, CORRECT_MAPPING
-    target_flat_id: Optional[str] = None
-    target_bill_id: Optional[str] = None
-    reason: Optional[str] = None
+    target_flat_id: str | None = None
+    target_bill_id: str | None = None
+    reason: str | None = None
 
 
 class BankAccountResponse(BaseModel):

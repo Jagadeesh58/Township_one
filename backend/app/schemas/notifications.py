@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -12,4 +12,4 @@ class NotificationResponse(BaseModel):
     channel: str
     status: str
     created_at: datetime
-    read_at: Optional[datetime] = None
+    read_at: datetime | None = None

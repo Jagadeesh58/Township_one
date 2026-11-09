@@ -1,16 +1,16 @@
-from datetime import date, time, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Optional, List
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AmenityResponse(BaseModel):
     id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     hourly_fee: Decimal
     capacity: int
-    rules: Optional[str] = None
+    rules: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -25,7 +25,7 @@ class AmenitySlotResponse(BaseModel):
     booked_count: int
     available_spots: int
     is_closed: bool = False
-    closure_reason: Optional[str] = None
+    closure_reason: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -70,16 +70,16 @@ class AmenityBookingResponse(BaseModel):
     flat_id: str
     slot_id: str
     user_id: str
-    amenity_name: Optional[str] = None
-    slot_date: Optional[date] = None
-    start_time: Optional[time] = None
-    end_time: Optional[time] = None
+    amenity_name: str | None = None
+    slot_date: date | None = None
+    start_time: time | None = None
+    end_time: time | None = None
     status: str
     fee: Decimal
     fee_status: str
     idempotency_key: str
     version: int
     created_at: datetime
-    cancelled_at: Optional[datetime] = None
+    cancelled_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

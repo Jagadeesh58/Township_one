@@ -15,20 +15,20 @@ Test suite verifying:
 
 import os
 import uuid
-from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
+
 from backend.app.core.config import settings
 from backend.app.core.database import SessionLocal
-from backend.app.models.entities import Bill, Flat, FlatLedgerEntry, Payment, Receipt
+from backend.app.main import app
 
 client = TestClient(app)
 
 
 def get_auth_token(phone: str) -> tuple[str, dict]:
-    from backend.app.core.database import SessionLocal
     from backend.app.models.entities import OTPChallenge
+
     db = SessionLocal()
     try:
         db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
@@ -56,12 +56,7 @@ def test_mandatory_idempotency_key_enforcement():
     resp_missing = client.post(
         "/api/v1/payments/checkout",
         headers=headers,
-        json={
-            "flat_id": flat_id,
-            "bill_id": bill_id,
-            "amount": 500.0,
-            "test_outcome": "SUCCESS"
-        }
+        json={"flat_id": flat_id, "bill_id": bill_id, "amount": 500.0, "test_outcome": "SUCCESS"},
     )
     assert resp_missing.status_code == 422
 
@@ -74,8 +69,8 @@ def test_mandatory_idempotency_key_enforcement():
             "bill_id": bill_id,
             "amount": 500.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": "short"
-        }
+            "idempotency_key": "short",
+        },
     )
     assert resp_short.status_code == 422
 
@@ -97,8 +92,8 @@ def test_simulated_payment_blocked_in_production(monkeypatch):
             "bill_id": str(uuid.uuid4()),
             "amount": 500.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": "idem-prod-guard-check-123"
-        }
+            "idempotency_key": "idem-prod-guard-check-123",
+        },
     )
     assert resp.status_code == 403
     assert "disabled in production" in resp.json()["error"]["message"]
@@ -122,8 +117,8 @@ def test_pay_already_paid_bill_rejected():
             "bill_id": bill_id,
             "amount": 7475.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": "idem-already-paid-check"
-        }
+            "idempotency_key": "idem-already-paid-check",
+        },
     )
     assert resp.status_code == 400
     assert "already fully paid" in resp.json()["error"]["message"]
@@ -148,8 +143,8 @@ def test_invalid_payment_outcomes_rejected():
             "bill_id": bill_id,
             "amount": 1000.0,
             "test_outcome": "TYPO_SUCCESS",
-            "idempotency_key": "idem-typo-test-outcome"
-        }
+            "idempotency_key": "idem-typo-test-outcome",
+        },
     )
     assert resp_typo.status_code == 422
 
@@ -162,8 +157,8 @@ def test_invalid_payment_outcomes_rejected():
             "bill_id": bill_id,
             "amount": 1000.0,
             "test_outcome": "UNKNOWN",
-            "idempotency_key": "idem-unknown-test-outcome"
-        }
+            "idempotency_key": "idem-unknown-test-outcome",
+        },
     )
     assert resp_unknown.status_code == 422
 
@@ -176,8 +171,8 @@ def test_invalid_payment_outcomes_rejected():
             "bill_id": bill_id,
             "amount": 1000.0,
             "test_outcome": None,
-            "idempotency_key": "idem-none-test-outcome"
-        }
+            "idempotency_key": "idem-none-test-outcome",
+        },
     )
     assert resp_none.status_code == 422
 
@@ -190,8 +185,8 @@ def test_invalid_payment_outcomes_rejected():
             "bill_id": bill_id,
             "amount": 1000.0,
             "test_outcome": "success",
-            "idempotency_key": "idem-lower-test-outcome"
-        }
+            "idempotency_key": "idem-lower-test-outcome",
+        },
     )
     assert resp_lower.status_code == 422
 
@@ -219,8 +214,8 @@ def test_payment_failure_pending_expired_leaves_dues_intact():
                 "bill_id": bill_id,
                 "amount": 1000.0,
                 "test_outcome": outcome,
-                "idempotency_key": f"IDEM-NON-SUCCESS-{outcome}"
-            }
+                "idempotency_key": f"IDEM-NON-SUCCESS-{outcome}",
+            },
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -249,8 +244,8 @@ def test_cross_flat_idempotency_key_replay_and_leakage_prevention():
             "bill_id": swati_bill_id,
             "amount": 1000.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": shared_key
-        }
+            "idempotency_key": shared_key,
+        },
     )
     assert resp_swati.status_code == 200
     swati_payment = resp_swati.json()
@@ -273,8 +268,8 @@ def test_cross_flat_idempotency_key_replay_and_leakage_prevention():
             "bill_id": aamir_bill_id,
             "amount": 2000.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": shared_key
-        }
+            "idempotency_key": shared_key,
+        },
     )
     # Must return 409 Conflict
     assert resp_aamir.status_code == 409
@@ -304,8 +299,8 @@ def test_idempotency_key_payload_divergence_returns_409():
             "bill_id": bill_id,
             "amount": 500.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": diverge_key
-        }
+            "idempotency_key": diverge_key,
+        },
     )
     assert resp1.status_code == 200
 
@@ -318,8 +313,8 @@ def test_idempotency_key_payload_divergence_returns_409():
             "bill_id": bill_id,
             "amount": 600.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": diverge_key
-        }
+            "idempotency_key": diverge_key,
+        },
     )
     assert resp_diff_amount.status_code == 409
     assert "different request parameters" in resp_diff_amount.json()["error"]["message"].lower()
@@ -333,8 +328,8 @@ def test_idempotency_key_payload_divergence_returns_409():
             "bill_id": bill_id,
             "amount": 500.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": diverge_key
-        }
+            "idempotency_key": diverge_key,
+        },
     )
     assert resp_identical.status_code == 200
     assert resp_identical.json()["id"] == resp1.json()["id"]
@@ -357,8 +352,8 @@ def test_cross_resident_receipt_and_payment_access_denied():
             "bill_id": swati_bill_id,
             "amount": 500.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": f"IDEM-REC-ACCESS-{uuid.uuid4()}"
-        }
+            "idempotency_key": f"IDEM-REC-ACCESS-{uuid.uuid4()}",
+        },
     )
     assert resp.status_code == 200
     payment_id = resp.json()["id"]
@@ -394,8 +389,8 @@ def test_family_member_without_pay_permission_blocked():
             "bill_id": str(uuid.uuid4()),
             "amount": 500.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": "IDEM-FAMILY-PAY-DENIED"
-        }
+            "idempotency_key": "IDEM-FAMILY-PAY-DENIED",
+        },
     )
     assert resp.status_code == 403
     assert "does not permit bill payment" in resp.json()["error"]["message"].lower()
@@ -422,8 +417,8 @@ def test_payment_exceeding_balance_rejected():
             "bill_id": bill_id,
             "amount": over_amount,
             "test_outcome": "SUCCESS",
-            "idempotency_key": f"IDEM-OVERPAY-{uuid.uuid4()}"
-        }
+            "idempotency_key": f"IDEM-OVERPAY-{uuid.uuid4()}",
+        },
     )
     assert resp.status_code == 400
     assert "cannot exceed current outstanding balance" in resp.json()["error"]["message"]
@@ -439,4 +434,5 @@ def test_postgresql_row_locking_in_payments():
     if not pg_url:
         pytest.skip("PG_DATABASE_URL not set; skipping live PostgreSQL row locking concurrency test.")
     from tests.test_payment_concurrency import test_postgresql_with_for_update_row_locking
+
     test_postgresql_with_for_update_row_locking()

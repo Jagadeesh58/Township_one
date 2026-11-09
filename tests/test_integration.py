@@ -15,11 +15,11 @@ End-to-end integration test suite verifying the complete resident journey:
 - Family member role permissions (read permitted, pay denied)
 """
 
-from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.main import app
+
 from backend.app.core.database import SessionLocal
+from backend.app.main import app
 from backend.app.models.entities import OTPChallenge
 
 client = TestClient(app)
@@ -80,8 +80,8 @@ def test_full_resident_billing_and_payment_journey():
             "bill_id": bill_id,
             "amount": 6370.0,
             "test_outcome": "FAILED",
-            "idempotency_key": "IDEM-E2E-FAILED-001"
-        }
+            "idempotency_key": "IDEM-E2E-FAILED-001",
+        },
     )
     assert failed_pay.status_code == 200
     assert failed_pay.json()["status"] == "FAILED"
@@ -103,8 +103,8 @@ def test_full_resident_billing_and_payment_journey():
             "amount": 6370.0,
             "payment_method": "UPI_SIMULATED",
             "test_outcome": "SUCCESS",
-            "idempotency_key": "IDEM-E2E-SWATI-001"
-        }
+            "idempotency_key": "IDEM-E2E-SWATI-001",
+        },
     )
     assert success_pay.status_code == 200
     pay_data = success_pay.json()
@@ -143,8 +143,8 @@ def test_full_resident_billing_and_payment_journey():
             "bill_id": bill_id,
             "amount": 1000.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": "IDEM-E2E-DUP-BLOCKED"
-        }
+            "idempotency_key": "IDEM-E2E-DUP-BLOCKED",
+        },
     )
     assert duplicate_pay.status_code == 400
     assert "already fully paid" in duplicate_pay.json()["error"]["message"]
@@ -222,8 +222,8 @@ def test_full_resident_billing_and_payment_journey():
             "bill_id": neeraj_summary["latest_bill"]["id"],
             "amount": 100.0,
             "test_outcome": "SUCCESS",
-            "idempotency_key": "IDEM-E2E-FAMILY-BLOCK"
-        }
+            "idempotency_key": "IDEM-E2E-FAMILY-BLOCK",
+        },
     )
     assert ananya_pay.status_code == 403
     assert "does not permit bill payment" in ananya_pay.json()["error"]["message"].lower()

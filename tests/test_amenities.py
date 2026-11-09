@@ -1,13 +1,16 @@
 import uuid
-from datetime import datetime, timezone, timedelta, time, date
-from decimal import Decimal
-import pytest
+from datetime import time, timedelta
+
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
 from backend.app.core.database import SessionLocal
+from backend.app.main import app
 from backend.app.models.entities import (
-    Amenity, AmenitySlot, AmenityRule, AmenityBooking, AmenityClosure, Flat, OTPChallenge
+    Amenity,
+    AmenityBooking,
+    AmenitySlot,
+    Flat,
+    OTPChallenge,
 )
 from backend.app.services.amenity_service import get_effective_now
 
@@ -60,11 +63,15 @@ def test_book_amenity_slot_success_and_idempotency():
     flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
     hall = db.query(Amenity).filter(Amenity.name == "Clubhouse Banquet Hall").first()
     eff_date = get_effective_now().date()
-    slot = db.query(AmenitySlot).filter(
-        AmenitySlot.amenity_id == hall.id,
-        AmenitySlot.slot_date == eff_date,
-        AmenitySlot.start_time == time(10, 0),
-    ).first()
+    slot = (
+        db.query(AmenitySlot)
+        .filter(
+            AmenitySlot.amenity_id == hall.id,
+            AmenitySlot.slot_date == eff_date,
+            AmenitySlot.start_time == time(10, 0),
+        )
+        .first()
+    )
     slot_id = slot.id
     flat_id = flat.id
     db.close()
@@ -151,10 +158,16 @@ def test_flat_daily_booking_limit_enforced():
     court = db.query(Amenity).filter(Amenity.name == "Tennis Court").first()
     eff_date = get_effective_now().date() + timedelta(days=1)
 
-    slots = db.query(AmenitySlot).filter(
-        AmenitySlot.amenity_id == court.id,
-        AmenitySlot.slot_date == eff_date,
-    ).order_by(AmenitySlot.start_time.asc()).limit(2).all()
+    slots = (
+        db.query(AmenitySlot)
+        .filter(
+            AmenitySlot.amenity_id == court.id,
+            AmenitySlot.slot_date == eff_date,
+        )
+        .order_by(AmenitySlot.start_time.asc())
+        .limit(2)
+        .all()
+    )
     slot1_id = slots[0].id
     slot2_id = slots[1].id
     flat_id = flat.id
@@ -189,18 +202,22 @@ def test_flat_daily_booking_limit_enforced():
 
 def test_cancellation_workflow_and_unauthorized_cancellation_blocked():
     neeraj_client, neeraj_headers = get_auth_client("9876543210")  # Neeraj
-    swati_client, swati_headers = get_auth_client("9876543211")    # Swati
+    swati_client, swati_headers = get_auth_client("9876543211")  # Swati
 
     db = SessionLocal()
     flat_neeraj = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
     court = db.query(Amenity).filter(Amenity.name == "Tennis Court").first()
     eff_date = get_effective_now().date() + timedelta(days=3)
 
-    slot = db.query(AmenitySlot).filter(
-        AmenitySlot.amenity_id == court.id,
-        AmenitySlot.slot_date == eff_date,
-        AmenitySlot.start_time == time(16, 0),
-    ).first()
+    slot = (
+        db.query(AmenitySlot)
+        .filter(
+            AmenitySlot.amenity_id == court.id,
+            AmenitySlot.slot_date == eff_date,
+            AmenitySlot.start_time == time(16, 0),
+        )
+        .first()
+    )
     slot_id = slot.id
     flat_id = flat_neeraj.id
     db.close()
@@ -237,18 +254,22 @@ def test_cancellation_workflow_and_unauthorized_cancellation_blocked():
 
 def test_amenity_closure_workflow_blocks_new_bookings_and_cancels_conflicts():
     helpdesk_client, helpdesk_headers = get_auth_client("9876543220")  # Help Desk (Ramesh)
-    neeraj_client, neeraj_headers = get_auth_client("9876543210")      # Neeraj
+    neeraj_client, neeraj_headers = get_auth_client("9876543210")  # Neeraj
 
     db = SessionLocal()
     court = db.query(Amenity).filter(Amenity.name == "Tennis Court").first()
     flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
     closure_date = get_effective_now().date() + timedelta(days=4)
 
-    slot = db.query(AmenitySlot).filter(
-        AmenitySlot.amenity_id == court.id,
-        AmenitySlot.slot_date == closure_date,
-        AmenitySlot.start_time == time(18, 0),
-    ).first()
+    slot = (
+        db.query(AmenitySlot)
+        .filter(
+            AmenitySlot.amenity_id == court.id,
+            AmenitySlot.slot_date == closure_date,
+            AmenitySlot.start_time == time(18, 0),
+        )
+        .first()
+    )
     slot_id = slot.id
     flat_id = flat.id
     court_id = court.id

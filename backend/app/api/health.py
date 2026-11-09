@@ -1,7 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from sqlalchemy import text
+from sqlalchemy.orm import Session
+
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
 
@@ -21,6 +23,6 @@ def health_check(db: Session = Depends(get_db)):
         "app_name": settings.APP_NAME,
         "environment": settings.APP_ENV,
         "database": db_status,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "1.0.0"
+        "timestamp": datetime.now(UTC).isoformat(),
+        "version": "1.0.0",
     }

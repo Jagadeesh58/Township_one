@@ -1,9 +1,9 @@
 from decimal import Decimal
-import pytest
+
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
 from backend.app.core.database import SessionLocal
+from backend.app.main import app
 from backend.app.models.entities import OTPChallenge
 
 

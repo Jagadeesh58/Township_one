@@ -11,25 +11,25 @@ Documentation:
 docs/authentication-and-access-control.md
 """
 
-import uuid
-import secrets
 import hashlib
 import hmac
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, List
+import secrets
+import uuid
+from datetime import UTC, datetime, timedelta
+
 import jwt
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import settings
 from backend.app.core.database import get_db
-from backend.app.models.entities import User, UserRoleAssignment, FlatMembership, Flat, RevokedToken, OTPChallenge
+from backend.app.models.entities import FlatMembership, OTPChallenge, RevokedToken, User
 from backend.app.services.sms import get_sms_provider
 
 REVOKED_TOKENS: set = set()
 
 
-def create_otp_challenge(phone: str, db: Session, ip_address: Optional[str] = None) -> str:
+def create_otp_challenge(phone: str, db: Session, ip_address: str | None = None) -> str:
     """
     Creates an OTP challenge with query-driven rate-limiting and persistent salt-hashed storage
     exclusively in the `otp_challenges` database table.
@@ -42,31 +42,31 @@ def create_otp_challenge(phone: str, db: Session, ip_address: Optional[str] = No
     (APP_ENV in ('development', 'demo')) as an evaluator convenience. In staging/production,
     a cryptographically random 6-digit code is generated and dispatched via SMSProvider.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     phone_window = now - timedelta(minutes=10)
 
     # 1. Rate limiting: max 5 OTP requests per 10 minutes per phone
-    recent_phone_count = db.query(OTPChallenge).filter(
-        OTPChallenge.phone == phone,
-        OTPChallenge.created_at >= phone_window
-    ).count()
+    recent_phone_count = (
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone, OTPChallenge.created_at >= phone_window).count()
+    )
     if recent_phone_count >= 5:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying."
+            detail="Rate limit exceeded: Too many OTP requests for this phone number. Please wait before retrying.",
         )
 
     # 2. Rate limiting: max 20 OTP requests per hour per IP
     if ip_address:
         ip_window = now - timedelta(hours=1)
-        recent_ip_count = db.query(OTPChallenge).filter(
-            OTPChallenge.ip_address == ip_address,
-            OTPChallenge.created_at >= ip_window
-        ).count()
+        recent_ip_count = (
+            db.query(OTPChallenge)
+            .filter(OTPChallenge.ip_address == ip_address, OTPChallenge.created_at >= ip_window)
+            .count()
+        )
         if recent_ip_count >= 20:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Rate limit exceeded: Too many OTP requests from this IP address. Please wait before retrying."
+                detail="Rate limit exceeded: Too many OTP requests from this IP address. Please wait before retrying.",
             )
 
     sms_provider = get_sms_provider()
@@ -78,7 +78,7 @@ def create_otp_challenge(phone: str, db: Session, ip_address: Optional[str] = No
         otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
 
     salt = secrets.token_hex(16)
-    otp_hash = hashlib.sha256(f"{salt}:{otp_code}".encode("utf-8")).hexdigest()
+    otp_hash = hashlib.sha256(f"{salt}:{otp_code}".encode()).hexdigest()
     expires_at = now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS)
 
     challenge = OTPChallenge(
@@ -89,7 +89,7 @@ def create_otp_challenge(phone: str, db: Session, ip_address: Optional[str] = No
         attempts=0,
         is_used=False,
         ip_address=ip_address,
-        created_at=now
+        created_at=now,
     )
     db.add(challenge)
     db.commit()
@@ -105,31 +105,26 @@ def verify_otp_challenge(phone: str, otp: str, db: Session) -> bool:
     Verifies OTP challenge exclusively from the database table `otp_challenges`.
     Enforces salt-hash validation, expiration, single-use, and max 3 invalid attempts.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
-    challenge = db.query(OTPChallenge).filter(
-        OTPChallenge.phone == phone
-    ).order_by(OTPChallenge.created_at.desc()).first()
+    challenge = (
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).order_by(OTPChallenge.created_at.desc()).first()
+    )
 
     if not challenge:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active OTP challenge found. Please request an OTP."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No active OTP challenge found. Please request an OTP."
         )
 
     if challenge.is_used:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP has already been used."
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP has already been used.")
 
     exp = challenge.expires_at
     if exp.tzinfo is None:
-        exp = exp.replace(tzinfo=timezone.utc)
+        exp = exp.replace(tzinfo=UTC)
     if now > exp:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP has expired. Please request a new one."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="OTP has expired. Please request a new one."
         )
 
     challenge.attempts += 1
@@ -137,11 +132,10 @@ def verify_otp_challenge(phone: str, otp: str, db: Session) -> bool:
         challenge.is_used = True
         db.commit()
         raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many invalid attempts. OTP invalidated."
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many invalid attempts. OTP invalidated."
         )
 
-    attempt_hash = hashlib.sha256(f"{challenge.salt}:{otp}".encode("utf-8")).hexdigest()
+    attempt_hash = hashlib.sha256(f"{challenge.salt}:{otp}".encode()).hexdigest()
     if not hmac.compare_digest(challenge.otp_hash, attempt_hash):
         db.commit()
         return False
@@ -151,12 +145,12 @@ def verify_otp_challenge(phone: str, otp: str, db: Session) -> bool:
     return True
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """
     Generates a cryptographically signed JWT with unique JTI identifier for revocation tracking.
     """
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta:
         expire = now + expires_delta
     else:
@@ -176,31 +170,24 @@ def revoke_token_persisted(token: str, user_id: str, db: Session):
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"], options={"verify_exp": False})
         jti = payload.get("jti") or token
         exp_ts = payload.get("exp")
-        exp_dt = datetime.fromtimestamp(exp_ts, tz=timezone.utc) if exp_ts else datetime.now(timezone.utc) + timedelta(days=1)
+        exp_dt = datetime.fromtimestamp(exp_ts, tz=UTC) if exp_ts else datetime.now(UTC) + timedelta(days=1)
     except Exception:
         jti = token
-        exp_dt = datetime.now(timezone.utc) + timedelta(days=1)
+        exp_dt = datetime.now(UTC) + timedelta(days=1)
 
     REVOKED_TOKENS.add(jti)
     REVOKED_TOKENS.add(token)
 
     # Persist to database for multi-process and restart survival
     try:
-        revoked_rec = RevokedToken(
-            token_jti=jti,
-            user_id=user_id,
-            expires_at=exp_dt
-        )
+        revoked_rec = RevokedToken(token_jti=jti, user_id=user_id, expires_at=exp_dt)
         db.add(revoked_rec)
         db.commit()
     except Exception:
         db.rollback()
 
 
-def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db)
-) -> User:
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """
     Validates token from HttpOnly session cookie.
     Sessions are cookie-only.
@@ -210,15 +197,13 @@ def get_current_user(
 
     if not token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required. Please provide a session cookie."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required. Please provide a session cookie."
         )
 
     token = token.strip()
     if token in REVOKED_TOKENS:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has been revoked. Please sign in again."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked. Please sign in again."
         )
 
     try:
@@ -226,8 +211,7 @@ def get_current_user(
         jti = payload.get("jti")
         if jti and jti in REVOKED_TOKENS:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has been revoked. Please sign in again."
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked. Please sign in again."
             )
 
         # Check database revocation table
@@ -236,43 +220,38 @@ def get_current_user(
             if is_db_revoked:
                 REVOKED_TOKENS.add(jti)
                 raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token has been revoked. Please sign in again."
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked. Please sign in again."
                 )
 
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials."
-            )
+        sub = payload.get("sub")
+        if not sub:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials.")
+        user_id = str(sub)
     except jwt.PyJWTError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials. Invalid or expired token."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials. Invalid or expired token."
         )
 
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account inactive or not found."
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account inactive or not found.")
     return user
 
 
-def require_role(allowed_roles: List[str]):
+def require_role(allowed_roles: list[str]):
     """
     Enforces server-side role-based access control.
     """
+
     def role_checker(current_user: User = Depends(get_current_user)) -> User:
         user_roles = [ra.role_code for ra in current_user.role_assignments if ra.is_active]
         if not any(role in user_roles for role in allowed_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied: Required role in {allowed_roles}. Your roles: {user_roles}"
+                detail=f"Access denied: Required role in {allowed_roles}. Your roles: {user_roles}",
             )
         return current_user
+
     return role_checker
 
 
@@ -289,7 +268,7 @@ def verify_flat_access(user: User, flat_id: str, action: str = "read") -> FlatMe
     if "COMMITTEE" in user_roles and "ADMIN" not in user_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Committee members can only access aggregate reports, not individual flat records."
+            detail="Access denied: Committee members can only access aggregate reports, not individual flat records.",
         )
 
     # Help Desk and Guards cannot access resident billing or payments
@@ -297,12 +276,12 @@ def verify_flat_access(user: User, flat_id: str, action: str = "read") -> FlatMe
         if "GUARD" in user_roles and "ADMIN" not in user_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: Gate security staff do not have access to billing or payment records."
+                detail="Access denied: Gate security staff do not have access to billing or payment records.",
             )
         if "HELPDESK" in user_roles and "ADMIN" not in user_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: Helpdesk staff cannot access resident billing or payment records."
+                detail="Access denied: Helpdesk staff cannot access resident billing or payment records.",
             )
 
     # Admins and Accounts staff can read financial summaries
@@ -313,37 +292,34 @@ def verify_flat_access(user: User, flat_id: str, action: str = "read") -> FlatMe
             member_type="STAFF",
             can_pay_bills=False,
             can_approve_visitors=False,
-            can_raise_complaints=False
+            can_raise_complaints=False,
         )
         return dummy_membership
 
     # Ordinary resident / tenant / family membership verification
-    membership = next(
-        (fm for fm in user.flat_memberships if fm.flat_id == flat_id and fm.is_active),
-        None
-    )
+    membership = next((fm for fm in user.flat_memberships if fm.flat_id == flat_id and fm.is_active), None)
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: You do not have an active membership for this flat."
+            detail="Access denied: You do not have an active membership for this flat.",
         )
 
     if action == "pay" and not membership.can_pay_bills:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Your flat membership does not permit bill payment."
+            detail="Access denied: Your flat membership does not permit bill payment.",
         )
 
     if action == "approve_visitor" and not membership.can_approve_visitors:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Your flat membership does not permit visitor approvals."
+            detail="Access denied: Your flat membership does not permit visitor approvals.",
         )
 
     if action == "raise_complaint" and not membership.can_raise_complaints:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: Your flat membership does not permit lodging complaints."
+            detail="Access denied: Your flat membership does not permit lodging complaints.",
         )
 
     return membership
@@ -365,6 +341,5 @@ def verify_csrf(request: Request):
     if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="CSRF token validation failed. Missing or invalid X-CSRF-Token header."
+            detail="CSRF token validation failed. Missing or invalid X-CSRF-Token header.",
         )
-

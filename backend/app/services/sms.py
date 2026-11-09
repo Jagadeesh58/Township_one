@@ -8,8 +8,9 @@ Defines the SMS delivery adapter interface.
   in production, raises an explicit configuration error to block insecure unverified logins.
 """
 
-from abc import ABC, abstractmethod
 import logging
+from abc import ABC, abstractmethod
+
 from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class BaseSMSProvider(ABC):
     """Abstract SMS provider interface for transactional OTP delivery."""
+
     @abstractmethod
     def send_otp(self, phone: str, otp: str) -> bool:
         """Sends OTP to the specified mobile phone number. Returns True on successful dispatch."""
@@ -25,6 +27,7 @@ class BaseSMSProvider(ABC):
 
 class MockSMSProvider(BaseSMSProvider):
     """Simulated provider for local development, staging, and automated test suites."""
+
     def send_otp(self, phone: str, otp: str) -> bool:
         logger.info(f"[DEV/TEST MOCK SMS] Dispatched OTP {otp} to {phone}")
         return True
@@ -32,6 +35,7 @@ class MockSMSProvider(BaseSMSProvider):
 
 class ProductionSMSProvider(BaseSMSProvider):
     """Production provider requiring valid SMS gateway API key credentials."""
+
     def __init__(self, api_key: str):
         if not api_key or len(api_key.strip()) < 8:
             raise RuntimeError(
