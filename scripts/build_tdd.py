@@ -1,469 +1,381 @@
-"""
-Build script for Technical Design Document (TDD.docx).
-Ensures required sections, accurate technical specifications,
-and strict absence of forbidden words.
-"""
+"""Generate the Technical Design Document from the current project facts."""
+
+from __future__ import annotations
+
+import json
 import re
-import docx
-from docx.shared import Inches, Pt, RGBColor
+from pathlib import Path
+
+from docx import Document
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Inches, Pt, RGBColor
 
-def create_tdd():
-    doc = docx.Document()
+ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_URL = "https://github.com/Jagadeesh58/Township_one"
+SUMMARY_PATH = ROOT / "docs" / "reports" / "summary.json"
+OUTPUT_PATH = ROOT / "TDD.docx"
+NAVY = "1E3557"
+BLUE = "315B82"
+PALE_BLUE = "EAF1F7"
+LIGHT_GREY = "F2F4F7"
+DARK_GREY = "505A66"
 
-    # Page setup
-    for section in doc.sections:
-        section.top_margin = Inches(1.0)
-        section.bottom_margin = Inches(1.0)
-        section.left_margin = Inches(1.0)
-        section.right_margin = Inches(1.0)
 
-    # Line 1: Required GitHub repository URL
-    p_url = doc.add_paragraph()
-    r_url = p_url.add_run("https://github.com/Jagadeesh58/Township_one.git")
-    r_url.font.name = "Arial"
-    r_url.font.size = Pt(11)
-    r_url.font.bold = True
-    r_url.font.color.rgb = RGBColor(0, 102, 204)
+def shade_cell(cell, fill: str) -> None:
+    tc_pr = cell._tc.get_or_add_tcPr()
+    shd = tc_pr.find(qn("w:shd"))
+    if shd is None:
+        shd = OxmlElement("w:shd")
+        tc_pr.append(shd)
+    shd.set(qn("w:fill"), fill)
 
-    # Document Title
-    p_title = doc.add_paragraph()
-    r_title = p_title.add_run("Township One — Technical Design Document")
-    r_title.font.name = "Arial"
-    r_title.font.size = Pt(20)
-    r_title.font.bold = True
-    r_title.font.color.rgb = RGBColor(26, 36, 56)
 
-    p_sub = doc.add_paragraph()
-    r_sub = p_sub.add_run("System Architecture, Data Integrity, Financial Controls & Security Specifications")
-    r_sub.font.name = "Arial"
-    r_sub.font.size = Pt(12)
-    r_sub.font.italic = True
-    r_sub.font.color.rgb = RGBColor(100, 100, 100)
+def set_cell_text(cell, text: str, *, bold: bool = False, color: str = "263445", size: int = 9) -> None:
+    cell.text = ""
+    paragraph = cell.paragraphs[0]
+    paragraph.paragraph_format.space_after = Pt(2)
+    run = paragraph.add_run(str(text))
+    run.bold = bold
+    run.font.name = "Aptos"
+    run.font.size = Pt(size)
+    run.font.color.rgb = RGBColor.from_string(color)
+    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
 
-    # Helper function for adding sections
-    def add_h1(text):
-        p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(14)
-        p.paragraph_format.space_after = Pt(4)
-        r = p.add_run(text)
-        r.font.name = "Arial"
-        r.font.size = Pt(14)
-        r.font.bold = True
-        r.font.color.rgb = RGBColor(26, 36, 56)
-        return p
 
-    def add_h2(text):
-        p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(10)
-        p.paragraph_format.space_after = Pt(3)
-        r = p.add_run(text)
-        r.font.name = "Arial"
-        r.font.size = Pt(12)
-        r.font.bold = True
-        r.font.color.rgb = RGBColor(40, 60, 90)
-        return p
+def add_table(doc: Document, headers: list[str], rows: list[list[str]], widths: list[float] | None = None) -> None:
+    table = doc.add_table(rows=1, cols=len(headers))
+    table.style = "Table Grid"
+    table.autofit = True
+    for index, label in enumerate(headers):
+        set_cell_text(table.rows[0].cells[index], label, bold=True, color="FFFFFF", size=9)
+        shade_cell(table.rows[0].cells[index], NAVY)
+    table.rows[0]._tr.get_or_add_trPr().append(OxmlElement("w:tblHeader"))
+    for row_index, values in enumerate(rows):
+        cells = table.add_row().cells
+        row_properties = table.rows[-1]._tr.get_or_add_trPr()
+        row_properties.append(OxmlElement("w:cantSplit"))
+        for index, value in enumerate(values):
+            set_cell_text(cells[index], value, size=8)
+            if row_index % 2 == 1:
+                shade_cell(cells[index], LIGHT_GREY)
+    if widths:
+        for row in table.rows:
+            for index, width in enumerate(widths):
+                row.cells[index].width = Inches(width)
+    doc.add_paragraph().paragraph_format.space_after = Pt(1)
 
-    def add_body(text, bold_prefix=None, italic=False):
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(4)
-        p.paragraph_format.line_spacing = 1.15
-        if bold_prefix:
-            rb = p.add_run(bold_prefix + " ")
-            rb.font.name = "Arial"
-            rb.font.size = Pt(10)
-            rb.font.bold = True
-        r = p.add_run(text)
-        r.font.name = "Arial"
-        r.font.size = Pt(10)
-        r.font.italic = italic
-        return p
 
-    def add_bullet(text, bold_prefix=None):
-        p = doc.add_paragraph(style='List Bullet')
-        p.paragraph_format.space_after = Pt(3)
-        p.paragraph_format.line_spacing = 1.15
-        if bold_prefix:
-            rb = p.add_run(bold_prefix + " ")
-            rb.font.name = "Arial"
-            rb.font.size = Pt(10)
-            rb.font.bold = True
-        r = p.add_run(text)
-        r.font.name = "Arial"
-        r.font.size = Pt(10)
-        return p
+def add_body(doc: Document, text: str, *, bold_prefix: str | None = None) -> None:
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_after = Pt(5)
+    paragraph.paragraph_format.line_spacing = 1.12
+    if bold_prefix:
+        lead = paragraph.add_run(f"{bold_prefix} ")
+        lead.bold = True
+        lead.font.color.rgb = RGBColor.from_string(NAVY)
+    run = paragraph.add_run(text)
+    run.font.name = "Aptos"
+    run.font.size = Pt(9.5)
+    run.font.color.rgb = RGBColor.from_string("263445")
 
-    # 1. Overview and GitHub URL
-    add_h1("1. Overview and GitHub URL")
-    add_body("https://github.com/Jagadeesh58/Township_one.git", bold_prefix="Repository URL:")
+
+def add_bullets(doc: Document, items: list[str]) -> None:
+    for item in items:
+        paragraph = doc.add_paragraph(style="List Bullet")
+        paragraph.paragraph_format.left_indent = Inches(0.23)
+        paragraph.paragraph_format.first_line_indent = Inches(-0.12)
+        paragraph.paragraph_format.space_after = Pt(2)
+        paragraph.paragraph_format.line_spacing = 1.05
+        run = paragraph.add_run(item)
+        run.font.name = "Aptos"
+        run.font.size = Pt(9.2)
+
+
+def add_heading(doc: Document, text: str, level: int = 1) -> None:
+    paragraph = doc.add_paragraph(style=f"Heading {level}")
+    paragraph.paragraph_format.keep_with_next = True
+    paragraph.paragraph_format.space_before = Pt(11 if level == 1 else 7)
+    paragraph.paragraph_format.space_after = Pt(4)
+    run = paragraph.add_run(text)
+    run.font.name = "Aptos Display"
+    run.font.bold = True
+    run.font.color.rgb = RGBColor.from_string(NAVY if level == 1 else BLUE)
+    run.font.size = Pt(14 if level == 1 else 11)
+
+
+def load_summary() -> dict:
+    if not SUMMARY_PATH.exists():
+        return {"overall_status": "NOT RUN", "gates": {}}
+    try:
+        return json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"overall_status": "UNAVAILABLE", "gates": {}}
+
+
+def extract_test_line(gate: dict) -> str:
+    output = gate.get("stdout", "")
+    match = re.search(r"\d+ passed[^\n]*", output)
+    return match.group(0) if match else gate.get("status", "Not recorded")
+
+
+def build_document() -> None:
+    summary = load_summary()
+    doc = Document()
+    section = doc.sections[0]
+    section.top_margin = Inches(0.65)
+    section.bottom_margin = Inches(0.65)
+    section.left_margin = Inches(0.72)
+    section.right_margin = Inches(0.72)
+
+    styles = doc.styles
+    styles["Normal"].font.name = "Aptos"
+    styles["Normal"].font.size = Pt(9.5)
+    styles["Normal"].font.color.rgb = RGBColor.from_string("263445")
+    styles["Normal"].paragraph_format.space_after = Pt(4)
+    for name in ("Heading 1", "Heading 2"):
+        styles[name].font.name = "Aptos Display"
+        styles[name].font.bold = True
+        styles[name].font.color.rgb = RGBColor.from_string(NAVY)
+
+    header = section.header.paragraphs[0]
+    header.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    header_run = header.add_run("TOWNSHIP ONE  |  TECHNICAL DESIGN")
+    header_run.font.name = "Aptos"
+    header_run.font.size = Pt(8)
+    header_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
+
+    footer = section.footer.paragraphs[0]
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    footer_run = footer.add_run("Company A — Brief 2  |  Page ")
+    footer_run.font.name = "Aptos"
+    footer_run.font.size = Pt(8)
+    footer_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
+    field = OxmlElement("w:fldSimple")
+    field.set(qn("w:instr"), "PAGE")
+    footer._p.append(field)
+
+    top = doc.add_paragraph()
+    top.paragraph_format.space_after = Pt(12)
+    url_run = top.add_run(REPOSITORY_URL)
+    url_run.bold = True
+    url_run.font.size = Pt(10)
+    url_run.font.color.rgb = RGBColor.from_string(BLUE)
+
+    title = doc.add_paragraph()
+    title.paragraph_format.space_after = Pt(2)
+    title_run = title.add_run("Township One")
+    title_run.font.name = "Aptos Display"
+    title_run.font.size = Pt(25)
+    title_run.bold = True
+    title_run.font.color.rgb = RGBColor.from_string(NAVY)
+
+    subtitle = doc.add_paragraph()
+    subtitle.paragraph_format.space_after = Pt(12)
+    subtitle_run = subtitle.add_run("Technical Design Document | Gated Township Resident Application")
+    subtitle_run.font.size = Pt(11)
+    subtitle_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
+    deployment_note = doc.add_paragraph()
+    deployment_note.paragraph_format.space_after = Pt(10)
+    note_run = deployment_note.add_run("Live app URL: not deployed yet. The free-tier deployment is documented in deployment.md; owner-managed provider accounts and secrets are still required.")
+    note_run.font.name = "Aptos"
+    note_run.font.size = Pt(8.5)
+    note_run.font.italic = True
+    note_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
+
+    add_table(
+        doc,
+        ["Project context", "Reference configuration"],
+        [["Client brief", "Company A, Pune — Brief 2"], ["Community", "2,400 apartments across 28 towers"],
+         ["Operations", "180 on-site staff and four gates"], ["Financial reference", "₹22–26 crore annual maintenance budget in the supplied brief"],
+         ["Document basis", "Repository implementation and the supplied assignment brief"]],
+        [1.6, 5.5],
+    )
+
+    add_heading(doc, "1. Problem and scope")
     add_body(
-        "Township One is an integrated resident portal and operations management system engineered "
-        "for large residential communities. The reference configuration is modeled on a community "
-        "comprising 2,400 residential flats across 28 towers, 180 on-site operations staff, and "
-        "4 multi-lane security gates in Pune."
+        doc,
+        "Township One brings resident maintenance tasks, complaints, visitor approvals and amenity bookings into one mobile-first application. Staff workflows support bank statement reconciliation, complaint triage and gate operations. The committee view reports collections, outstanding dues and complaint timing. The product is a demonstration implementation using synthetic data and simulated external transactions."
     )
     add_body(
-        "The system addresses core community operational requirements: passwordless mobile authentication "
-        "with rate limiting, hierarchical spatial modeling, deterministic area-based maintenance billing, "
-        "simulated test payment processing with cryptographic idempotency, dual-entry accounting ledgers "
-        "with immutable post-transaction balances, a bank statement matching engine with database-level "
-        "uniqueness protection, complaint management with trilingual emergency detection and offline AI fallback, "
-        "visitor access management with cryptographic offline credentials, amenity bookings with concurrency slot locking, "
-        "multilingual community notice broadcasting, committee governance financial reporting, and a responsive "
-        "Progressive Web Application (PWA) supporting English, Marathi, and Hindi."
+        doc,
+        "The mandatory Core Build centres on resident login, maintenance bills with test payment, bank CSV matching, complaints with assignment/status and the committee view. The additional Brief 2 functions are resident notices, gate visitor management and amenity booking. General accounting remains with Tally; CCTV, boom barriers and marketplace functionality are outside scope."
     )
 
-    # 2. Architecture and Why
-    add_h1("2. Architecture and Why")
+    add_heading(doc, "2. Architecture and technology choices")
+    add_table(
+        doc,
+        ["Layer", "Technology", "Reason"],
+        [
+            ["Resident/staff UI", "React 19, TypeScript, Vite, PWA", "Mobile-first resident journeys and role-specific staff screens."],
+            ["API", "FastAPI and Pydantic", "Typed request validation, dependency-based authorization and OpenAPI."],
+            ["Persistence", "SQLAlchemy 2.0 and Alembic", "Explicit data relationships and versioned schema changes."],
+            ["Shared database", "PostgreSQL", "Transactions, uniqueness and row locking for concurrent finance/booking workflows."],
+            ["Local tests", "SQLite plus pytest", "Fast portable tests; PostgreSQL-specific guarantees still require PostgreSQL execution."],
+            ["AI", "Local TF-IDF / MultinomialNB; optional Groq adapter", "Works without a paid API key; provider failures fall back to local classification or human review. Money decisions remain deterministic."],
+            ["Photo storage", "Private local adapter or Cloudinary authenticated assets", "Hosted photos use authenticated delivery and are read through short-lived signed download URLs behind application routes."],
+        ],
+        [1.2, 2.0, 4.0],
+    )
+
     add_body(
-        "Township One is designed as a decoupled client-server architecture prioritizing security, "
-        "auditability, deterministic calculations, and operational resilience."
-    )
-    add_h2("System Components")
-    add_bullet(
-        "React 19 with TypeScript and Vite. Provides an installable Progressive Web Application "
-        "with service worker caching for offline shell availability, touch targets exceeding 48px, "
-        "and zero third-party UI framework overhead.",
-        bold_prefix="Frontend Client:"
-    )
-    add_bullet(
-        "FastAPI (Python 3.11+). Provides asynchronous high-throughput REST endpoints with strict "
-        "Pydantic v2 schema validation, dependency injection for database sessions and authentication, "
-        "and automated OpenAPI documentation.",
-        bold_prefix="Backend API:"
-    )
-    add_bullet(
-        "PostgreSQL 15+ as the primary relational database engine, supporting row-level locking "
-        "(SELECT ... FOR UPDATE) for strict payment concurrency control. An optional SQLite configuration "
-        "is maintained for rapid local developer unit testing.",
-        bold_prefix="Database Tier:"
-    )
-    add_bullet(
-        "SQLAlchemy 2.0 ORM with Alembic for version-controlled, auditable database schema migrations.",
-        bold_prefix="Data Mapping & Migrations:"
-    )
-    add_bullet(
-        "Docker Compose specification with PostgreSQL 15 alpine, persistent named volumes, and "
-        "automated health check probes.",
-        bold_prefix="Containerization:"
+        doc,
+        "Hosted reviewer profile: one Render Free Docker service serves the compiled React app and FastAPI from the same origin; Neon Free provides PostgreSQL; Cloudinary Free stores authenticated photo assets; and a scheduled GitHub Actions workflow calls a token-protected retention endpoint. The app uses a local complaint classifier by default, so no paid AI API is required. Provider quotas, sleep/cold-start behaviour and account limits make this a challenge/demo deployment profile, not a production availability guarantee."
     )
 
-    add_h2("Architectural Decisions and Rationale")
-    add_bullet(
-        "FastAPI provides native asynchronous concurrency, tight type validation through Pydantic v2, "
-        "and automatic OpenAPI documentation, minimizing endpoint defects while maintaining high throughput.",
-        bold_prefix="Why FastAPI?"
-    )
-    add_bullet(
-        "Financial accounting and payment workflows require strong ACID guarantees and row-level locking. "
-        "PostgreSQL guarantees that concurrent checkouts on the same maintenance bill cannot result in double "
-        "allocation or balance corruption.",
-        bold_prefix="Why PostgreSQL?"
-    )
-    add_bullet(
-        "Storing session credentials in browser localStorage exposes residents to token exfiltration via "
-        "Cross-Site Scripting (XSS). Township One uses HttpOnly, SameSite=Lax session cookies paired with "
-        "double-submit CSRF tokens.",
-        bold_prefix="Why Cookie-Only Sessions?"
-    )
+    add_heading(doc, "3. Data model")
+    add_bullets(doc, [
+        "Identity and access: User, OTPChallenge, RevokedToken, UserRoleAssignment, FlatMembership, Tower, Flat and Gate.",
+        "Staff operations: StaffMember, StaffTeam, staff skills/shifts and gate-scoped GateDevice enrollment.",
+        "Maintenance finance: BillingRule, Bill, BillLine, Payment, PaymentIntent/idempotency records, PaymentAllocation, Receipt and FlatLedgerEntry.",
+        "Bank reconciliation: BankAccount, registered UPI mappings, BankImportFile/BankRow and bank posting/review records.",
+        "Complaints: Complaint, ComplaintEvent, assignment/SLA records, ClassificationDecision, SafetyEvent, attachments and incident grouping.",
+        "Visitors: VisitorEntry, VisitorPhoto, VisitorEvent, PreApproval, gate device identity/generation/sequence and audit events.",
+        "Community: Amenity, AmenityRule, AmenitySlot, AmenityBooking, Notice, NoticeRevision and revision-specific NoticeRead records.",
+    ])
 
-    # 3. Data Model
-    add_h1("3. Data Model")
+    add_heading(doc, "4. Core workflows")
+    add_heading(doc, "4.1 Resident identity and maintenance", 2)
     add_body(
-        "The relational database schema is normalized across six logical domains: spatial structure, "
-        "identity and role-based access control, maintenance billing and dual-entry accounting, "
-        "complaint lifecycle management, visitor security, and amenity reservations."
+        doc,
+        "Residents authenticate through an OTP challenge and are authorized against active server-side flat membership. The resident home prioritizes dues, active complaints and today's visitors. Maintenance principal uses the approved area snapshot multiplied by the configured rate; the supplied sample rate is ₹6.50 per square foot per month. Issued bills retain their calculation inputs so later configuration changes do not rewrite prior bills."
     )
-    add_bullet(
-        "Tower (code, name, total_floors, flats_per_floor), Flat (flat_number, tower_id, "
-        "floor_number, area_sqft), Gate (gate_number, name, access_type).",
-        bold_prefix="Spatial Domain:"
-    )
-    add_bullet(
-        "User (name, phone, email), UserRoleAssignment (role_code: RESIDENT, ACCOUNTS, COMMITTEE, GUARD, "
-        "ADMIN), FlatMembership (flat_id, user_id, member_type: OWNER, TENANT, FAMILY; granular permissions: "
-        "can_pay_bills, can_approve_visitors, can_raise_complaints).",
-        bold_prefix="Identity & RBAC:"
-    )
-    add_bullet(
-        "BillingRule (rate_per_sqft, due_day_of_month, grace_period_days, late_fee_percentage_pa), "
-        "Bill (flat_id, period_month, period_year, principal_amount, late_fee_amount, total_amount, "
-        "paid_amount, balance_amount, status), BillLine (itemized lines), FlatLedgerEntry (entry_type: "
-        "DEBIT, CREDIT; amount, balance_after, description, reference_id).",
-        bold_prefix="Billing & Accounting:"
-    )
-    add_bullet(
-        "Payment (flat_id, bill_id, user_id, amount, status, idempotency_key, gateway_reference), "
-        "Receipt (receipt_number, payment_id, flat_id, amount, issued_at), BankAccount (account_number, "
-        "bank_name, ifsc_code, upi_id), BankStatementFile (filename, file_sha256, status), "
-        "BankPosting (bank_account_id, utr, payment_id, status; with UNIQUE(bank_account_id, utr)).",
-        bold_prefix="Payments & Bank Domain:"
-    )
-    add_bullet(
-        "Complaint (ticket_number, flat_id, tower_id, user_id, title, description, category, urgency, "
-        "status, version, is_safety_escalation, language, assigned_staff_id, assigned_team, rating, "
-        "feedback, reopen_requested, closed_at), ComplaintEvent (audit trail with from_status, to_status, "
-        "actor_user_id), IncidentGroup (grouping duplicate tickets in a tower), ComplaintAttachment "
-        "(secure photo metadata, stripped EXIF, signed URLs).",
-        bold_prefix="Complaints Domain:"
-    )
-    add_bullet(
-        "VisitorEntry (gate_id, flat_id, visitor_name, phone, purpose, status: ARRIVED, AWAITING_APPROVAL, "
-        "APPROVED, REJECTED, ADMITTED, EXITED, OVERRIDDEN_ADMIT; arrival_time, admission_time, exit_time), "
-        "VisitorPhoto (photo_path, sha256, retention_expires_at), PreApproval (flat_id, guest_name, phone, "
-        "purpose, code_hash, salt, valid_from, valid_until, max_uses, used_count), "
-        "SupervisorOverride (entry_id, supervisor_id, reason, created_at).",
-        bold_prefix="Visitor Security Domain:"
-    )
-    add_bullet(
-        "Amenity (code, name, description, open_time, close_time, slot_duration_minutes, max_capacity, "
-        "fee_amount), AmenitySlot (amenity_id, slot_date, start_time, end_time, capacity, booked_count, "
-        "is_closed, closure_reason), AmenityRule (amenity_id, advance_booking_days, cancellation_cutoff_hours, "
-        "flat_daily_limit), AmenityClosure (amenity_id, start_date, end_date, reason), "
-        "AmenityBooking (amenity_id, slot_id, flat_id, user_id, status, fee_amount, idempotency_key).",
-        bold_prefix="Amenity Reservations Domain:"
-    )
-    add_bullet(
-        "Notice (author_user_id, status, priority, target_scope, target_tower_id, current_revision, "
-        "published_at, expires_at), NoticeRevision (notice_id, revision_number, title_en, body_en, "
-        "title_mr, body_mr, title_hi, body_hi, created_by_user_id), NoticeRead (notice_id, user_id, revision_number, read_at).",
-        bold_prefix="Community Notices Domain:"
-    )
-
-    # 4. Main Flows
-    add_h1("4. Main Flows")
-
-    add_h2("Flow 1: Passwordless Mobile Authentication")
-    add_bullet("The resident enters their 10-digit mobile number in the PWA interface.")
-    add_bullet("The server verifies rate limits: maximum 5 OTP requests per phone in 10 minutes, and maximum 20 requests per client IP per hour.")
-    add_bullet("A 6-digit cryptographically random OTP is generated, salted, and hashed using SHA-256 before being stored in OTPChallenge with a 5-minute expiration window.")
-    add_bullet("In development/demo mode, the server logs the OTP; in production, SMS credentials dispatch the message.")
-    add_bullet("The resident submits the OTP. The server validates salt and hash in constant time, marks the challenge as used, issues a signed JWT with unique JTI, and writes an HttpOnly SameSite=Lax session cookie alongside a double-submit CSRF cookie.")
-
-    add_h2("Flow 2: Area-Based Maintenance Billing & Ledger Posting")
-    add_bullet("At billing generation, the system reads the active BillingRule tariff (INR 6.50 per sq ft).")
-    add_bullet("The principal amount is computed as flat area multiplied by rate, rounded using ROUND_HALF_UP Decimal arithmetic.")
-    add_bullet("A Bill entity is created with status ISSUED, and corresponding itemized BillLine entries are created.")
-    add_bullet("Simultaneously, a DEBIT entry is posted to FlatLedgerEntry, updating the flat running balance_after by the bill amount.")
-
-    add_h2("Flow 3: Idempotent Payment Processing & Concurrency Protection")
-    add_bullet("The resident initiates payment for an unpaid bill via the 2-tap payment interface.")
-    add_bullet("The server verifies flat authorization (user must possess active membership with can_pay_bills permission).")
-    add_bullet("An idempotency check is performed against the SHA-256 request fingerprint (user ID, flat ID, bill ID, amount, currency). Identical re-submissions return cached payment records; cross-flat key collisions return HTTP 409 Conflict.")
-    add_bullet("The target Bill row is locked (SELECT ... FOR UPDATE) to prevent concurrent over-payment.")
-    add_bullet("Upon success, the bill paid_amount increases and balance_amount decreases. A CREDIT entry is written to FlatLedgerEntry, reducing the running balance_after. A tamper-evident Receipt is generated.")
-
-    add_h2("Flow 4: Bank Statement Preview, Deterministic Safety Matching, and Review Queue")
-    add_bullet("Accounts staff uploads canonical bank statement CSV. The system parses rows, computes file SHA-256, and executes a dry-run preview returning validation status and candidate decisions without database mutation.")
-    add_bullet("Upon commit, idempotency keyed on (bank_account_no, file_sha256) ensures duplicate files return HTTP 200 ALREADY_PROCESSED with zero side effects.")
-    add_bullet(
-        "Auto-match requires credit transaction in INR against valid bank account, unique UTR, "
-        "registered UPI identifier matching flat, flat token narration resolving to the same flat, "
-        "and transaction amount matching open bill balance exactly, with zero duplicate or conflicting evidence. "
-        "In our 385-row benchmark corpus, exactly 60 rows satisfy this strict safety contract (15.58% auto-match coverage), "
-        "with zero false auto-postings verified."
-    )
-    add_bullet(
-        "Rows matching only UPI or only flat reference, or with amounts differing from bill balance, "
-        "are routed to the review queue with explicit non-empty reasons (UPI_ONLY_REVIEW, FLAT_REF_ONLY_REVIEW, "
-        "AMOUNT_ONLY_REVIEW) for accounts approval. Debit rows are held as DEBIT_HELD."
-    )
-    add_bullet(
-        "A database-level unique constraint on bank_postings(bank_account_id, utr) enforces that duplicate UTRs "
-        "can never be posted twice, even under concurrent multi-threaded execution. Savepoint handling converts "
-        "duplicate attempts to DUPLICATE_NO_OP or UTR_CONFLICT without raising unhandled database errors."
-    )
-
-    add_h2("Flow 5: Resident Complaint Lodging, Trilingual Emergency Detection, and AI Triage")
-    add_bullet("The resident submits a complaint with title, description, flat identifier, and optional photo attachment (MIME verified via Pillow, EXIF stripped, signed URL streaming).")
-    add_bullet("The deterministic emergency detector inspects text for hazardous keywords (fire, smoke, gas leak, lift entrapment, sparking) across English, Hindi, and Marathi. Matches force CRITICAL urgency and create an active SafetyEvent with alerts; safety events cannot be downgraded.")
-    add_bullet("Non-emergency complaints pass to the AI triage engine (Groq API with 5s timeout and 1 retry; local TF-IDF + MultinomialNB fallback trained on 360-row multilingual dataset). Confidence below 0.60 flags the ticket for human review.")
-    add_bullet("Deterministic assignment matches the predicted category to staff teams, locating on-duty staff in the tower.")
-
-    add_h2("Flow 6: Visitor Entry, Resident Push Approval, Gate Admission & Cryptographic Verification")
-    add_bullet("Guard records visitor arrival with optional photo. The photo is stripped of EXIF metadata before storage, and an automated 90-day retention purge job enforces privacy regulations.")
-    add_bullet("Visitor state transitions to AWAITING_APPROVAL. The resident receives an alert and can approve or reject in 1 tap from their home dashboard.")
-    add_bullet("Upon approval, the guard terminal admits entry; illegal state bypasses return HTTP 409 Conflict. If a resident is unreachable, an authorized supervisor can record an override with mandatory justification.")
-    add_bullet("Pre-approved guest passes issue 6-digit codes and ECDSA P-256 compact cryptographic credentials. Offline guard terminals verify signatures against the gate public key and time anchor, syncing transactions back when online.")
-
-    add_h2("Flow 7: Amenity Slot Booking & Capacity Concurrency")
-    add_bullet("Residents browse facility slots (Banquet Hall, Tennis Court, Swimming Pool) with live available capacity counters.")
-    add_bullet("Booking requests enforce unique idempotency keys, booking window advance limits, and a maximum of 1 slot per flat per day rule (HTTP 409 on violation).")
-    add_bullet("Cancellations outside the 2-hour cutoff release slot capacity; society administrative closures cancel conflicting bookings automatically and block new reservations.")
-
-    add_h2("Flow 8: Community Notice Board Publishing & Language Fallback")
-    add_bullet("Authorized committee members publish notices targeted globally or scoped to specific towers (e.g., Tower 7 lift maintenance).")
-    add_bullet("Notice revisions are immutable and append-only. Residents viewing notices in Marathi or Hindi receive localized content, or an explicit 'Shown in English' fallback badge when translations are absent.")
-    add_bullet("Resident read receipts are tracked per user per revision number.")
-
-    add_h2("Flow 9: Committee Governance Dashboard & Financial Auditing")
-    add_bullet("Provides executive operational oversight with mathematical dues ageing reconciliation (0-30, 31-60, 61-90, 90+ days summing exactly to total outstanding dues).")
-    add_bullet("Presents complaint SLA turnaround metrics (mean and median resolution hours, SLA breach count) and bank reconciliation coverage.")
-    add_bullet("Supports one-click ReportLab PDF governance report generation and CSV aggregate data export.")
-
-    # 5. AI Capabilities (Built vs Not Built, Synthetic Data)
-    add_h1("5. AI Capabilities (Built vs Not Built, Synthetic Data)")
     add_body(
-        "To maintain transparency and engineering integrity, AI functionality is divided into implemented "
-        "operational capabilities and scheduled future enhancements:"
+        doc,
+        "The payment interface runs in test mode. Only a validated successful test result creates a posted payment allocation and receipt. Pending, failed or expired states do not reduce the outstanding balance. Monetary calculations use Decimal values and database numeric columns. Posted ledger events are not edited; corrections use reversal events."
     )
-    add_bullet(
-        "Deterministic trilingual regex emergency detector for fire/smoke/gas/lift/sparking forcing immediate "
-        "CRITICAL urgency and SafetyEvent; Groq API classification client with graceful fallback to local "
-        "TF-IDF + MultinomialNB model trained on 360-row multilingual dataset (45 per category across 8 categories, "
-        "120 per language: English, Hindi, Marathi); character n-gram TF-IDF cosine similarity duplicate candidate "
-        "detection with incident grouping; zero AI in financial matching logic.",
-        bold_prefix="Built:"
-    )
-    add_bullet(
-        "Automated speech-to-text complaint transcription for gate intercoms; dynamic guard patrol route "
-        "optimization; predictive maintenance forecasting on lift telemetry; automated OCR for utility meter "
-        "photographs.",
-        bold_prefix="Not Built Yet (Future):"
-    )
-    add_bullet(
-        "The training dataset comprises 360 synthetically generated multilingual complaint examples (120 English, "
-        "120 Hindi, 120 Marathi) balanced across 8 operational categories. Model evaluation uses held-out incident family "
-        "splits. No production-level accuracy is claimed on unseen real-world society complaints until recalibrated "
-        "on historical society operational data.",
-        bold_prefix="Synthetic Training Data Notice:"
-    )
-
-    # 6. UI and Design Decisions
-    add_h1("6. UI and Design Decisions")
-    add_bullet(
-        "From the resident home dashboard, dues can be reviewed and settled in two taps (Tap 1: 'Pay Now' "
-        "on the DuesCard; Tap 2: 'Execute Test Payment' in the payment modal), and visitors can be approved in 1 tap.",
-        bold_prefix="Two-Tap Resident Actions:"
-    )
-    add_bullet(
-        "Responsive interface tested at 320px viewport width without horizontal scrollbars, ensuring accessibility "
-        "on entry-level mobile devices.",
-        bold_prefix="320px Viewport Support:"
-    )
-    add_bullet(
-        "All primary interactive buttons and form controls enforce a minimum touch bounding box of 48px by 48px.",
-        bold_prefix="Touch Target Sizing:"
-    )
-    add_bullet(
-        "Comprehensive dictionary translations in English, Marathi, and Hindi, allowing seamless language switching "
-        "across all navigation, billing, and status elements.",
-        bold_prefix="Trilingual Localization:"
-    )
-    add_bullet(
-        "Service worker pre-caches the static app shell while enforcing a strict network-only bypass for all /api/* "
-        "routes, guaranteeing that sensitive financial and personal data is never written to public browser caches. "
-        "A message listener clears cached assets upon resident logout.",
-        bold_prefix="Offline Shell & Cache Boundary:"
-    )
-    add_bullet(
-        "Guard Gate Terminal provides high-contrast outdoor night mode, gate selector (1-4), offline queue synchronization, "
-        "and fast-track 6-digit pass verification.",
-        bold_prefix="Guard Terminal:"
-    )
-
-    # 7. Security and Privacy Architecture
-    add_h1("7. Security and Privacy Architecture")
-    add_bullet(
-        "Tokens are transported exclusively via HttpOnly, SameSite=Lax cookies (township_session). Token theft via "
-        "XSS is prevented, and token revocation is tracked in real-time using JTI database blacklisting.",
-        bold_prefix="Cookie-Only Session Security:"
-    )
-    add_bullet(
-        "State-changing HTTP requests require a valid X-CSRF-Token header matching the township_csrf cookie.",
-        bold_prefix="Double-Submit CSRF Protection:"
-    )
-    add_bullet(
-        "Access to individual flat summaries, bills, ledgers, and receipts is validated against server-side FlatMembership "
-        "records. Cross-flat viewing or payment attempts return HTTP 403 Forbidden.",
-        bold_prefix="Strict IDOR Denial:"
-    )
-    add_bullet(
-        "Privileges are derived strictly from database UserRoleAssignment entities; client-supplied role claims or headers "
-        "are completely ignored.",
-        bold_prefix="Role Tampering Immunity:"
-    )
-    add_bullet(
-        "All monetary calculations utilize Python Decimal and PostgreSQL NUMERIC(12,2) with ROUND_HALF_UP rounding. "
-        "Binary floating-point drift is strictly prohibited.",
-        bold_prefix="Financial Precision:"
-    )
-    add_bullet(
-        "Visitor photos have all EXIF metadata stripped via Pillow upon upload, are served exclusively via time-limited "
-        "signed streaming URLs, and are permanently purged by an automated 90-day retention job.",
-        bold_prefix="Visitor Privacy & EXIF Scrubbing:"
-    )
-    add_bullet(
-        "System adheres to principles of the Digital Personal Data Protection (DPDP) Act: minimal resident data collection, "
-        "salted SHA-256 OTP storage, zero plaintext credential storage, and segregated staff role scopes.",
-        bold_prefix="Data Privacy Compliance:"
-    )
-
-    # 8. Scope Boundaries and Future Roadmap
-    add_h1("8. Scope Boundaries and Future Roadmap")
+    add_heading(doc, "4.2 Bank statement matching", 2)
     add_body(
-        "Township One strictly separates verified deliverables from scheduled future roadmap capabilities:"
+        doc,
+        "The bank import uses a canonical synthetic CSV adapter. Each imported row retains source-file and row provenance. Deterministic matching considers the account, credit/debit direction, currency, amount, UTR/reference, registered UPI evidence and flat/bill references. A candidate is posted automatically only when the evidence uniquely identifies an eligible bill or payment and passes the configured checks. Amount-only, UPI-only, conflicting, overpaid, debit, reversed, uncleared or ambiguous rows are held for Accounts review. Preview does not post. Accounts approval rechecks the current state inside a transaction."
     )
-    add_h2("Built Deliverables")
-    add_bullet("Passwordless phone OTP authentication with persistent challenge tracking and rate limiting.")
-    add_bullet("Spatial hierarchy for 28 towers, 2,400 flats, 180 staff, and 4 access gates.")
-    add_bullet("Area-based maintenance billing engine (INR 6.50/sq ft) with 5-day grace period and simple interest.")
-    add_bullet("Simulated payment gateway with cryptographic SHA-256 idempotency fingerprinting.")
-    add_bullet("Dual-entry general accounting ledger with running post-transaction balances.")
-    add_bullet("Payment receipts with sequential numbering and tamper-evident transaction references.")
-    add_bullet("Bank statement matching engine with canonical CSV preview, deterministic safety rules, 60/385 auto-matches (15.58% coverage), review queue for partials/UPI-only/flat-ref-only rows, and database-level unique constraint on account and UTR.")
-    add_bullet("Complaint lifecycle state machine with HTTP 409 Conflict rejection, trilingual emergency detection, AI triage with local MultinomialNB fallback, private signed photo streaming, and semantic duplicate linking.")
-    add_bullet("Visitor access lifecycle (arrival, approval, admission, exit, supervisor override) with 90-day photo retention purging and offline ECDSA P-256 token verification.")
-    add_bullet("Amenity reservation system with slot capacity locking, flat daily limit enforcement, and closure conflict cancellation.")
-    add_bullet("Community notice broadcasting with append-only revisions, tower targeting, and automatic language fallback indicators.")
-    add_bullet("Committee governance dashboard with mathematical dues ageing reconciliation (0-30, 31-60, 61-90, 90+ days), SLA turnaround metrics, PDF and CSV exports.")
-    add_bullet("Progressive Web Application (PWA) with English/Marathi/Hindi localization, offline shell caching with network-only API bypass, and responsive mobile layout.")
-
-    add_h2("Not Built Yet (Scheduled for Future Scope)")
-    add_bullet("Automated license plate recognition (ALPR) cameras integrated with gate physical barrier relays.")
-    add_bullet("IoT smart water meter telemetry ingestion and automated consumption-based tariff surcharges.")
-    add_bullet("Biometric RFID turnstiles for automated clubhouse amenity entry.")
-    add_bullet("Federation accounting consolidation across multi-society clusters.")
-
-    # 9. Labelled Assumptions List
-    add_h1("9. Labelled Assumptions List")
     add_body(
-        "All operational rules implemented in the current system are explicitly labeled as illustrative "
-        "demonstration benchmarks pending formal society general body resolution:"
+        doc,
+        "The matching logic does not use AI to authorize money movement. The synthetic test corpus is maintained under `tests/bank_corpus`; measured results belong in the generated verification report. No live bank API is connected."
     )
-    add_bullet(
-        "Set to INR 6.50 per square foot per month based on Pune residential society benchmarks.",
-        bold_prefix="Maintenance Tariff:"
+    add_heading(doc, "4.3 Complaints, AI and safety", 2)
+    add_body(
+        doc,
+        "A resident submits a categorized or free-text complaint and may attach a photograph. The service assigns a team/staff member using operational rules, starts a response clock and records status changes in a timeline. Help Desk can correct the AI category/urgency suggestion; the human decision is stored separately from the original suggestion."
     )
-    add_bullet(
-        "Fixed to the 15th calendar day of each billing month.",
-        bold_prefix="Due Date:"
+    add_body(
+        doc,
+        "When configured, the backend calls Groq with a constrained output format. Provider failures, timeouts, malformed output or missing configuration use the local classifier or route the complaint to human review. The local model is trained on synthetic examples; production accuracy is not established. Deterministic emergency phrase rules create SafetyEvent records independently of AI. Similar complaints may be suggested for linking, but staff confirms the link and each resident ticket remains independently tracked."
     )
-    add_bullet(
-        "5 calendar days following the due date (through the 20th of the month) during which no interest accrues.",
-        bold_prefix="Grace Period:"
+    add_heading(doc, "4.4 Visitor and gate operations", 2)
+    add_body(
+        doc,
+        "A guard records a visitor at an assigned gate and captures a photograph. A resident with active permission for the target flat approves or rejects the visit. The guard records admission and exit after the allowed state transition. Pre-approved guest credentials are signed using an ECDSA P-256 key. Configure a stable `SIGNING_KEY` or protected `SIGNING_KEY_FILE` so credentials remain verifiable after a backend restart."
     )
-    add_bullet(
-        "Modeled as 18.00% per annum simple interest beginning on the first day following grace period expiration (the 21st). "
-        "Daily interest rate is computed as 0.18 / 366 in leap years (such as 2026) and 0.18 / 365 in non-leap years. "
-        "Derived from Model Bye-Law No. 67 under the Maharashtra Co-operative Societies (MCS) Act 1960 as an illustrative benchmark.",
-        bold_prefix="Late Interest Rate:"
+    add_body(
+        doc,
+        "The guard PWA stages offline visit metadata and the actual photo Blob in IndexedDB. The queue records event/photo UUIDs, gate/device/generation, sequence, capture time, hash and upload state. A signed server time anchor is bound to the guard, gate and enrolled device. Reconnect synchronization uploads the image, checks its hash and acknowledges the event/photo before local photo bytes are removed. Offline entries remain pending; the offline path does not create resident approval. Browser tests must be run to prove reload/reconnect behaviour on a real browser."
     )
-    add_bullet(
-        "Response SLA targets are modeled as 1 hour for CRITICAL, 4 hours for HIGH, 12 hours for MEDIUM, and 24 hours for LOW. "
-        "Resolution SLA targets are modeled as 4 hours for CRITICAL, 24 hours for HIGH, 48 hours for MEDIUM, and 72 hours for LOW. "
-        "First response timestamp is human-gated on staff action; SLA targets are illustrative demo operational baselines.",
-        bold_prefix="Demo SLA Values:"
+    add_body(
+        doc,
+        "Visitor-photo expiry is calculated from original capture time plus 90 days. Local operations use `python -m backend.app.jobs.purge_visitor_photos`; the hosted profile uses the token-protected `/api/v1/ops/retention/visitor-photos` endpoint, invoked daily by `.github/workflows/visitor-photo-retention.yml`. Local disk remains a development adapter; hosted files use authenticated Cloudinary assets and application-mediated reads. A PWA cannot run local expiry cleanup while the browser is closed or the tablet is powered off; a strict device-level guarantee depends on managed kiosk/OS policy or a native cleanup component. The scheduled workflow is configured in source but must be enabled and supplied with owner-managed secrets after deployment."
     )
-    add_bullet(
-        "The 360-row multilingual complaint classification dataset and 385-row bank statement corpus are synthetically "
-        "generated for testing and algorithmic evaluation. Real-world society deployment requires calibration against "
-        "historical society operational records.",
-        bold_prefix="Synthetic Training Data:"
+    add_heading(doc, "4.5 Amenities, notices and committee reporting", 2)
+    add_body(
+        doc,
+        "Amenity slots expose rules, fees and availability. Booking attempts are checked against slot capacity and resident eligibility; PostgreSQL concurrency behaviour needs PostgreSQL testing. Notices support draft/published/withdrawn status, all-resident or tower audiences, English/Hindi/Marathi text, revisions and read receipts keyed to the exact revision. Residents see active notices within their audience, with a visible English fallback label when their selected translation is unavailable."
+    )
+    add_body(
+        doc,
+        "The committee dashboard reports collections, outstanding dues, ageing bands and complaint response/resolution timing. Reports should identify their period and definitions. The client success measures (payment punctuality from 70% to 90%, an 80% reduction in matching time, and reopened complaints from 25% to below 8%) are targets, not results achieved by this prototype."
     )
 
-    doc.save("TDD.docx")
-    print("TDD.docx created successfully.")
+    add_heading(doc, "5. Security and privacy")
+    add_bullets(doc, [
+        "API permissions are resolved from active server-side roles and flat memberships; guard operations also verify the assigned gate and enrolled device.",
+        "Authentication cookies are HttpOnly and state-changing requests use CSRF protection. OTP challenges are stored as salted hashes and are rate-limited.",
+        "Visitor photographs are stored outside public frontend assets, validated and re-encoded to strip image metadata, and served through short-lived application-signed URLs. Hosted storage uses Cloudinary authenticated delivery; public delivery URLs are not used.",
+        "Visitor photo deletion uses original capture time. The scheduled endpoint requires a separate high-entropy token; failed object deletions are not marked successful and remain retryable.",
+        "The current SMS provider is simulated for development/demo; the production placeholder fails closed because no real SMS gateway adapter is implemented.",
+        "Synthetic names, phone numbers, complaints and bank rows are used. Do not place real resident data, photos or bank statements in the repository.",
+    ])
+
+    add_heading(doc, "6. User experience and localization")
+    add_body(
+        doc,
+        "The visual direction uses a restrained palette, clear hierarchy and mobile-first layouts. Resident home exposes dues, open complaints and today's visitors. Staff screens prioritize queue state, urgency and the next action. The guard terminal uses high-contrast controls and visible connectivity/queue state. English, Marathi and Hindi dictionaries support resident and staff text; critical translation coverage should be verified with the frontend tests and narrow-screen browser review."
+    )
+
+    add_heading(doc, "7. Assumptions and scope boundaries")
+    add_table(
+        doc,
+        ["Item", "Treatment in this prototype"],
+        [
+            ["Maintenance rate", "₹6.50/sq ft/month from the supplied brief."],
+            ["Due date, grace period and late interest", "Illustrative configuration only; actual bye-law values require federation approval."],
+            ["Payments", "Test/simulated only; no real funds are collected."],
+            ["SMS and notifications", "Development/demo simulation; no live SMS transport or WhatsApp integration."],
+            ["Bank data", "Synthetic canonical CSV; no live bank integration."],
+            ["AI data", "Synthetic training examples; no production accuracy claim."],
+            ["Gate storage", "Local private disk for development; Cloudinary Free authenticated assets for hosted preview."],
+            ["Retention scheduler", "Daily GitHub Actions workflow calls a token-protected API route; enable it and add repository secrets after hosting."],
+            ["External systems", "Tally, CCTV, boom barriers and live bank/payment systems are not integrated."],
+        ],
+        [2.0, 5.2],
+    )
+
+    add_heading(doc, "8. Verification evidence")
+    gates = summary.get("gates", {})
+    if not gates:
+        add_body(doc, "No release-verification report was available when this document was generated. Run `python scripts/verify_release.py` and regenerate this document.")
+    else:
+        rows = []
+        for name, result in gates.items():
+            if name in {"backend_tests", "backend_tests_and_coverage", "backend_coverage"}:
+                detail = extract_test_line(result)
+                coverage = result.get("coverage_percentage")
+                if coverage is not None:
+                    detail += f"; coverage {coverage}%"
+            elif name == "database_seed_and_ground_truth":
+                if result.get("error"):
+                    detail = result["error"]
+                else:
+                    counts = result.get("counts", {})
+                    truth = result.get("ground_truth", {})
+                    count_text = ", ".join(f"{key}: {value}" for key, value in counts.items())
+                    balance_text = "; ".join(
+                        f"{flat}: ₹{value.get('outstanding')} / {value.get('overdue_days')} days"
+                        for flat, value in truth.items()
+                    )
+                    detail = f"{count_text}; {balance_text}; seed runs: {result.get('seed_runs', 'not recorded')}"
+            elif name == "frontend_typescript":
+                node_version = result.get("stdout", "").strip().splitlines()[0] if result.get("stdout") else "Node version not recorded"
+                detail = f"TypeScript compiler exited 0 ({node_version})."
+            elif name == "wording_scan":
+                detail = f"{result.get('count', 'unknown')} finding(s)."
+            else:
+                detail = (
+                    result.get("stderr", "")[:220].replace("\n", " ")
+                    or result.get("stdout", "")[-220:].replace("\n", " ")
+                    or result.get("status", "Not recorded")
+                )
+            rows.append([name, result.get("status", "UNKNOWN"), detail])
+        add_table(doc, ["Check", "Result", "Evidence"], rows, [2.0, 0.9, 4.3])
+        add_body(doc, f"Overall verifier result: {summary.get('overall_status', 'UNKNOWN')}. Full command outputs are recorded in `docs/reports/summary.json`.")
+
+    add_heading(doc, "9. Known limitations and next work")
+    add_bullets(doc, [
+        "Run the Docker frontend build with the Node 24.15 builder image and execute browser-level PWA/offline tests in the deployed preview; the local container used for this revision had Node 22.16 and could not prove that build.",
+        "Run PostgreSQL migration and concurrency tests against a disposable PostgreSQL service; SQLite does not prove row-lock behaviour.",
+        "Complete the account-side Render/Neon/Cloudinary setup, enable the scheduled GitHub Actions workflow and verify a real 90-day purge on synthetic photo data before operational use.",
+        "Integrate a real SMS gateway and payment provider only with approved accounts, credentials and end-to-end tests; run a measured load test and privacy/security review before operational use.",
+        "Review billing and late-interest assumptions with the federation before using the application for real maintenance collections.",
+    ])
+
+    doc.core_properties.title = "Township One Technical Design Document"
+    doc.core_properties.subject = "Gated township resident application — Brief 2"
+    doc.core_properties.author = "Township One Project"
+    doc.core_properties.keywords = "resident app, maintenance, complaints, visitors, bank reconciliation"
+    doc.save(OUTPUT_PATH)
+    print(f"Wrote {OUTPUT_PATH}")
+
 
 if __name__ == "__main__":
-    create_tdd()
+    build_document()
