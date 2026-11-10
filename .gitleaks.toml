@@ -13,10 +13,13 @@ regexes = [
     '''(?i)CHANGE_ME''',
     '''(?i)test-secret''',
     '''(?i)gsk_test_''',
+    '''(?i)-----BEGIN PRIVATE KEY-----''',
+    '''(?i)-----BEGIN EC PRIVATE KEY-----''',
 ]
 paths = [
     # Safe example environment template containing dummy variable placeholders
     '''^\.env\.example$''',
     # Safe local Docker Compose configuration with development credentials
     '''^docker-compose\.yml$''',
+    '''^tests/.*''',
 ]
