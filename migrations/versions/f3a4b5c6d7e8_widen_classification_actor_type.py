@@ -5,8 +5,8 @@ Revises: e1f2a3b4c5d6
 Create Date: 2026-11-09
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "f3a4b5c6d7e8"
 down_revision = "e1f2a3b4c5d6"
@@ -30,9 +30,7 @@ def downgrade() -> None:
         sa.text("SELECT COUNT(*) FROM classification_decisions WHERE LENGTH(actor_type) > 20")
     ).scalar_one()
     if long_identifiers:
-        raise RuntimeError(
-            "Cannot downgrade classification_decisions.actor_type while values exceed 20 characters."
-        )
+        raise RuntimeError("Cannot downgrade classification_decisions.actor_type while values exceed 20 characters.")
     with op.batch_alter_table("classification_decisions") as batch_op:
         batch_op.alter_column(
             "actor_type",

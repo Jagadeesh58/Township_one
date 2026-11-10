@@ -11,17 +11,17 @@ Responsibility:
 import os
 import sys
 from logging.config import fileConfig
+
+from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine.url import make_url
-from alembic import context
 
 # Ensure root directory is on PYTHONPATH
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Import all models to ensure they are registered with Base.metadata
 from backend.app.core.config import settings
 from backend.app.core.database import Base
-# Import all models to ensure they are registered with Base.metadata
-import backend.app.models.entities
 
 config = getattr(context, "config", None)
 
@@ -61,7 +61,12 @@ def get_effective_migration_url() -> str:
             selected_url = cfg_url.strip()
 
     # 4. Check application validated settings
-    if not selected_url and hasattr(settings, "DATABASE_URL") and settings.DATABASE_URL and settings.DATABASE_URL.strip():
+    if (
+        not selected_url
+        and hasattr(settings, "DATABASE_URL")
+        and settings.DATABASE_URL
+        and settings.DATABASE_URL.strip()
+    ):
         selected_url = settings.DATABASE_URL.strip()
 
     if not selected_url:
@@ -72,9 +77,9 @@ def get_effective_migration_url() -> str:
 
     # Validate URL structure
     if selected_url.startswith("postgres://"):
-        selected_url = "postgresql+psycopg://" + selected_url[len("postgres://"):]
+        selected_url = "postgresql+psycopg://" + selected_url[len("postgres://") :]
     elif selected_url.startswith("postgresql://"):
-        selected_url = "postgresql+psycopg://" + selected_url[len("postgresql://"):]
+        selected_url = "postgresql+psycopg://" + selected_url[len("postgresql://") :]
 
     try:
         make_url(selected_url)

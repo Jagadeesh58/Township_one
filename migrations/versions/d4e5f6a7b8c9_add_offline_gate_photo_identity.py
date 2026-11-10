@@ -1,7 +1,7 @@
 """Add offline gate event/photo idempotency and device sequence fields."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "d4e5f6a7b8c9"
 down_revision = "c3d4e5f6a7b8"
