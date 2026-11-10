@@ -25,8 +25,9 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 
 COPY --chown=township:township . ./
 COPY --from=frontend-build --chown=township:township /build/frontend/dist ./frontend/dist
+RUN chmod +x /app/entrypoint.sh
 RUN mkdir -p /tmp/township-private && chown -R township:township /tmp/township-private
 
 USER township
 EXPOSE 8000
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
