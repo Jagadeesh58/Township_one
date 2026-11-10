@@ -1,82 +1,62 @@
-# Township One — Testing & Quality Assurance Lead Report
+# Testing and Validation
 
-## 1. Quality Strategy & Verification Philosophy
+Use the exact output from commands in `docs/reports/summary.json`. Do not type test counts or coverage values into this document.
 
-Township One enforces proof-based verification. No feature, refactoring, or security control is marked complete without executable automated tests that run against real runtime state and verify database assertions.
+## Backend tests
 
----
-
-## 2. Test Suite Architecture
-
-```
-tests/
-├── conftest.py                   # Strict database separation & state isolation fixtures
-├── test_health.py               # Health checks, error format, dynamic Alembic URL, config guards
-├── test_seed.py                 # Exact entity counts, sample personas, due dates, safe seed
-├── test_auth.py                 # OTP salted hashing, replay protection, rate limits, JWT revocation
-├── test_billing.py              # Area-rate arithmetic, grace period, leap year, multi-bill aggregation
-├── test_payments.py             # Mandatory idempotency keys, outcome validation, IDOR, prod guard
-├── test_payment_concurrency.py  # ThreadPoolExecutor race condition & over-allocation defense
-├── test_money_precision.py      # Half-up rounding, IEEE 754 float immunity, boundary precision
-├── test_migrations.py           # Temporary DB migration, upgrade head, current, heads
-└── test_integration.py          # 10-step full resident journey, ledger reconciliation
-```
-
----
-
-## 3. Test Execution & Evidence
-
-### 3.1 Backend Test Results
 ```bash
-py -3.11 -m pytest tests/ -v
+python -m pytest -rs
 ```
 
-```text
-============================= test session starts =============================
-platform win32 -- Python 3.11.9, pytest-8.4.2, pluggy-1.6.0
-rootdir: C:\Township_one
-configfile: pyproject.toml
-collected 57 items
+For coverage:
 
-tests/test_auth.py .................................. [ 24%]
-tests/test_billing.py .......                         [ 36%]
-tests/test_health.py .......                          [ 49%]
-tests/test_integration.py .                          [ 50%]
-tests/test_migrations.py .                           [ 52%]
-tests/test_money_precision.py .....                   [ 61%]
-tests/test_payment_concurrency.py ..                  [ 64%]
-tests/test_payments.py ..........                     [ 82%]
-tests/test_seed.py ...........                        [100%]
-
-======================= 57 passed, 3 warnings in 33.23s =======================
-```
-
-### 3.2 Frontend Test Results
 ```bash
-cd frontend && npm test
+python -m pytest -rs --cov=backend/app --cov-report=term --cov-fail-under=90
 ```
 
-```text
- RUN  v5.1.0 C:/Township_one/frontend
+The SQLite suite exercises application behaviour and portable database constraints. Tests requiring PostgreSQL locking must be run with `PG_DATABASE_URL` and `TEST_DATABASE_URL` configured for a disposable PostgreSQL database.
 
- ✓ src/__tests__/app.test.ts (11 tests) 80ms
+## Migration and seed checks
 
- Test Files  1 passed (1)
-      Tests  11 passed (11)
-   Duration  899ms
-```
-
-### 3.3 Frontend Build Verification
 ```bash
-cd frontend && npm run build
+alembic upgrade head
+alembic check
+python -m seed.seed_data --mode safe
+python -m seed.seed_data --mode safe
 ```
 
-```text
-vite v6.4.5 building for production...
-✓ 39 modules transformed.
-rendering chunks...
-dist/index.html                   0.80 kB │ gzip:  0.44 kB
-dist/assets/index-CxXMJiAj.css    0.58 kB │ gzip:  0.39 kB
-dist/assets/index-_I_LRtTJ.js   267.58 kB │ gzip: 79.99 kB
-✓ built in 4.32s
+The seed command must be repeatable. It must preserve the 28-tower, 2,400-flat, 180-staff and four-gate reference counts and the three published balance examples.
+
+## Frontend checks
+
+Node must satisfy the package-lock engine requirement (Node 22.22.2 or later in the Node 22 line, or Node 24.15 or later).
+
+```bash
+cd frontend
+npm ci
+npx tsc --noEmit
+npm test
+npm run build
 ```
+
+The IndexedDB queue tests use `fake-indexeddb`. A browser-level test should additionally exercise real reload, offline capture, reconnect upload and acknowledgement behaviour before claiming browser verification.
+
+## Bank reconciliation tests
+
+`tests/test_bank_matching.py` uses synthetic transaction fixtures to exercise exact evidence, ambiguity, duplicates and review routing. PostgreSQL uniqueness and concurrency assertions require a PostgreSQL test database.
+
+## Release verifier
+
+```bash
+python scripts/verify_release.py
+```
+
+The verifier writes `docs/reports/summary.json`. A missing executable, failing command or timeout is recorded as a non-passing status and causes a non-zero exit code.
+
+## Evidence boundaries
+
+- A test file proves only the assertions that it executes.
+- SQLite does not prove PostgreSQL row-level lock behaviour.
+- TypeScript compilation does not prove browser interaction.
+- A locally scheduled command does not prove a hosted scheduler is deployed.
+- A screenshot does not prove that a backend action or external integration succeeded.

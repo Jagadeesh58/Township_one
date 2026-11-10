@@ -1,41 +1,215 @@
 {
-  "timestamp": "2026-11-09T10:07:21.845654+00:00",
+  "generated_at": "2026-11-09T18:51:32.710198+00:00",
+  "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
+  "platform": "linux",
   "gates": {
-    "database_and_ground_truth": {
-      "status": "PASS",
-      "towers": 28,
-      "flats": 2400,
-      "staff": 180,
-      "gates": 4,
-      "ground_truth_balances": {
-        "T07-1203": "0.00",
-        "T12-0408": "6370.00",
-        "T21-1601": "5660.00"
-      }
+    "postgresql_migrations": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "duration_seconds": 0,
+      "command": [
+        "alembic upgrade head",
+        "alembic check",
+        "alembic downgrade base",
+        "alembic upgrade head"
+      ],
+      "stdout": "",
+      "stderr": "No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour."
     },
-    "ruff": {
-      "return_code": 0,
-      "status": "PASS"
+    "ruff_check": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "duration_seconds": 0,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "ruff",
+        "check",
+        "."
+      ],
+      "stdout": "",
+      "stderr": "Ruff is declared in requirements.txt but is not installed in this execution environment."
+    },
+    "ruff_format": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "duration_seconds": 0,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "ruff",
+        "format",
+        "--check",
+        "."
+      ],
+      "stdout": "",
+      "stderr": "Ruff is declared in requirements.txt but is not installed in this execution environment."
     },
     "mypy": {
-      "return_code": 0,
-      "status": "PASS"
+      "status": "BLOCKED",
+      "returncode": null,
+      "duration_seconds": 0,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "mypy",
+        "backend/app"
+      ],
+      "stdout": "",
+      "stderr": "Mypy is declared in requirements.txt but is not installed in this execution environment."
     },
-    "tests_and_coverage": {
-      "return_code": 0,
-      "coverage_percentage": 90,
-      "status": "PASS"
-    },
-    "frontend": {
-      "tsc_return_code": 0,
-      "test_return_code": 0,
-      "build_return_code": 0,
-      "status": "PASS"
-    },
-    "vocabulary_guard": {
+    "frontend_typescript": {
       "status": "PASS",
-      "violations_count": 0,
-      "violations": []
+      "returncode": 0,
+      "command": [
+        "node",
+        "-e",
+        "console.log(process.version); process.argv = [process.argv[0], 'tsc', '--noEmit']; require('./node_modules/typescript/lib/tsc.js')"
+      ],
+      "stdout": "v22.16.0\n",
+      "stderr": ""
+    },
+    "frontend_tests": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "command": [
+        "npm",
+        "test"
+      ],
+      "stdout": "",
+      "stderr": "Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. Run npm ci, npm test on supported Node in CI."
+    },
+    "frontend_build": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "command": [
+        "npm",
+        "run",
+        "build"
+      ],
+      "stdout": "",
+      "stderr": "Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. The Docker builder is pinned to Node 24.15.0."
+    },
+    "postgresql_backend_tests": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "duration_seconds": 0,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "pytest",
+        "tests/",
+        "-rs"
+      ],
+      "stdout": "",
+      "stderr": "No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour."
+    },
+    "backend_tests": {
+      "status": "PASS",
+      "returncode": null,
+      "duration_seconds": 29.82,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-rs",
+        "-p",
+        "no:ddtrace",
+        "-p",
+        "no:cov"
+      ],
+      "stdout": "199 passed, 3 skipped, 22 warnings in 29.82s. All executed assertions passed. Three PostgreSQL row-lock tests were skipped because no PostgreSQL service was available.",
+      "stderr": "The execution wrapper timed out during process cleanup after pytest printed its complete green summary; no test failure was reported. Re-run in CI to confirm clean process exit."
+    },
+    "database_seed_and_ground_truth": {
+      "status": "PASS",
+      "returncode": 0,
+      "duration_seconds": 0,
+      "command": [
+        "python",
+        "scripts/verify_release.py",
+        "--database-check-worker"
+      ],
+      "stdout": "{\n  \"status\": \"PASS\",\n  \"migration\": \"alembic upgrade head\",\n  \"schema_parity\": \"alembic check reported no new upgrade operations\",\n  \"seed_runs\": 2,\n  \"counts\": {\n    \"towers\": 28,\n    \"flats\": 2400,\n    \"staff\": 180,\n    \"gates\": 4\n  },\n  \"ground_truth\": {\n    \"T07-1203\": {\n      \"outstanding\": \"0.00\",\n      \"overdue_days\": 0\n    },\n    \"T12-0408\": {\n      \"outstanding\": \"6370.00\",\n      \"overdue_days\": 47\n    },\n    \"T21-1601\": {\n      \"outstanding\": \"5660.00\",\n      \"overdue_days\": 18\n    }\n  }\n}",
+      "stderr": "",
+      "migration": "alembic upgrade head",
+      "schema_parity": "alembic check reported no new upgrade operations",
+      "seed_runs": 2,
+      "counts": {
+        "towers": 28,
+        "flats": 2400,
+        "staff": 180,
+        "gates": 4
+      },
+      "ground_truth": {
+        "T07-1203": {
+          "outstanding": "0.00",
+          "overdue_days": 0
+        },
+        "T12-0408": {
+          "outstanding": "6370.00",
+          "overdue_days": 47
+        },
+        "T21-1601": {
+          "outstanding": "5660.00",
+          "overdue_days": 18
+        }
+      }
+    },
+    "backend_coverage": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "duration_seconds": 120,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-rs",
+        "--cov=backend/app",
+        "--cov-report=term",
+        "--cov-fail-under=90"
+      ],
+      "stdout": "All test assertions completed and pytest printed 199 passed, 3 skipped, 22 warnings. The coverage process did not finish shutdown before the execution timeout, so no current coverage percentage was captured.",
+      "stderr": "The previous 90.00% report belongs to the earlier 196-pass code state and is not reused as evidence for this Cloudinary storage change."
+    },
+    "compileall": {
+      "status": "PASS",
+      "returncode": 0,
+      "duration_seconds": 0,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "compileall",
+        "-q",
+        "backend",
+        "seed",
+        "tests"
+      ],
+      "stdout": "Python modules compiled successfully.",
+      "stderr": ""
+    },
+    "wording_scan": {
+      "status": "PASS",
+      "count": 0,
+      "items": []
+    },
+    "test_runner_shutdown": {
+      "status": "BLOCKED",
+      "returncode": null,
+      "duration_seconds": 120,
+      "command": [
+        "/opt/pyvenv/bin/python",
+        "-m",
+        "pytest",
+        "-q",
+        "-rs"
+      ],
+      "stdout": "Pytest printed the complete summary: 199 passed, 3 skipped, 22 warnings in 29.82s.",
+      "stderr": "The outer execution wrapper did not observe a clean process exit before timeout. Re-run on CI or a normal local shell to confirm exit code."
     }
-  }
+  },
+  "overall_status": "FAIL",
+  "all_gates_passed": false
 }

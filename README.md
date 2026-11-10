@@ -1,140 +1,157 @@
-# TOWNSHIP ONE — Gated Township Resident & Operations Platform
+# Township One
 
-**Repository URL:** https://github.com/Jagadeesh58/Township_one.git  
-**Client:** Company A, Pune  
-**Township Context:** 2,400 residential flats across 28 towers, 180 on-site staff, 4 multi-lane access gates, managing ₹22–26 crore annual maintenance budget.  
-**Scope:** Gated township resident app for maintenance billing, complaints, and community operations.  
+**Gated township resident and operations platform** · Company A, Pune · Brief 2
 
----
+Repository: https://github.com/Jagadeesh58/Township_one
 
-## 1. System Overview
+Township One consolidates the high-frequency tasks of a 2,400-home gated community: maintenance dues, test payments, complaint tracking, visitor approvals, notices and amenity bookings. Role-specific workspaces support accounts reconciliation, help-desk triage, guard operations and committee oversight.
 
-Township One is a resident experience and community operations platform engineered for large-scale gated communities. The platform provides secure resident authentication, spatial township modeling, maintenance dues calculation with transparent breakdown, simulated test payment processing with cryptographic idempotency, dual-entry accounting ledgers, and a mobile-first Progressive Web App (PWA).
+## Product surface
 
-### Architecture Highlights
-- **Backend API:** FastAPI (Python 3.11), SQLAlchemy 2.0 ORM, Pydantic v2, and Alembic schema migrations.
-- **Frontend PWA:** React 19, TypeScript, Vite 6, Service Worker offline caching (with strict `/api/*` network-only bypass), trilingual native localization (English, Marathi, Hindi).
-- **Financial Precision:** Strict decimal arithmetic using Python `Decimal` (`ROUND_HALF_UP`) ensuring zero binary floating-point drift across all billing and ledger calculations.
-- **Payment Idempotency:** Cryptographic request fingerprinting, mandatory client idempotency keys (minimum 8 chars), dialect-aware row-level locking (`with_for_update`), and generic conflict responses preventing cross-resident data leakage.
-- **Role-Based Access Control:** Strict server-side permission enforcement. Committee members access aggregate township metrics while being strictly blocked from individual flat drill-downs; security guards are restricted to gate operations with zero financial access; family members have view permissions while bill payment is blocked.
-
----
-
-## 2. Professional Documentation Hierarchy
-
-Comprehensive architecture specifications, data schemas, security models, and verification reports are maintained in the [`docs/`](docs/) directory:
-
-| Document | Description |
+| Workspace | What works in the prototype |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | High-level system architecture, component topology, and technology stack. |
-| [`docs/data-model.md`](docs/data-model.md) | Entity-relationship diagrams, schema tables, constraints, and data dictionaries. |
-| [`docs/database-and-seed-data.md`](docs/database-and-seed-data.md) | 2,400 flats, 28 towers, 180 staff, 4 gates, and ground truth sample personas. |
-| [`docs/authentication-and-access-control.md`](docs/authentication-and-access-control.md) | Salted SHA-256 OTP authentication, persistent JWT revocation, and RBAC permissions model. |
-| [`docs/maintenance-billing.md`](docs/maintenance-billing.md) | Area-rate billing (₹6.50/sq ft), grace period boundaries, leap year support, and ledger bookkeeping. |
-| [`docs/payments-and-receipts.md`](docs/payments-and-receipts.md) | Idempotency locking, state machine retry lifecycle, test payment modes, and vouchers. |
-| [`docs/resident-experience-and-pwa.md`](docs/resident-experience-and-pwa.md) | 2-tap payment CTA, multi-bill selection, service worker caching, and trilingual i18n. |
-| [`docs/security-and-privacy.md`](docs/security-and-privacy.md) | Production configuration guards, IDOR prevention, brute-force defenses, and DPDP Act 2023 alignment. |
-| [`docs/testing-and-validation.md`](docs/testing-and-validation.md) | Verification engine methodology, test suite topology, and test execution evidence. |
-| [`docs/assumptions-and-open-decisions.md`](docs/assumptions-and-open-decisions.md) | Domain assumptions register, late fee legal notice, and architectural roadmap. |
-| [`docs/implementation-status.md`](docs/implementation-status.md) | Feature completion status, verified persona checklist, and future phase boundaries. |
-| [`docs/reviewer-walkthrough.md`](docs/reviewer-walkthrough.md) | Step-by-step evaluation guide and demonstration scenarios. |
-| [`docs/deployment.md`](docs/deployment.md) | Production deployment guide, environment variables, and operations checklist. |
+| Resident | OTP demo login, flat-linked bills and ledger, simulated payment and receipt, complaints, visitor approvals, guest pre-approvals, notices and amenity booking. |
+| Accounts | CSV statement preview/import, evidence-based matching, duplicate checks and a review queue. Ambiguous rows are held; AI never posts a payment. |
+| Help desk | Assigned complaint queue, category/urgency suggestions, status history, response timers, manual correction and safety escalation. |
+| Gate guard | Gate-scoped visitor check-in, resident approval, photo capture, pre-approved guest verification and offline queue/reconnect sync. |
+| Committee | Collection/dues ageing and complaint timing summaries, plus notice editing and publication. |
 
-### Technical Verification Reports
-- [`docs/reports/backend-test-report.md`](docs/reports/backend-test-report.md) — 57/57 Automated backend tests passing.
-- [`docs/reports/migration-validation.md`](docs/reports/migration-validation.md) — Alembic schema migration and revision verification.
-- [`docs/reports/seed-data-validation.md`](docs/reports/seed-data-validation.md) — Database entity counts and overdue math validation.
-- [`docs/reports/frontend-validation.md`](docs/reports/frontend-validation.md) — Vitest frontend test report and production asset build metrics.
-- [`docs/reports/payment-safety-validation.md`](docs/reports/payment-safety-validation.md) — Idempotency key replay verification, concurrency benchmarks, and precision tests.
+The interface supports English, Marathi and Hindi. The resident experience is mobile-first; guard controls are deliberately large and high-contrast.
 
----
+## Why this is more than a UI demo
 
-## 3. Reviewer Test Personas & Test Credentials
+- Financial calculations use `Decimal`; payments are simulated and idempotent. The bank matcher uses amount, reference, UPI and flat/bill evidence, then routes uncertain rows to Accounts review.
+- Complaint category and urgency are suggested by a local TF-IDF / Multinomial Naive Bayes model. Deterministic emergency phrase rules escalate safety events independently of model output. Staff can correct a category; duplicates are linked, not silently closed.
+- Visitor access is role-, flat-, gate- and device-scoped. Offline visit records and image Blobs queue in IndexedDB and sync on reconnection.
+- Visitor and complaint images are validated and re-encoded to strip metadata. They are stored privately and served through application routes; hosted deployments use Cloudinary authenticated assets, read only through authorized application routes.
+- Visitor-photo retention is calculated from capture time plus 90 days. A token-protected API operation and scheduled GitHub Actions workflow are included for hosted cleanup.
+- The hosted container applies Alembic migrations and optionally performs a guarded, non-destructive demo seed. Remote destructive reset is rejected.
 
-The local demonstration database (`township_one.db`) is pre-seeded with test accounts. In development and testing environments, OTP verification uses the demo OTP `123456`:
+## Architecture
 
-| Persona / Role | Name | Phone Number | Demo OTP | Scope | Permitted Access | Blocked Access |
-|---|---|---|---|---|---|---|
-| **Resident (Tenant)** | Swati Joshi | `9876543211` | `123456` | T12-0408 (980 sq ft) | View bills, pay ₹6,370 overdue dues, test checkout, lodge complaints | Other flats' records (403), committee reports (403), gate logs (403) |
-| **Resident (Owner)** | Neeraj Kulkarni | `9876543210` | `123456` | T07-1203 (1,150 sq ft) | View bills (₹7,475 paid, ₹0 due), receipts, flat ledger statement | Other flats' finances (403), duplicate payment on paid bill (400) |
-| **Family Member** | Ananya Kulkarni | `9876543213` | `123456` | T07-1203 | View flat billing summary & complaints (`can_pay_bills = False`) | Initiating payments / checkout (403) |
-| **Resident (Owner)** | Aamir Shaikh | `9876543212` | `123456` | T21-1601 (1,640 sq ft) | View ₹5,660 balance (₹5,000 paid of ₹10,660), pay dues | Other flats' records (403) |
-| **Help Desk** | Ramesh Patil | `9876543220` | `123456` | Township Support | Complaint triage, assignment, status tracking, SLA monitoring | Financial postings (403), gate security photos |
-| **Security Guard** | Suresh Shinde | `9876543230` | `123456` | Gate 1 | Visitor verification, entry/exit logging | Resident financial records (403), complaints (403) |
-| **Accounts Staff** | Anita Deshmukh | `9876543240` | `123456` | Finance Office | Manual reconciliation, bill generation, ledger audit | Security gate photos, committee governance actions |
-| **Committee Member**| Vikram Sardesai | `9876543250` | `123456` | Management Committee | Aggregate township collections, receivables, ageing metrics | **Strictly blocked from individual flat drill-down (403)** |
+- **Frontend:** React 19, TypeScript, Vite and installable PWA.
+- **API:** FastAPI, Pydantic and SQLAlchemy 2.0.
+- **Database:** PostgreSQL for shared deployment; SQLite is used only for portable test runs.
+- **Migrations:** Alembic.
+- **AI:** local scikit-learn classifier by default; optional server-side Groq adapter when a current free quota is available. No external AI key is required for the baseline workflow.
+- **Storage:** local private adapter in development; Cloudinary authenticated private assets in the hosted profile (a $0 Free plan with no credit card required).
 
----
+The hosted profile serves the compiled frontend and API from a single Render Docker service, so the browser uses same-origin `/api/v1` requests rather than a separately deployed frontend.
 
-## 4. Ground Truth Sample Data (As of 2026-11-06)
+## Local quick start
 
-Deterministic baseline date: `DEMO_AS_OF_DATE = 2026-11-06T00:00:00Z`.
+Prerequisites: Python 3.11+, Node.js 22.22.2+ or 24.15+, npm, Docker Engine with Compose, and Git.
 
-1. **Flat T07-1203 (Neeraj Kulkarni):**
-   - Area: 1,150 sq ft @ ₹6.50/sq ft = ₹7,475.00
-   - Paid: ₹7,475.00 in full on 2026-11-03
-   - Current Outstanding: ₹0.00
-   - Overdue Days: 0
-2. **Flat T12-0408 (Swati Joshi, Tenant):**
-   - Area: 980 sq ft @ ₹6.50/sq ft = ₹6,370.00
-   - Due Date: 2026-09-20 (Grace ended 2026-09-20)
-   - Overdue Days: **Exactly 47 days** as of 2026-11-06 ($2026\text{-}11\text{-}06 - 2026\text{-}09\text{-}20 = 47\text{ days}$)
-   - Paid: ₹0.00 | Current Outstanding: ₹6,370.00
-   - Late Fee Notice: Illustrative demo calculation (18% p.a. simple interest) pending society federation approval (not an approved legal rate).
-   - Complaints: 1 high-urgency active water leakage complaint.
-3. **Flat T21-1601 (Aamir Shaikh):**
-   - Area: 1,640 sq ft @ ₹6.50/sq ft = ₹10,660.00
-   - Due Date: 2026-10-19 (Grace ended 2026-10-19)
-   - Overdue Days: **Exactly 18 days** as of 2026-11-06 ($2026\text{-}11\text{-}06 - 2026\text{-}10\text{-}19 = 18\text{ days}$)
-   - Paid: ₹5,000.00 on 2026-10-18 | Current Outstanding: ₹5,660.00
-4. **Tower 7 Lift Incident (CMP-2026-1002):**
-   - Primary ticket grouping 10 distinct lift complaints from 10 distinct flats across Tower 7.
-   - All reports remain open and SLA-tracked until physical mechanical resolution.
+1. Create and activate a virtual environment:
 
----
+   ```bash
+   python -m venv .venv
+   # Windows PowerShell: .venv\\Scripts\\Activate.ps1
+   # macOS/Linux: source .venv/bin/activate
+   ```
 
-## 5. Quick Start & Execution
+2. Install backend and frontend dependencies:
 
-### 5.1 Prerequisites
-- Python 3.11+
-- Node.js 18+ (Node 20+ recommended)
-- Git
+   ```bash
+   python -m pip install -r requirements.txt
+   cd frontend && npm ci && cd ..
+   ```
 
-### 5.2 Backend Setup & Execution
+3. Start PostgreSQL, migrate and seed the synthetic dataset:
+
+   ```bash
+   docker compose up -d db
+   alembic upgrade head
+   python -m seed.seed_data --mode safe
+   ```
+
+4. Start FastAPI and Vite together:
+
+   ```bash
+   python scripts/dev.py
+   ```
+
+Open `http://127.0.0.1:5173`. API documentation: `http://127.0.0.1:8000/docs`; health/readiness: `http://127.0.0.1:8000/health`.
+
+Copy `.env.example` to `.env` for local overrides. Never commit `.env` or real personal/financial data. Local DB credentials and the demo OTP are for development only.
+
+## Free hosted reviewer deployment
+
+The repo includes `Dockerfile`, `entrypoint.sh`, `requirements-runtime.txt`, `.dockerignore` and `render.yaml` for a free-tier **demo** profile:
+
+| Component | Free option | Responsibility |
+|---|---|---|
+| Web app + API | Render Free Docker web service | One origin; serves built React app and FastAPI. It sleeps after inactivity and can have a cold start. |
+| PostgreSQL | Neon Free | Shared relational database and migrations. Free plan has account-level compute/storage/egress limits. |
+| Private photos | Cloudinary Free | Authenticated assets; signed access remains behind application routes. Free plan is $0 and does not require a credit card; usage is limited by monthly credits. |
+| Retention scheduler | GitHub Actions (public repository) | Daily call to the token-protected 90-day visitor-photo purge endpoint. |
+| Complaint AI | Local scikit-learn model | No external model API or API key required. |
+
+Follow [`deployment.md`](deployment.md) to create the free resources, add secrets and deploy. This is a reviewer/demo setup, not a production SLA. Free plans can sleep, throttle, change quotas or introduce cold starts; monitor limits and disable resources you no longer need. No app URL is claimed until the owner completes provider setup.
+
+## Demo data and reviewer accounts
+
+The seed represents 28 towers, 2,400 flats, 180 staff and four gates. The financial snapshot date is **6 November 2026**. The maintenance principal rate is ₹6.50 per sq ft per month. The due-date, grace-period and late-interest configuration remains illustrative and must be approved against the society's bye-laws before real billing.
+
+| Flat | Resident | Outstanding | Overdue |
+|---|---|---:|---:|
+| T07-1203 | Neeraj Kulkarni | ₹0.00 | 0 days |
+| T12-0408 | Swati Joshi (tenant) | ₹6,370.00 | 47 days |
+| T21-1601 | Aamir Shaikh | ₹5,660.00 | 18 days |
+
+For a demo environment, set `DEMO_OTP_CODE=123456` and use one of the synthetic reviewer identities documented in [`deployment.md`](deployment.md). Do not expose fixed OTP login in a real resident service.
+
+## Verification
+
+<!-- verification-summary:start -->
+| Check | Result | Measured evidence |
+|---|---|---|
+| `postgresql_migrations` | **BLOCKED** | No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour. |
+| `ruff_check` | **BLOCKED** | Ruff is declared in requirements.txt but is not installed in this execution environment. |
+| `ruff_format` | **BLOCKED** | Ruff is declared in requirements.txt but is not installed in this execution environment. |
+| `mypy` | **BLOCKED** | Mypy is declared in requirements.txt but is not installed in this execution environment. |
+| `frontend_typescript` | **PASS** | TypeScript compiler passed (v22.16.0). |
+| `frontend_tests` | **BLOCKED** | Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. Run npm ci, |
+| `frontend_build` | **BLOCKED** | Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. The Docker  |
+| `postgresql_backend_tests` | **BLOCKED** | No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour. |
+| `backend_tests` | **PASS** | 199 passed, 3 skipped, 22 warnings in 29.82s. All executed assertions passed. Three PostgreSQL row-lock tests were skipped because no PostgreSQL service was available. |
+| `database_seed_and_ground_truth` | **PASS** | towers: 28, flats: 2400, staff: 180, gates: 4 |
+| `backend_coverage` | **BLOCKED** | 199 passed, 3 skipped, 22 warnings. The coverage process did not finish shutdown before the execution timeout, so no current coverage percentage was captured. |
+| `compileall` | **PASS** | Python modules compiled successfully. |
+| `wording_scan` | **PASS** | 0 finding(s). |
+| `test_runner_shutdown` | **BLOCKED** | Pytest printed the complete summary: 199 passed, 3 skipped, 22 warnings in 29.82s. |
+
+Overall result: **FAIL**
+<!-- verification-summary:end -->
+
+The authoritative command output is recorded in `docs/reports/summary.json` and the generated evidence table in `TDD.docx`. A blocked or skipped check is not described as a pass. In particular, SQLite cannot verify PostgreSQL row locks and a local Node 22.16 environment is below the package's supported Node engine. Run the Docker frontend build with its Node 24.15 stage and run the PostgreSQL workflow before treating those checks as complete.
+
+Useful commands:
+
 ```bash
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Run safe database seed (non-destructive; skips if already seeded)
-py -3.11 seed/seed_data.py --mode safe
-
-# Start FastAPI server on port 8000
-py -3.11 -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+python -m pytest -rs
+python scripts/verify_release.py
 ```
-Swagger API Documentation: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-### 5.3 Frontend Setup & Execution
+Frontend checks (with a supported Node version and `npm ci`):
+
 ```bash
-# Navigate to frontend
 cd frontend
-
-# Install npm dependencies
-npm install
-
-# Run frontend development server
-npm run dev
-```
-Resident Portal Application: [http://localhost:5173](http://localhost:5173)
-
-### 5.4 Running Automated Verification
-```bash
-# Run backend pytest suite (57 tests)
-py -3.11 -m pytest tests/ -v
-
-# Run frontend vitest suite (11 tests)
-cd frontend
+npx tsc --noEmit
 npm test
-
-# Build production frontend bundle
 npm run build
 ```
+
+## Known limits and scope boundaries
+
+- The payment flow is simulated; it does not collect money. SMS/OTP delivery is simulated in demo; there is no live SMS transport.
+- Bank reconciliation uses a synthetic CSV adapter, not a live bank feed. Tally remains outside the application.
+- The local AI model uses synthetic training examples; production accuracy has not been established. Groq is optional, quota-limited and not required.
+- The Cloudinary and Neon accounts, Render service and GitHub secrets must be created by the repository owner. Provider free quotas are finite and can change; no live host URL or real provider operation is claimed in this source archive.
+- Render's local filesystem is ephemeral; hosted photo storage must stay on authenticated Cloudinary assets. The scheduled action must be enabled and monitored. Browser-side PWA queue expiry cannot execute while a device is powered off.
+- PostgreSQL row-lock/concurrency behaviour, browser PWA offline/reconnect behaviour, load and security under real traffic require dedicated hosted verification.
+- Actual bye-law billing parameters, DPDP notices/retention procedures, gate signage and resident-facing privacy processes require client review before production use.
+
+## Assignment scope exclusions
+
+No general accounting/Tally replacement, CCTV or boom-barrier hardware integration, classifieds/marketplace, live bank integration, real payment gateway, or production SMS/WhatsApp integration is claimed.

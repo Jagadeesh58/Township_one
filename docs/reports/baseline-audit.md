@@ -1,68 +1,20 @@
-# Repository Baseline Audit Report
+# Repository Inspection Notes
 
-## Audit Summary
+These notes describe findings in the supplied source snapshot before the current edits. They are not a statement of the present verification result.
 
-- Execution Date: 2026-11-09
-- Python Version: 3.11.9
-- Node Version: 20+
-- Database Engine: PostgreSQL (Target), SQLite (Local Test Isolation)
-- Git Branch: master
+## Findings in the supplied snapshot
 
-## Code Quality and Static Analysis
+- SQLAlchemy model declarations and Alembic migration definitions did not describe the same schema.
+- A fresh database migration followed by the documented seed path was not reliable.
+- Two seed entry points were referenced by different parts of the repository.
+- README and report files contained outdated test information and inconsistent run commands.
+- Python lint and type-check configuration did not cover the whole application consistently.
+- PostgreSQL row-lock behaviour and browser-based journeys had not been demonstrated by the supplied test evidence.
+- The guard interface did not persist visitor photo Blobs offline, although some documentation described offline synchronization.
+- Visitor-photo deletion could record a failed filesystem removal as successful.
 
-### Python Linting (Ruff)
-- Total Findings: 1,023
-- Categories:
-  - Import sorting (I001): 278
-  - Unused imports (F401): 84
-  - Pyupgrade modern typing idioms (UP006, UP035, UP017): 364
-  - Blank lines, whitespace, formatting (W293, E302, E305): 297
-- Automatically fixable via `ruff check --fix` and `ruff format`: 726+
+## Evidence policy
 
-### Python Type Checking (Mypy)
-- Total Errors: 477 across 21 files
-- Root Cause: Legacy SQLAlchemy `Column` definitions in `backend/app/models/entities.py` generating type incompatibilities across API routes and service layers expecting typed model instances.
-- Remediation Plan: Transition to modern SQLAlchemy 2.0 `Mapped[...]` and `mapped_column(...)` constructs with strict optionality.
+The earlier archive did not retain the raw command output needed to reproduce its historical numeric measurements. Those figures are not repeated here. The current command output, return codes, skip reasons and database seed evidence are recorded by `scripts/verify_release.py` in `docs/reports/summary.json`.
 
-## Test Verification
-
-### Backend Automated Test Suite (Pytest)
-- Tests Executed: 164 total (161 passed, 3 skipped due to PostgreSQL-specific concurrency requirements)
-- Execution Duration: ~276 seconds
-- Total Backend Code Statements: 4,171
-- Total Statements Missed: 505
-- Baseline Coverage: 88%
-
-#### Coverage Distribution
-| Module | Statements | Missing | Coverage |
-| :--- | :--- | :--- | :--- |
-| `backend/app/api/bank.py` | 94 | 67 | 29% |
-| `backend/app/api/notifications.py` | 33 | 16 | 52% |
-| `backend/app/services/billing.py` | 92 | 37 | 60% |
-| `backend/app/api/amenities.py` | 81 | 22 | 73% |
-| `backend/app/ml/duplicates.py` | 54 | 14 | 74% |
-| `backend/app/ml/classifier.py` | 120 | 28 | 77% |
-| `backend/app/services/bank_matching.py` | 464 | 85 | 82% |
-| `backend/app/api/visitors.py` | 205 | 37 | 82% |
-| `backend/app/services/payments.py` | 98 | 13 | 87% |
-| `backend/app/services/amenity_service.py` | 109 | 13 | 88% |
-| `backend/app/services/visitor_service.py` | 223 | 21 | 91% |
-| `backend/app/services/committee_service.py` | 165 | 11 | 93% |
-| `backend/app/services/complaints.py` | 76 | 1 | 99% |
-| `backend/app/models/entities.py` | 635 | 0 | 100% |
-
-### Frontend Automated Test Suite (Vitest)
-- Test Files: 7 files passed
-- Tests Executed: 41 passed, 0 failed
-- TypeScript Compilation (`tsc --noEmit`): 0 errors
-- Production Build (`npm run build`): Clean distribution output in `frontend/dist/`
-
-## Database Migrations Audit
-
-### Alembic Check Status
-- Initial Status: Drift detected
-- Drift Findings:
-  1. Table `revoked_tokens` present in models but missing from migration chain.
-  2. Column `payments.created_at` present in models but missing from migration chain.
-  3. Column nullability/type adjustments needed between SQLite autogenerate inspection and schema definitions.
-- Required Action: Add corrective migration revision and synchronize model column definitions so `alembic check` passes without pending operations.
+A blocked or unexecuted check must remain identified as unverified. SQLite results do not establish PostgreSQL row-lock behaviour, and source-level browser code does not establish that a deployed browser workflow works.

@@ -44,7 +44,7 @@ Raw OTPs are never stored in memory or database state in plaintext:
 - **Verification Limiting:** Maximum 3 incorrect OTP submission attempts per challenge. Exceeding 3 invalid attempts locks the challenge and requires requesting a new OTP.
 - **Single-Use Replay Prevention:** Once verified, an OTP challenge is immediately removed from the active challenge pool. Attempting to replay an already-consumed OTP results in HTTP 400 Bad Request.
 
-### 2.3 JWT Session Management & Persistent Revocation
+### 2.3 JWT Lifecycle Management & Persistent Revocation
 - JWT payloads carry a unique `jti` (JWT ID) UUID claim alongside `sub` (user ID), `phone`, and `exp`.
 - When a user logs out (`POST /api/v1/auth/logout`), the token's `jti` is permanently persisted in the `revoked_tokens` database table and cached in memory.
 - Every authenticated request verifies that the token's `jti` has not been revoked.

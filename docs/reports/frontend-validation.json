@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-11-09T18:22:52.167397+00:00",
+  "node_version": "22.16.0",
+  "typescript": {
+    "status": "PASS",
+    "returncode": 0,
+    "command": [
+      "node",
+      "-e",
+      "console.log(process.version); process.argv = [process.argv[0], 'tsc', '--noEmit']; require('./node_modules/typescript/lib/tsc.js')"
+    ],
+    "stdout": "v22.16.0\n",
+    "stderr": ""
+  },
+  "frontend_tests": {
+    "status": "BLOCKED",
+    "returncode": null,
+    "command": [
+      "npm",
+      "test"
+    ],
+    "stdout": "",
+    "stderr": "Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. Run npm ci, npm test on supported Node in CI."
+  },
+  "frontend_build": {
+    "status": "BLOCKED",
+    "returncode": null,
+    "command": [
+      "npm",
+      "run",
+      "build"
+    ],
+    "stdout": "",
+    "stderr": "Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. The Docker builder is pinned to Node 24.15.0."
+  }
+}

@@ -1,87 +1,55 @@
-# Township One — Feature Status
+# Township One — Implementation Status
 
-**Repository:** `https://github.com/Jagadeesh58/Township_one.git`  
+Repository: https://github.com/Jagadeesh58/Township_one.git
 
----
+This document maps the Brief 2 scope to the current source tree. A code path or screen is not, by itself, proof that an end-to-end workflow has passed. Executed results are recorded in `docs/reports/summary.json` when the release verifier has run.
 
-## 1. Feature Status
+## Brief 2 requirement map
 
-| Feature | Status | Verified By Test / Command | Notes |
-|---|---|---|---|
-| **Township Spatial Modeling** | Built | `tests/test_seed.py` | 28 towers, 2,400 flats, 180 staff members, 4 gates |
-| **Passwordless Phone OTP Auth** | Built | `tests/test_auth.py` | Persistent `OTPChallenge`, IP & phone rate limits, single-use |
-| **Cookie Session & CSRF Protection** | Built | `tests/test_auth.py`, `tests/test_permissions_regression.py` | `township_session` HttpOnly cookie, double-submit `X-CSRF-Token` |
-| **Role-Based Access Control (RBAC)** | Built | `tests/test_permissions_regression.py` | Server-side role boundaries for Resident, Help Desk, Accounts, Guard, Committee |
-| **Maintenance Billing Engine** | Built | `tests/test_billing.py`, `tests/test_money_precision.py` | Area-based calculation (₹6.50/sq ft), leap year simple interest, 5-day grace period |
-| **Simulated Payment Gateway** | Built | `tests/test_payments.py`, `tests/test_payment_concurrency.py` | Cryptographic SHA-256 idempotency fingerprinting, outcome simulation |
-| **Dual-Entry Accounting Ledger** | Built | `tests/test_resident_security.py` | DEBIT on bill issue, CREDIT on payment, running balance tracking |
-| **Decimal Currency Precision** | Built | `tests/test_money_precision.py`, `tests/test_resident_security.py` | Zero binary floating-point drift (`ROUND_HALF_UP` Decimal) |
-| **Payment Receipts** | Built | `tests/test_payments.py` | Sequential receipt numbering, tamper-evident transaction references |
-| **Bank Statement Matching Engine** | Built | `tests/test_bank_matching.py` | Canonical statement preview, deterministic safety rules, 60 / 385 rows auto-matched (15.58% coverage), 325 rows held for review with non-empty reasons, 0 false auto-postings verified, review queue |
-| **Complaint Lifecycle State Machine** | Built | `tests/test_complaints.py` | Explicit state transitions (HTTP 409 Conflict on illegal transition), flat-scoping, rating & reopen |
-| **Trilingual Emergency Detection** | Built | `tests/test_complaints.py`, `tests/test_ml.py` | Deterministic regex detector across en/hi/mr forcing CRITICAL urgency and SafetyEvent |
-| **AI Complaint Classification & Fallback** | Built | `tests/test_ml.py` | Groq API client with local TF-IDF + MultinomialNB fallback trained on 360-row multilingual dataset |
-| **Semantic Duplicate Detection** | Built | `tests/test_complaints.py`, `tests/test_ml.py` | Character n-gram TF-IDF cosine similarity with incident group linking |
-| **Private Photo Streaming** | Built | `tests/test_complaints.py`, `tests/test_visitors.py` | Pillow MIME verification, EXIF stripping, 5-minute signed streaming |
-| **Accounts Workspace UI** | Built | `frontend/src/__tests__/features.test.tsx` | Statement upload, preview table, commit action, review queue handlers |
-| **Help Desk Queue UI** | Built | `frontend/src/__tests__/features.test.tsx` | Status/category/urgency filters, SLA badges, AI evidence card, one-tap optimistic correction |
-| **Resident Complaints UI** | Built | `frontend/src/__tests__/features.test.tsx` | Ticket submission with photo upload, my complaints, 1-5 star resolution rating, reopen request |
-| **Notification Bell & In-App Alerts** | Built | `frontend/src/__tests__/features.test.tsx` | Unread badge count, safety escalation alerts, mark-all-read |
-| **Trilingual Localization** | Built | `frontend/src/__tests__/translations.test.ts` | English, Marathi, and Hindi translations |
-| **PWA Cache Lifecycle** | Built | `frontend/src/__tests__/serviceWorker.test.ts` | App shell pre-caching, network-only bypass for `/api/*`, cache wipe on logout |
-| **Visitor Entry & Lifecycle** | Built | `tests/test_visitors.py` | State machine (ARRIVED -> AWAITING_APPROVAL -> APPROVED/REJECTED -> ADMITTED -> EXITED), photo upload with EXIF removal, 90-day retention purge CLI, supervisor override with mandatory justification |
-| **Pre-Approved Guest Passes & Offline Crypto** | Built | `tests/test_guest_codes.py` | 6-digit one-time code verification, single-use counter decrement, ECDSA P-256 compact credential verification for offline gate terminals, gate time-anchor and public key endpoints |
-| **Guard Gate Terminal UI** | Built | `frontend/src/pages/GuardGateTerminal.tsx` | Gate switcher (1-4), online/offline status badge, guest pass verification, visitor arrival recorder with photo upload, live entries log, admit/exit/supervisor-override actions, outdoor night theme toggle, touch targets >= 48px |
-| **Amenity Booking & Concurrency Locking** | Built | `tests/test_amenities.py`, `frontend/src/pages/AmenityBookingPage.tsx` | Slot listing with capacity counter, idempotency key enforcement, flat daily booking limit (HTTP 409), cancellation workflow with 2-hour cutoff, amenity closure manager cancelling conflicting bookings |
-| **Community Notice Board** | Built | `tests/test_notices.py`, `frontend/src/pages/ResidentHomePage.tsx` | Immutable revision history (append-only), tower-targeted scoping, trilingual support with automatic language fallback indicator ("Shown in English"), read tracking per user per revision |
-| **Committee Governance & Dues Ageing** | Built | `tests/test_committee.py`, `frontend/src/pages/CommitteeDashboard.tsx` | Mathematical dues ageing reconciliation (0-30, 31-60, 61-90, 90+ days summing exactly to total outstanding), complaint SLA turnaround metrics, ReportLab PDF download, CSV aggregate export |
+| Requirement | Implementation location | Evidence / limitation |
+|---|---|---|
+| Resident installable web application | `frontend/`, PWA manifest and service worker | Installable shell; browser installation must be checked in a supported browser. |
+| OTP login and flat membership | `backend/app/api/auth.py`, `backend/app/core/security.py`, membership models | Development/demo OTP is simulated; no real SMS transport is implemented. |
+| Family and tenant access | `FlatMembership`, resident API authorization | Verify role/member permission tests and cross-flat denial. |
+| Notices | `backend/app/api/notices.py`, `frontend/src/pages/ResidentNoticesPage.tsx`, `CommitteeNoticeEditor.tsx` | Revision-aware read tracking, audience scoping and English/Hindi/Marathi content; browser UI tests must be run with supported Node dependencies. |
+| Area-based billing | Billing services and `Bill`/`BillingRule` models | Rate in the reference seed is ₹6.50/sq ft/month. Late-fee settings are illustrative pending federation approval. |
+| Test payment, receipts and flat ledger | `backend/app/services/payments.py`, payment API and resident billing UI | Simulated payment only; no real gateway collection. |
+| Bank CSV matching | `backend/app/services/bank_matching.py`, bank APIs and Accounts UI | Synthetic canonical CSV only. Ambiguous rows must be held for Accounts review. Run corpus and PostgreSQL tests for current measured outcome. |
+| Complaint categories and photos | Complaint API, service and resident UI | Private local photo storage and server authorization. Complaint-photo retention policy is separate from visitor-photo retention. |
+| Automatic complaint assignment and response timer | Complaint service and Help Desk UI | Verify with `tests/test_complaints.py` and API workflow tests. |
+| AI category and urgency suggestions | `backend/app/ml/`, classifier service and provider adapter | Groq requires server-side configuration; local model uses synthetic training data. No operational accuracy claim is made. |
+| Human correction and emergency rules | Classification decision and safety-event services | Deterministic safety matching must remain independent of AI output. Verify regression tests. |
+| Duplicate complaint linking | Similarity service and incident-group models | Staff confirms links; individual complaints remain open and independently tracked. |
+| Visitor entry and resident approval | Visitor API/service and `GuardGateTerminal.tsx` | Online lifecycle is covered by visitor tests. Server checks guard gate scope and active resident membership. |
+| Pre-approved guest credentials | Visitor service and ECDSA P-256 signing key | Configure a stable `SIGNING_KEY` or `SIGNING_KEY_FILE` to retain credential validity across restarts. |
+| Offline gate capture | `frontend/src/lib/gateQueue.ts`, guard page, visitor multipart sync endpoint | IndexedDB stores the actual photo Blob and metadata; upload validates hash and device/gate anchor. Browser reload/reconnect tests require a supported frontend environment. Offline entries are not approved on the disconnected device. During synchronization, the server validates any signed pre-approval credential; entries without a valid pre-approval remain awaiting resident approval. |
+| Visitor-photo retention | `purge_visitor_photos` service, token-protected operations endpoint and `.github/workflows/visitor-photo-retention.yml` | Original capture time drives the 90-day rule. The daily workflow is configured in source; owner-managed Render/GitHub secrets and a real hosted run are still required. A stopped PWA cannot run its local expiry sweep. |
+| Amenity booking | Amenity API/service and booking page | Slot/capacity tests exist; PostgreSQL row-lock behaviour requires PostgreSQL execution. |
+| Committee reporting | Committee API and dashboard | Aggregates and exports are present; PostgreSQL and browser verification must be run independently. |
+| English, Marathi and Hindi | `frontend/src/i18n/translations.ts` and notice content fields | Translation completeness is covered by the frontend suite; visual review at 320px requires browser execution. |
 
----
+## Reference sample data
 
-## 2. Automated Test Verification Summary
+Seed reference date: `2026-11-06`.
 
-### Backend Test Suite
-- **Command:** `py -m pytest tests/`
-- **Results:** 161 passed, 3 skipped, 0 failures (164 collected)
-- **Key Modules Tested:**
-  - `tests/test_amenities.py`: 6 passed
-  - `tests/test_auth.py`: 26 passed
-  - `tests/test_bank_matching.py`: 12 passed
-  - `tests/test_billing.py`: 8 passed
-  - `tests/test_committee.py`: 5 passed
-  - `tests/test_complaints.py`: 6 passed
-  - `tests/test_guest_codes.py`: 4 passed
-  - `tests/test_health.py`: 7 passed
-  - `tests/test_integration.py`: 1 passed
-  - `tests/test_migrations.py`: 1 passed
-  - `tests/test_ml.py`: 27 passed
-  - `tests/test_money_precision.py`: 5 passed
-  - `tests/test_notices.py`: 5 passed
-  - `tests/test_payment_concurrency.py`: 2 passed, 2 skipped (PostgreSQL concurrency tests)
-  - `tests/test_payments.py`: 10 passed, 1 skipped (Razorpay webhook verification signature test)
-  - `tests/test_permissions_regression.py`: 7 passed
-  - `tests/test_resident_security.py`: 10 passed
-  - `tests/test_seed.py`: 11 passed
-  - `tests/test_visitors.py`: 8 passed
+| Flat | Outstanding | Overdue |
+|---|---:|---:|
+| T07-1203 | ₹0.00 | 0 days |
+| T12-0408 | ₹6,370.00 | 47 days |
+| T21-1601 | ₹5,660.00 | 18 days |
 
-### Frontend Test & Build Suite
-- **TypeScript Verification:** `cd frontend && npx tsc --noEmit` — PASSED (0 errors)
-- **Unit & Component Tests:** `cd frontend && npm test` — 41 passed across 7 test files (0 failures)
-- **Production Bundle Build:** `cd frontend && npm run build` — PASSED (`dist/index.html`, `dist/assets/index-*.js`, `dist/assets/index-*.css`)
+The seed includes 28 towers, 2,400 flats, 180 staff and four gates. These are synthetic demo records, not live community data.
 
----
+## Known limitations
 
-## 3. Reviewer Personas (Demo Reference Date: `2026-11-06`)
-
-| Persona | Phone | Demo OTP | Role / Flat | State |
-|---|---|---|---|---|
-| **Neeraj Kulkarni** | `9876543210` | `123456` | Owner, Flat T07-1203 | 1,150 sq ft, settled dues (₹7,475.00 paid), ₹0.00 outstanding |
-| **Swati Joshi** | `9876543211` | `123456` | Tenant, Flat T12-0408 | 980 sq ft, 47 days overdue (due 2026-09-20), ₹6,370.00 outstanding |
-| **Aamir Shaikh** | `9876543212` | `123456` | Owner, Flat T21-1601 | 1,640 sq ft, 18 days overdue (due 2026-10-19), ₹5,660.00 outstanding |
-| **Ananya Kulkarni** | `9876543213` | `123456` | Family Member, Flat T07-1203 | Can view dues summary, cannot execute payments |
-| **Priya Sharma** | `9876543214` | `123456` | Owner, Flat T03-0201 | 1,150 sq ft, routine maintenance account |
-| **Ramesh Patil** | `9876543220` | `123456` | Help Desk Staff | Authorized for complaints queue, triage, and incident linking |
-| **Suresh Shinde** | `9876543230` | `123456` | Security Guard | Gate access, visitor entry logging, admission, offline sync, guest pass verification |
-| **Anita Deshmukh** | `9876543240` | `123456` | Accounts Staff | Authorized for bank statement imports, review queue, and ledger posting |
-| **Vikram Sardesai** | `9876543250` | `123456` | Committee Member | Authorized for aggregate governance dashboard, dues ageing, SLA metrics, PDF/CSV report exports |
-| **System Admin** | `9876543200` | `123456` | Administrator | Full administrative authority across all modules |
+- Payment and SMS are not connected to live external providers.
+- The production SMS adapter deliberately fails closed until a real gateway transport is added.
+- Bank CSV data is synthetic; no bank API is connected.
+- Late-fee and grace-period settings are illustrative and require society approval.
+- AI training data is synthetic; production performance is not established.
+- Development uses private local storage; the hosted adapter uses Cloudinary authenticated assets and application-mediated reads. No live Cloudinary account or real object lifecycle has been exercised in this environment.
+- The daily GitHub Actions retention workflow and token-protected endpoint are present in source, but the repository secrets, deployed service and scheduled execution have not yet been configured or verified.
+- PWA local expiry work cannot run while the browser is closed or the tablet is powered off.
+- PostgreSQL-only concurrency guarantees require execution against PostgreSQL.
+- Load testing has not been measured in this environment.
+- The frontend verification status depends on installing dependencies under the Node version supported by `frontend/package-lock.json`.

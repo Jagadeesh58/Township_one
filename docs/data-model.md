@@ -77,7 +77,7 @@ Binds users to specific residential flats with fine-grained permissions.
 
 ---
 
-### 2.3 Maintenance Billing & Dual-Entry Ledger (`billing_rules`, `bills`, `bill_lines`, `flat_ledger_entries`)
+### 2.3 Maintenance Billing & Flat Ledger (`billing_rules`, `bills`, `bill_lines`, `flat_ledger_entries`)
 
 #### `billing_rules`
 Defines maintenance tariffs and grace period parameters.
@@ -111,7 +111,7 @@ Monthly maintenance bills generated per flat.
 | `status` | VARCHAR(20) | NOT NULL | `ISSUED`, `PARTIALLY_PAID`, `PAID`, `OVERDUE` |
 
 #### `flat_ledger_entries`
-Immutable dual-entry accounting ledger tracking all debit and credit movements.
+Immutable per-flat maintenance ledger recording debit and credit movements. This is not a full double-entry accounting ledger and does not replace Tally.
 | Column | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | VARCHAR(36) | PRIMARY KEY | Ledger entry UUID |

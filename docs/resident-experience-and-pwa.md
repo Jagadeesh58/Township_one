@@ -7,7 +7,7 @@ The resident frontend is built as a responsive mobile-first Progressive Web App 
 ### Key Features
 - **2-Tap Payment CTA:** Prominently surfaced on the resident home screen (`DuesCard.tsx`). Residents can view their outstanding balance and launch the payment modal in a single tap.
 - **Multi-Flat Switcher:** Residents or owners with multiple properties (e.g., owner of multiple flats) can seamlessly switch active flat context via the header navigation.
-- **Trilingual Internationalization:** Complete native interface localization for:
+- **Trilingual Internationalization:** English, Hindi and Marathi interface localization for:
   - English (`en`)
   - Marathi (`mr`) — *टाऊनशिप वन*
   - Hindi (`hi`) — *टाउनशिप वन*

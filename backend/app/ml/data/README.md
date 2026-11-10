@@ -19,7 +19,7 @@ The dataset contains the following columns:
   - `COMMON_AREA`: Clubhouses, gymnasiums, sports facilities, children play parks, swimming pools, and internal roads.
   - `GENERAL`: Administrative inquiries, billing and receipts, parking allocations, pet conduct, and late-night noise.
 - `urgency` (string): Priority level reflecting safety hazard, health risk, and operational SLA:
-  - `CRITICAL`: Life safety risk, immediate structural or fire hazard, trapped individuals, complete utility failure, or severe active flooding. Target resolution / first response SLA: < 1 hour.
+  - `CRITICAL`: Life safety risk, immediate structural or fire hazard, trapped individuals, total utility failure, or severe active flooding. Target resolution / first response SLA: < 1 hour.
   - `HIGH`: Severe inconvenience, health risk, major water leak, single-floor power outage, or security breach without direct physical violence. Target SLA: < 4 hours.
   - `MEDIUM`: Moderate functional impediment, noisy equipment, partial component defect, slow drainage, or low water pressure. Target SLA: < 24 hours.
   - `LOW`: Cosmetic defects, routine queries, minor informational delays, light bulb replacements, or administrative approvals. Target SLA: < 48 hours.

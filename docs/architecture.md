@@ -1,78 +1,82 @@
-# Township One — System Architecture
+# Township One — Architecture
 
-## 1. Executive Summary
+## Product context
 
-Township One is a gated community operations and resident management platform engineered for large-scale residential townships. The system is specifically architected for **Company A, Pune**, accommodating **2,400 residential flats across 28 towers, 180 on-site operations staff, and 4 multi-lane security gates**.
+Township One is a resident and facilities application based on Brief 2 of the supplied challenge. The reference dataset represents 2,400 apartments in 28 towers, 180 on-site staff and four gates in Pune. All names, visitor records, payment rows and other demo records are synthetic.
 
-The platform is designed around reliability, data integrity, auditability, and role-based access control.
+The implementation brings resident maintenance, test payments, complaint tracking, visitor approval, notices and amenity booking into one mobile-first web application. Staff workspaces support CSV reconciliation, complaint triage, gate operations and committee reporting.
+
+## Application components
 
 ```mermaid
 flowchart TD
-    Client["Resident / Staff Device (Browser / Mobile PWA)"]
-    SW["Service Worker (App Shell Cache & Network-Only API Guard)"]
-    FastAPI["FastAPI Application (Python 3.11)"]
-    AuthModule["Authentication & Security Guard (Salted OTP, JWT Revocation, RBAC)"]
-    BillingEngine["Billing Engine (Deterministic Decimal, Grace Calculation)"]
-    PaymentGateway["Payment Processor (Cryptographic Idempotency, Row Locking)"]
-    Database[("Relational Database (SQLite Local / PostgreSQL Production)")]
+  Browser[Resident and staff browser / PWA]
+  UI[React + TypeScript + Vite]
+  API[FastAPI single-origin application]
+  Auth[Session, CSRF and server-side role checks]
+  Services[Billing, test payments, bank reconciliation, complaints, visitors, notices, amenities, reports]
+  DB[(Neon PostgreSQL in hosted preview)]
+  Disk[Private local storage adapter]
+  Cloudinary[Authenticated Cloudinary Free assets]
+  ML[Local TF-IDF / MultinomialNB]
+  Groq[Optional Groq provider]
+  Scheduler[GitHub Actions daily retention call]
 
-    Client --> SW
-    SW -->|Network-Only for /api/*| FastAPI
-    FastAPI --> AuthModule
-    FastAPI --> BillingEngine
-    FastAPI --> PaymentGateway
-    AuthModule --> Database
-    BillingEngine --> Database
-    PaymentGateway --> Database
+  Browser --> UI
+  UI --> API
+  API --> Auth
+  API --> Services
+  Auth --> DB
+  Services --> DB
+  Services --> Disk
+  Services --> Cloudinary
+  Services --> ML
+  ML -. optional provider .-> Groq
+  Scheduler --> API
 ```
 
----
+| Area | Current implementation | Boundary |
+|---|---|---|
+| User interface | React, TypeScript, Vite and PWA shell; hosted static build served by FastAPI | Same-origin deployment avoids a separate frontend service and CORS configuration. |
+| API | FastAPI with Pydantic validation | Session cookie, CSRF protection and server-side resource authorization. |
+| Data | SQLAlchemy 2.0 and Alembic | PostgreSQL is the shared deployment database; SQLite is used for portable tests. |
+| Money | Python `Decimal`, database numeric columns and transactional rechecks | PostgreSQL row-lock/concurrency guarantees still require PostgreSQL execution. |
+| Photos | Local private storage or Cloudinary Free authenticated assets | No public asset URLs; reads pass through signed application routes. |
+| Complaint AI | Local TF-IDF / MultinomialNB, optional Groq adapter | Synthetic training examples; not production-accuracy validated. AI never posts money or overrides emergency phrase rules. |
+| Retention | Token-protected endpoint plus scheduled GitHub Actions workflow | Enable workflow and configure secrets after deployment; monitor execution. |
 
-## 2. Technology Stack
+## Free hosted preview profile
 
-| Layer | Component | Technology | Rationale |
-|---|---|---|---|
-| **Frontend** | Single Page Application / PWA | React 19, TypeScript, Vite 6 | Type safety, reactive UI state machine, sub-second asset compilation. |
-| **Offline Cache** | Service Worker | Vanilla JavaScript (Cache API) | App shell caching, dynamic asset cache, strict network-only bypass for private financial API calls. |
-| **Backend** | REST API Services | FastAPI, Python 3.11, Pydantic v2 | High-performance asynchronous ASGI framework with automated OpenAPI contract generation and strict typing. |
-| **ORM & Migrations** | Data Access Layer | SQLAlchemy 2.0, Alembic | Declarative data models, deterministic schema migrations, dialect-agnostic SQL generation (SQLite & PostgreSQL). |
-| **Precision Math** | Financial Computing | Python `decimal.Decimal` (ROUND_HALF_UP) | Complete elimination of IEEE 754 binary floating-point rounding errors in currency arithmetic. |
-| **Security** | Auth & Encryption | PyJWT, Passlib, hashlib, HMAC | Salted SHA-256 OTP hashes, constant-time verification, persistent token revocation via unique JTI tracking. |
+- **Render Free Docker service:** serves frontend and FastAPI together. Expect sleep/cold starts; the local container filesystem is not durable.
+- **Neon Free PostgreSQL:** shared database, with account-level compute, storage and egress limits. Use the pooled connection string and TLS.
+- **Cloudinary Free image storage:** authenticated image storage under the current free credit allowance. Keep assets authenticated; monitor monthly credits.
+- **GitHub Actions:** scheduled daily retention call for a public repository.
+- **AI:** local scikit-learn classifier works without any external model key. Groq is optional and should remain disabled unless the account has a current free quota.
 
----
+This profile is for a challenge/reviewer demonstration. It is not a production SLA or a guarantee that usage can never exceed a provider's free quota.
 
-## 3. Core Architectural Principles
+## Data and transaction principles
 
-### 3.1 Strict Financial Precision
-Financial balances and currency transactions are never represented as floating-point numbers. All internal arithmetic utilizes Python's authoritative `Decimal` type with explicit two-decimal rounding (`ROUND_HALF_UP`). API schemas provide both decimal fields and pre-formatted INR strings (e.g., `"7475.00"`), guaranteeing zero drift between client formatting and ledger entries.
+### Monetary calculations
 
-### 3.2 Dual-Entry Flat Ledger Bookkeeping
-Every financial event produces a permanent audit record in the `flat_ledger_entries` table:
-- **Bill Issuance:** Posts an authoritative `DEBIT` entry, increasing the flat's outstanding balance.
-- **Payment Settlement:** Posts an atomic `CREDIT` entry, decreasing the flat's outstanding balance.
-Running balances are calculated and stamped at transaction time (`balance_after`), enabling real-time ledger statement reconstruction and reconciliation.
+Currency calculations use `Decimal`; persisted monetary columns use database numeric types. JSON money values are represented as decimal strings. The demo maintenance principal uses the supplied rate of ₹6.50 per square foot per month. Due date, grace period and late interest settings remain illustrative until the federation approves the actual bye-law configuration.
 
-### 3.3 Cryptographic Payment Idempotency
-To prevent accidental duplicate payments caused by network retries or double clicks:
-1. Every payment checkout requires a mandatory client-supplied `idempotency_key` (minimum 8 characters).
-2. The server binds the key to a cryptographic SHA-256 request fingerprint combining:
-   $$\text{SHA256}(\text{user\_id} : \text{flat\_id} : \text{bill\_id} : \text{amount} : \text{currency} : \text{method} : \text{outcome})$$
-3. Concurrent requests are serialized using database row-level locking (`with_for_update`).
-4. Replaying the identical key with matching parameters returns the existing transaction without creating duplicate payments or receipts.
-5. Reusing a key across different residents returns a generic HTTP 409 conflict, completely preventing data leakage or payment snooping across flats.
+### Resident flat ledger
 
-### 3.4 Multi-Tier Role-Based Access Control (RBAC)
-Server-side authorization is enforced at every endpoint:
-- **Residents (Owners/Tenants):** Access restricted strictly to their assigned flat(s). Tenants possess active bill payment permissions.
-- **Family Members:** Assigned read permissions for billing summaries and visitor approvals, but blocked from executing bill payments.
-- **Management Committee:** Granted access to anonymized aggregate township financial reports; strictly forbidden from drilling down into individual resident flats (HTTP 403).
-- **Security Guards:** Access restricted to gate entry/exit logs; financial and billing records are completely inaccessible (HTTP 403).
+The flat ledger records bill debits, payment credits and adjustment/reversal entries for each flat. It is a resident balance history, not a replacement for the federation's accounting system or Tally. Corrections should use compensating entries rather than editing posted financial history.
 
----
+### Payment idempotency and reconciliation
 
-## 4. Environment & Database Decoupling
+Test checkout uses an idempotency key and request fingerprint to prevent duplicate logical payment operations. Bank matching uses deterministic evidence. Unclear or conflicting rows are held for Accounts review; AI does not authorize financial postings. PostgreSQL row locks are part of the intended concurrency path but have not been demonstrated by the SQLite-only run recorded in this checkout.
 
-The platform guarantees strict isolation between environments:
-- **Local Development / Reviewer Demo:** Zero-dependency SQLite database (`township_one.db`) pre-seeded with 2,400 flats and exact sample scenarios.
-- **Automated Test Suite:** Fully decoupled test database (`township_one_test.db`) initialized and isolated per test module to ensure tests never mutate demo data.
-- **Production:** PostgreSQL 15+ via psycopg driver, enforced with startup configuration guards that reject weak secrets, debug flags, or simulated payment modes.
+### Authorization
+
+The backend resolves active roles and flat memberships from server-side records. Guard operations also check the guard's assigned gate and enrolled device/generation. A client-supplied flat ID, gate ID or role is not an authorization decision. Committee reporting is designed around aggregate data; resident-level access remains subject to resource permissions.
+
+## Environment and deployment notes
+
+- The Docker image builds the frontend with Node 24.15 and runs the API with Python 3.11.
+- The container applies forward Alembic migrations and can run the idempotent demo seeder only through explicit `APP_ENV=demo`, `ALLOW_REMOTE_DEMO_SEED=true` and `--allow-remote-demo-seed` opt-ins. Remote destructive resets are rejected.
+- Hosted images are stored in private Cloudinary Free; local files are not relied on after a Render restart.
+- The retention API requires a separate high-entropy job token. The workflow is configured in source but requires Render and GitHub secret setup by the repository owner.
+- SMS/OTP delivery is simulated in demo; no real SMS provider is connected. Test payments are simulated; no funds are collected.

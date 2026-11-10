@@ -1,58 +1,29 @@
-# Frontend & PWA Quality Validation Report
+# Frontend Validation Status
 
-**Test Framework:** Vitest 5.1.0  
-**Build Tool:** Vite 6.4.5, TypeScript 5.8.2  
-**Test Suite:** `frontend/src/__tests__/app.test.ts` (100% Passed)  
-**Production Build Status:** Passed (Zero TypeScript or Bundle Errors)  
+## TypeScript
 
----
+The standalone TypeScript compilation command passed in this checkout:
 
-## 1. Unit & Component Test Results
-
-```text
- RUN  v5.1.0 C:/Township_one/frontend
-
- ✓ src/__tests__/app.test.ts (11 tests) 80ms
-   ✓ Township One Frontend Suite (11)
-     ✓ Internationalization & Translations (3)
-       ✓ contains all required keys for language: en
-       ✓ contains all required keys for language: mr
-       ✓ contains all required keys for language: hi
-     ✓ Authentication & Input Validation (2)
-       ✓ validates standard 10-digit Indian mobile numbers
-       ✓ validates 6-digit numeric OTP
-     ✓ Payment Idempotency Key Lifecycle (3)
-       ✓ generates a valid, cryptographically random idempotency key with minimum 8 characters
-       ✓ generates distinct keys for successive calls
-       ✓ simulates retry lifecycle: preserves key on network interruption, changes on new attempt
-     ✓ Financial Calculations & Precision Formatting (2)
-       ✓ formats Indian currency numbers correctly without floating point errors
-       ✓ correctly aggregates multi-bill balances
-     ✓ Payment State Machine Transitions (1)
-       ✓ transitions correctly across the payment lifecycle
+```bash
+node node_modules/typescript/bin/tsc --noEmit --pretty false
 ```
 
----
+Exit code: `0`. The report is stored in `docs/reports/frontend-validation.json`.
 
-## 2. Production Asset Build Metrics
+## Vitest and production build
 
-```text
-dist/index.html                   0.80 kB │ gzip:  0.44 kB
-dist/assets/index-CxXMJiAj.css    0.58 kB │ gzip:  0.39 kB
-dist/assets/index-_I_LRtTJ.js   267.58 kB │ gzip: 79.99 kB
-✓ built in 4.32s
+The project declares a supported Node range beginning at Node 22.22.2 (or Node 24.15.0 and later supported lines). The available runtime in this environment is Node 22.16.0.
+
+The supplied `node_modules` was populated for Windows and contains `@rollup/rollup-win32-*`, not the Linux optional Rollup package required by this container. Vitest exits during startup with `Cannot find module @rollup/rollup-linux-x64-gnu`. A fresh `npm ci` attempt in this environment did not complete because npm registry access stalled; an offline retry confirmed that the required package tarball was not cached. The existing local `node_modules` directory must not be used as evidence.
+
+Therefore these checks remain unverified here:
+
+```bash
+npm ci
+npm test
+npm run build
 ```
 
-- Total uncompressed JavaScript bundle: ~267 kB (79.99 kB gzipped).
-- Total uncompressed CSS stylesheet: ~0.58 kB (0.39 kB gzipped).
-- Zero dependencies on non-standard runtime CDNs.
+The test code includes a FileReader fallback for jsdom Blob implementations without `Blob.arrayBuffer()`, and the test setup provides Node WebCrypto for SHA-256. It also includes API fetch mocks for relative URL handling and dedicated notice/gate queue component tests. These changes are not claimed as Vitest-verified until the suite is run with a supported Node version and a clean Linux dependency install.
 
----
-
-## 3. PWA Capabilities Checklist
-
-- [x] **Service Worker Registration:** Registered at `/sw.js` with root scope.
-- [x] **Pre-Cached App Shell:** HTML skeleton, web manifest, and icons cached upon installation.
-- [x] **API Network-Only Bypass:** All requests targeting `/api/*` bypass Cache Storage, ensuring zero local caching of private financial records or tokens.
-- [x] **Trilingual Localization:** 100% interface coverage across English, Marathi, and Hindi.
-- [x] **Payment State Machine:** Handles `READY`, `PROCESSING`, `SUCCESS`, `FAILED`, and `NETWORK_INTERRUPTION` with contextual retry actions.
+Do not use the existing cached `node_modules` directory as verification evidence. CI specifies Node 22.22.2 and installs dependencies with `npm ci`; its actual run is still required to verify the browser test and production build jobs.

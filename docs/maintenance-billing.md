@@ -63,7 +63,7 @@ The resident billing summary endpoint (`/api/v1/billing/flats/{flat_id}/summary`
 
 ---
 
-## 5. Dual-Entry Ledger Flow
+## 5. Per-Flat Ledger Flow
 
 ```mermaid
 sequenceDiagram

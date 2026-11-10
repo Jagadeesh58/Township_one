@@ -1,60 +1,34 @@
-# Township One — Payments & Receipts Architecture
+# Township One — Payments, Reconciliation and Receipts
 
-## 1. Simulated Payment Gateway (Test Mode)
+## Test payment behaviour
 
-The Township One resident portal includes an embedded, sandbox-safe simulated payment gateway designed for developer testing and reviewer demonstrations without charging real bank accounts or UPI handles.
+The resident payment flow is a simulated test checkout. It does not collect money from a bank account, card or UPI handle.
 
-### Strict Outcome Modes
-The gateway accepts only explicit, verified test outcome values:
-- `SUCCESS`: Immediately settles bill balance, writes dual-entry credit ledger, and issues receipt.
-- `PENDING`: Simulates bank settlement delay; leaves outstanding balance intact.
-- `FAILED`: Simulates card or UPI decline; leaves outstanding balance intact.
-- `EXPIRED`: Simulates user session expiration; leaves outstanding balance intact.
+Supported test outcomes:
 
-Any arbitrary or misspelled outcome strings (e.g., `TYPO_SUCCESS`, `unknown`) are strictly rejected with HTTP 422 Unprocessable Entity.
+- `SUCCESS`: posts the validated payment allocation and creates a receipt.
+- `PENDING`: leaves the bill outstanding while the test transaction is pending.
+- `FAILED`: does not reduce the outstanding balance.
+- `EXPIRED`: does not reduce the outstanding balance.
 
----
+Invalid outcome values are rejected by request validation. A receipt is created only for a successfully posted test payment.
 
-## 2. Idempotency Key Management & Lifecycle
+## Idempotency
 
-To prevent accidental duplicate debits caused by network dropouts or multiple resident button taps, the system enforces a strict idempotency contract.
+A payment request includes an idempotency key. The backend binds the key to the authenticated principal and request details. Repeating the same logical request returns the original logical result rather than creating another payment. Reusing a key with different request details returns a conflict response. Responses must not disclose another resident's payment or receipt details.
 
-```mermaid
-stateDiagram-v2
-    [*] --> READY : Open Payment Modal
-    READY --> PROCESSING : Tap 'Confirm Payment'
-    PROCESSING --> SUCCESS : Gateway returns SUCCESS
-    PROCESSING --> FAILED : Gateway returns FAILED / Declined
-    PROCESSING --> NETWORK_INTERRUPTION : Fetch Error / Connection Drop
+## Allocation and balances
 
-    NETWORK_INTERRUPTION --> PROCESSING : Tap 'Retry Request' (Reuses exact key)
-    NETWORK_INTERRUPTION --> READY : Tap 'Start New Attempt' (Generates fresh key)
-    FAILED --> READY : Tap 'Try New Attempt' (Generates fresh key)
-    SUCCESS --> [*] : Display Voucher & Dismiss
-```
+The service checks the bill's current outstanding balance before allocating a payment. Partial payment is supported, subject to the bill-specific intent and current balance. An allocation must belong to the same flat and bill as the validated payment intent. Overpayments and ambiguous allocations are rejected or sent to Accounts review; they are not silently distributed as resident credit.
 
-### Idempotency Key Rules
-1. **Mandatory Field:** Every payment request must supply an `idempotency_key` of at least 8 characters (`Field(..., min_length=8)`).
-2. **Cryptographic Binding:** The key is bound to a SHA-256 fingerprint of the request payload:
-   $$\text{Hash} = \text{SHA256}(\text{user\_id} : \text{flat\_id} : \text{bill\_id} : \text{amount} : \text{currency} : \text{payment\_method} : \text{test\_outcome})$$
-3. **Exact Replay:** Retrying with the same key and identical parameters returns the original payment record without creating duplicate entries.
-4. **Parameter Divergence:** Reusing the same key with altered parameters (e.g., changed bill, amount, or outcome) yields HTTP 409 Conflict.
-5. **Cross-Resident Privacy Guard:** Attempting to submit another resident's key returns a generic HTTP 409 Conflict, completely suppressing the other resident's payment, flat, or receipt details.
+Posted financial records should not be mutated. A correction uses an auditable compensating reversal or adjustment. Monetary arithmetic uses `Decimal` and numeric database columns.
 
----
+## Concurrency evidence
 
-## 3. Transaction-Safe Concurrency & Over-Allocation Prevention
+The current local focused run is recorded in `docs/reports/payment-safety-validation.md`. SQLite passed the non-locking payment and precision tests. Three PostgreSQL row-lock tests were skipped because this execution environment did not provide PostgreSQL. The code's `SELECT ... FOR UPDATE` path is not considered verified until the PostgreSQL CI job or a local PostgreSQL test run passes.
 
-The payment service guarantees atomicity under heavy concurrent load:
-- **Dialect-Aware Row-Level Locking:** When executing on PostgreSQL or MySQL, checkout queries lock the target bill using `SELECT ... FOR UPDATE`.
-- **Balance Boundary Checks:** The payment amount cannot exceed the bill's current outstanding balance (`balance_amount`). Any attempt to overpay is rejected with HTTP 400 Bad Request.
-- **Thread-Safe Allocation:** When multiple concurrent requests attempt to settle the same bill simultaneously (verified in `tests/test_payment_concurrency.py`), total allocated payments never exceed the initial balance.
+## Bank statement matching
 
----
+The bank importer accepts the project's documented synthetic CSV format. Rows retain import and source-row provenance. A row is eligible for automatic matching only when the evidence uniquely identifies an eligible bill or existing test payment and passes the configured account, direction, currency, reference, UPI, amount and duplicate checks. Amount-only, UPI-only, conflicting and otherwise ambiguous rows are held for Accounts review. Preview does not post a payment. Accounts approval revalidates current evidence and outstanding balance inside a database transaction.
 
-## 4. Payment Receipts & PDF-Ready Voucher Generation
-
-On payment `SUCCESS`, the system immediately creates an official payment voucher in the `receipts` table:
-- **Voucher Format:** `REC-YYYYMM-XXXXX` (e.g., `REC-202611-3A7F1`).
-- **Data Captured:** Unique receipt number, flat number, resident full name, exact amount, transaction reference, payment method, and timestamp.
-- **IDOR Protection:** Receipt endpoints (`/api/v1/payments/receipts/{receipt_number}`) verify caller ownership. Residents can only view vouchers issued to their authenticated flat.
+The application does not connect to a live bank API and does not replace Tally.
