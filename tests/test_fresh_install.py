@@ -15,9 +15,9 @@ Validates the full lifecycle on a clean database:
 import json
 import os
 import tempfile
-from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
@@ -106,22 +106,34 @@ def test_fresh_database_migration_seed_and_ground_truth_invariants():
             # test passes; it does not duplicate seed logic or hard-code results.
             report_path = os.environ.get("TOWNSHIP_RELEASE_REPORT_PATH")
             if report_path:
-                Path(report_path).write_text(json.dumps({
-                    "counts": {
-                        "towers": towers_count,
-                        "flats": flats_count,
-                        "staff": staff_count,
-                        "gates": gates_count,
-                    },
-                    "ground_truth": {
-                        "T07-1203": {"outstanding": f"{bill1.balance_amount:.2f}", "overdue_days": 0},
-                        "T12-0408": {"outstanding": f"{bill2.balance_amount:.2f}", "overdue_days": overdue_days_flat2},
-                        "T21-1601": {"outstanding": f"{bill3.balance_amount:.2f}", "overdue_days": overdue_days_flat3},
-                    },
-                    "seed_runs": 2,
-                    "migration": "alembic upgrade head",
-                    "schema_parity": "alembic check reported no new upgrade operations",
-                }, sort_keys=True), encoding="utf-8")
+                Path(report_path).write_text(
+                    json.dumps(
+                        {
+                            "counts": {
+                                "towers": towers_count,
+                                "flats": flats_count,
+                                "staff": staff_count,
+                                "gates": gates_count,
+                            },
+                            "ground_truth": {
+                                "T07-1203": {"outstanding": f"{bill1.balance_amount:.2f}", "overdue_days": 0},
+                                "T12-0408": {
+                                    "outstanding": f"{bill2.balance_amount:.2f}",
+                                    "overdue_days": overdue_days_flat2,
+                                },
+                                "T21-1601": {
+                                    "outstanding": f"{bill3.balance_amount:.2f}",
+                                    "overdue_days": overdue_days_flat3,
+                                },
+                            },
+                            "seed_runs": 2,
+                            "migration": "alembic upgrade head",
+                            "schema_parity": "alembic check reported no new upgrade operations",
+                        },
+                        sort_keys=True,
+                    ),
+                    encoding="utf-8",
+                )
 
     finally:
         if engine is not None:

@@ -22,10 +22,10 @@ from backend.app.schemas.notices import (
 from backend.app.services.amenity_service import get_effective_now
 from backend.app.services.notice_service import (
     create_notice,
+    publish_notice,
     record_notice_read,
     resolve_language_body,
     update_notice_create_revision,
-    publish_notice,
     withdraw_notice,
 )
 
@@ -40,10 +40,7 @@ def get_user_roles(user: User) -> list[str]:
 
 def can_manage_notices(user: User) -> bool:
     # Help Desk retains the staff publishing rights already used by the workflow.
-    return any(
-        role in ("ADMIN", "COMMITTEE", "MANAGEMENT", "HELPDESK", "HELP_DESK")
-        for role in get_user_roles(user)
-    )
+    return any(role in ("ADMIN", "COMMITTEE", "MANAGEMENT", "HELPDESK", "HELP_DESK") for role in get_user_roles(user))
 
 
 def as_utc(value):
@@ -144,38 +141,38 @@ def list_managed_notices(
     notices = db.query(Notice).order_by(Notice.id.desc()).all()
     result = []
     for notice in notices:
-        revision = db.query(NoticeRevision).filter(
-            NoticeRevision.id == notice.current_revision_id
-        ).first()
+        revision = db.query(NoticeRevision).filter(NoticeRevision.id == notice.current_revision_id).first()
         if not revision:
             continue
         body, is_fallback, fallback_label = resolve_language_body(revision, lang)
         tower = db.query(Tower).filter(Tower.id == revision.tower_id).first() if revision.tower_id else None
-        result.append({
-            "id": notice.id,
-            "status": notice.status,
-            "revision_count": db.query(NoticeRevision).filter(NoticeRevision.notice_id == notice.id).count(),
-            "current_revision": NoticeRevisionResponse(
-                id=revision.id,
-                notice_id=revision.notice_id,
-                revision_number=revision.revision_number,
-                title=revision.title,
-                body=body,
-                body_en=revision.body_en,
-                body_hi=revision.body_hi,
-                body_mr=revision.body_mr,
-                is_fallback_language=is_fallback,
-                fallback_language_label=fallback_label,
-                publish_at=revision.publish_at,
-                expires_at=revision.expires_at,
-                audience=revision.audience,
-                tower_id=revision.tower_id,
-                tower_number=tower.code if tower else None,
-                severity=revision.severity,
-                created_at=revision.created_at,
-                is_read=False,
-            ).model_dump(),
-        })
+        result.append(
+            {
+                "id": notice.id,
+                "status": notice.status,
+                "revision_count": db.query(NoticeRevision).filter(NoticeRevision.notice_id == notice.id).count(),
+                "current_revision": NoticeRevisionResponse(
+                    id=revision.id,
+                    notice_id=revision.notice_id,
+                    revision_number=revision.revision_number,
+                    title=revision.title,
+                    body=body,
+                    body_en=revision.body_en,
+                    body_hi=revision.body_hi,
+                    body_mr=revision.body_mr,
+                    is_fallback_language=is_fallback,
+                    fallback_language_label=fallback_label,
+                    publish_at=revision.publish_at,
+                    expires_at=revision.expires_at,
+                    audience=revision.audience,
+                    tower_id=revision.tower_id,
+                    tower_number=tower.code if tower else None,
+                    severity=revision.severity,
+                    created_at=revision.created_at,
+                    is_read=False,
+                ).model_dump(),
+            }
+        )
     return result
 
 
@@ -296,17 +293,21 @@ def mark_revision_read_endpoint(
     notice = db.query(Notice).filter(Notice.id == revision.notice_id).first()
     if not notice or notice.status != "PUBLISHED":
         raise HTTPException(status_code=404, detail="Notice is not available.")
-    roles = get_user_roles(current_user)
     if not can_manage_notices(current_user):
         now = get_effective_now()
         published_at = as_utc(notice.published_at)
         expires_at = as_utc(notice.expires_at)
         if (published_at and published_at > now) or (expires_at and expires_at < now):
             raise HTTPException(status_code=404, detail="Notice is not available.")
-        memberships = db.query(FlatMembership).join(Flat).filter(
-            FlatMembership.user_id == current_user.id,
-            FlatMembership.is_active.is_(True),
-        ).all()
+        memberships = (
+            db.query(FlatMembership)
+            .join(Flat)
+            .filter(
+                FlatMembership.user_id == current_user.id,
+                FlatMembership.is_active.is_(True),
+            )
+            .all()
+        )
         if not memberships:
             raise HTTPException(status_code=403, detail="Active flat membership is required.")
         tower_ids = {membership.flat.tower_id for membership in memberships}

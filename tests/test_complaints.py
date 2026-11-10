@@ -23,11 +23,20 @@ from backend.app.main import app
 from backend.app.models.entities import (
     ClassificationDecision,
     Flat,
+    OTPChallenge,
+    SafetyEvent,
 )
 
 
 def get_authenticated_client(phone: str) -> tuple[TestClient, dict]:
     """Authenticates a test client using demo OTP login and extracts session & CSRF tokens."""
+    db = SessionLocal()
+    try:
+        db.query(OTPChallenge).filter(OTPChallenge.phone == phone).delete()
+        db.commit()
+    finally:
+        db.close()
+
     client = TestClient(app)
     # Request OTP
     req_resp = client.post("/api/v1/auth/otp/request", json={"phone": phone})
@@ -136,10 +145,14 @@ def test_emergency_detector_safety_escalation_and_invariants():
     # Persist the full deterministic rule identifier; PostgreSQL enforces VARCHAR lengths.
     db = SessionLocal()
     try:
-        decision = db.query(ClassificationDecision).filter(
-            ClassificationDecision.complaint_id == complaint_id,
-            ClassificationDecision.is_active.is_(True),
-        ).one()
+        decision = (
+            db.query(ClassificationDecision)
+            .filter(
+                ClassificationDecision.complaint_id == complaint_id,
+                ClassificationDecision.is_active.is_(True),
+            )
+            .one()
+        )
         assert decision.actor_type == "rule_emergency_engine"
         assert len(decision.actor_type) == 21
     finally:
@@ -159,6 +172,41 @@ def test_emergency_detector_safety_escalation_and_invariants():
     )
     assert downgrade_resp.status_code == 400
     assert "Cannot lower urgency on a verified safety escalation" in downgrade_resp.json()["error"]["message"]
+
+
+def test_emergency_hazard_routing_category_and_safety_event():
+    """Bug 4 fix: emergency detector hazard_type must route category properly (e.g. GAS_LEAK -> PLUMBING, not GENERAL)."""
+    client_swati, headers_swati = get_authenticated_client("9876543211")
+    db = SessionLocal()
+    flat = db.query(Flat).filter(Flat.flat_number == "T12-0408").first()
+    db.close()
+
+    # Submission with gas leak trigger
+    data = {
+        "flat_id": flat.id,
+        "title": "Kitchen cylinder issue",
+        "description": "Heavy gas leak smell coming from kitchen cylinder pipeline! Need urgent help.",
+        "language": "en",
+    }
+
+    resp = client_swati.post("/api/v1/complaints", data=data, headers=headers_swati)
+    assert resp.status_code == 201
+    comp_data = resp.json()
+
+    assert comp_data["urgency"] == "CRITICAL"
+    assert comp_data["is_safety_escalation"] is True
+    # Crucial check: hazard_type GAS_LEAK must map to PLUMBING, NOT GENERAL!
+    assert comp_data["category"] == "PLUMBING"
+    complaint_id = comp_data["id"]
+
+    db = SessionLocal()
+    try:
+        safety_ev = db.query(SafetyEvent).filter(SafetyEvent.complaint_id == complaint_id).first()
+        assert safety_ev is not None
+        assert safety_ev.trigger_pattern == "GAS_LEAK"
+        assert "gas leak" in safety_ev.matched_text.lower()
+    finally:
+        db.close()
 
 
 # -----------------------------------------------------------------------------

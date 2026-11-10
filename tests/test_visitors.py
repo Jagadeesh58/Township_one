@@ -323,7 +323,7 @@ def test_photo_upload_validation_exif_stripping_and_streaming():
         headers=guard_headers,
     )
     assert create_res.status_code == 201
-    entry_id = create_res.json()["id"]
+    assert "id" in create_res.json()
     photo_url = create_res.json()["photo_url"]
     assert photo_url is not None
 
@@ -389,7 +389,6 @@ def test_photo_retention_purge_job_deletes_files_and_is_idempotent():
     assert second_run == 0
 
 
-
 def test_photo_retention_failure_preserves_storage_reference_for_retry(monkeypatch):
     db = SessionLocal()
     storage_dir = Path(get_storage_path())
@@ -412,7 +411,7 @@ def test_photo_retention_failure_preserves_storage_reference_for_retry(monkeypat
     original_unlink = Path.unlink
 
     def fail_for_target(path: Path, *args, **kwargs):
-        if path == dummy_file:
+        if path == dummy_file or path.resolve() == dummy_file.resolve():
             raise OSError("simulated storage permission failure")
         return original_unlink(path, *args, **kwargs)
 
@@ -435,6 +434,7 @@ def test_photo_retention_failure_preserves_storage_reference_for_retry(monkeypat
     assert deleted.storage_key is None
     assert deleted.deleted_at is not None
     db.close()
+
 
 def test_guard_cannot_access_billing_complaints_or_bank_endpoints():
     guard_client, guard_headers = get_auth_client("9876543230")
@@ -462,10 +462,9 @@ def test_guard_cross_gate_scope_authorization_denied():
     guard_client, guard_headers = get_auth_client("9876543230")  # Suresh Shinde (assigned to Gate 1)
 
     db = SessionLocal()
-    g1 = db.query(Gate).filter(Gate.gate_number == 1).first()
+    assert db.query(Gate).filter(Gate.gate_number == 1).first() is not None
     g2 = db.query(Gate).filter(Gate.gate_number == 2).first()
     flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
-    gate1_id = g1.id
     gate2_id = g2.id
     flat_id = flat.id
 
@@ -561,16 +560,12 @@ def test_offline_sync_requires_photo_and_is_idempotent():
     }
     payload = {"metadata": json.dumps(metadata)}
     photo_file = {"photo": ("visitor.jpg", photo_bytes, "image/jpeg")}
-    first = guard_client.post(
-        "/api/v1/visitors/gate/sync", data=payload, files=photo_file, headers=guard_headers
-    )
+    first = guard_client.post("/api/v1/visitors/gate/sync", data=payload, files=photo_file, headers=guard_headers)
     assert first.status_code == 200, first.text
     assert first.json()["processed_count"] == 1
     assert event_id in first.json()["acknowledged_ids"]
 
-    repeated = guard_client.post(
-        "/api/v1/visitors/gate/sync", data=payload, files=photo_file, headers=guard_headers
-    )
+    repeated = guard_client.post("/api/v1/visitors/gate/sync", data=payload, files=photo_file, headers=guard_headers)
     assert repeated.status_code == 200, repeated.text
     assert repeated.json()["processed_count"] == 0
     assert event_id in repeated.json()["acknowledged_ids"]
@@ -601,11 +596,14 @@ def test_offline_sync_rejects_wrong_photo_hash():
     gate = db.query(Gate).filter(Gate.gate_number == 1).first()
     db.close()
     device_id, generation_id = str(uuid4()), str(uuid4())
-    assert guard_client.post(
-        "/api/v1/visitors/gate/devices/enroll",
-        json={"device_id": device_id, "generation_id": generation_id, "gate_id": gate.id},
-        headers=guard_headers,
-    ).status_code == 200
+    assert (
+        guard_client.post(
+            "/api/v1/visitors/gate/devices/enroll",
+            json={"device_id": device_id, "generation_id": generation_id, "gate_id": gate.id},
+            headers=guard_headers,
+        ).status_code
+        == 200
+    )
     anchor = guard_client.get(
         "/api/v1/visitors/gate/time-anchor",
         params={"gate_id": gate.id, "device_id": device_id, "generation_id": generation_id},
@@ -613,12 +611,19 @@ def test_offline_sync_rejects_wrong_photo_hash():
     ).json()
     photo_bytes = create_jpeg_bytes()
     metadata = {
-        "client_event_id": str(uuid4()), "photo_uuid": str(uuid4()),
-        "gate_id": gate.id, "flat_id": flat.id, "visitor_name": "Hash Mismatch",
-        "purpose": "Delivery", "capture_time": anchor["payload"]["server_time_utc"],
-        "photo_sha256": "0" * 64, "device_id": device_id,
-        "device_generation_id": generation_id, "device_sequence": 1,
-        "time_anchor_payload": anchor["payload"], "time_anchor_signature": anchor["signature"],
+        "client_event_id": str(uuid4()),
+        "photo_uuid": str(uuid4()),
+        "gate_id": gate.id,
+        "flat_id": flat.id,
+        "visitor_name": "Hash Mismatch",
+        "purpose": "Delivery",
+        "capture_time": anchor["payload"]["server_time_utc"],
+        "photo_sha256": "0" * 64,
+        "device_id": device_id,
+        "device_generation_id": generation_id,
+        "device_sequence": 1,
+        "time_anchor_payload": anchor["payload"],
+        "time_anchor_signature": anchor["signature"],
     }
     response = guard_client.post(
         "/api/v1/visitors/gate/sync",

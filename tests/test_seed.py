@@ -28,6 +28,7 @@ from backend.app.models.entities import (
     UserRoleAssignment,
 )
 from seed.seed_data import is_safe_local_database, seed_database
+from tests.conftest import test_engine
 
 
 def test_seed_entity_counts():
@@ -191,7 +192,7 @@ def test_reviewer_role_assignments():
 
 def test_seed_safe_mode_idempotent_on_seeded_db():
     """Verify running safe seed on an already complete database safely succeeds without duplicate insertion."""
-    res = seed_database(mode="safe")
+    res = seed_database(target_engine=test_engine, mode="safe", confirm_local_demo=True)
     assert res["status"] in ["already_seeded", "seeded"]
     assert res["flats_count"] == 2400
 
@@ -199,7 +200,7 @@ def test_seed_safe_mode_idempotent_on_seeded_db():
 def test_seed_safety_rejects_unconfirmed_destructive_reset():
     """Verify seed_database fails closed if reset-demo is attempted without explicit confirmation."""
     with pytest.raises(RuntimeError) as exc_info:
-        seed_database(mode="reset-demo", confirm_local_demo=False)
+        seed_database(target_engine=test_engine, mode="reset-demo", confirm_local_demo=False)
     assert "Destructive demo reset requires explicit confirmation" in str(exc_info.value)
 
 

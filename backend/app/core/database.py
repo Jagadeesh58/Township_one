@@ -24,9 +24,9 @@ def get_engine(custom_url: str | None = None):
         url = settings.TEST_DATABASE_URL if is_test else settings.DATABASE_URL
 
     if url.startswith("postgres://"):
-        url = "postgresql+psycopg://" + url[len("postgres://"):]
+        url = "postgresql+psycopg://" + url[len("postgres://") :]
     elif url.startswith("postgresql://"):
-        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+        url = "postgresql+psycopg://" + url[len("postgresql://") :]
 
     # If default PostgreSQL URL is configured but not reachable on localhost during dev, fall back to SQLite
     if url.startswith("postgresql") and not os.environ.get("DATABASE_URL") and not os.environ.get("TEST_DATABASE_URL"):

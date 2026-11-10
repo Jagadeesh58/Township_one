@@ -29,6 +29,23 @@ from backend.app.services.sms import get_sms_provider
 REVOKED_TOKENS: set = set()
 
 
+def hash_otp(salt: str, otp_code: str) -> str:
+    """
+    Derives slow, memory-hard hash using scrypt (N=16384, r=8, p=1) to prevent
+    offline brute-force enumeration of 6-digit OTP codes if the database leaks.
+    Produces 32 bytes (64 hex characters) matching the String(64) column schema.
+    """
+    return hashlib.scrypt(
+        otp_code.encode("utf-8"),
+        salt=salt.encode("utf-8"),
+        n=16384,
+        r=8,
+        p=1,
+        maxmem=32 * 1024 * 1024,
+        dklen=32,
+    ).hex()
+
+
 def create_otp_challenge(phone: str, db: Session, ip_address: str | None = None) -> str:
     """
     Creates an OTP challenge with query-driven rate-limiting and persistent salt-hashed storage
@@ -78,7 +95,7 @@ def create_otp_challenge(phone: str, db: Session, ip_address: str | None = None)
         otp_code = f"{secrets.randbelow(900000) + 100000:06d}"
 
     salt = secrets.token_hex(16)
-    otp_hash = hashlib.sha256(f"{salt}:{otp_code}".encode()).hexdigest()
+    otp_hash = hash_otp(salt, otp_code)
     expires_at = now + timedelta(seconds=settings.OTP_EXPIRY_SECONDS)
 
     challenge = OTPChallenge(
@@ -139,8 +156,14 @@ def verify_otp_challenge(phone: str, otp: str, db: Session) -> bool:
             status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many invalid attempts. OTP invalidated."
         )
 
-    attempt_hash = hashlib.sha256(f"{challenge.salt}:{otp}".encode()).hexdigest()
-    if not hmac.compare_digest(challenge.otp_hash, attempt_hash):
+    attempt_hash = hash_otp(challenge.salt, otp)
+    is_valid = hmac.compare_digest(challenge.otp_hash, attempt_hash)
+    if not is_valid:
+        # Fallback to legacy sha256 for backward compatibility with pre-existing challenges
+        legacy_hash = hashlib.sha256(f"{challenge.salt}:{otp}".encode()).hexdigest()
+        is_valid = hmac.compare_digest(challenge.otp_hash, legacy_hash)
+
+    if not is_valid:
         db.commit()
         return False
 

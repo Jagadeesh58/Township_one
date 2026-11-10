@@ -188,7 +188,8 @@ def test_full_resident_billing_and_payment_journey():
     # Committee Role Strict Scoping Verification
     # -------------------------------------------------------------
     client.post("/api/v1/auth/otp/request", json={"phone": "9876543250"})
-    comm_login = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"}).json()
+    verify_comm = client.post("/api/v1/auth/otp/verify", json={"phone": "9876543250", "otp": "123456"})
+    assert verify_comm.status_code == 200
     comm_csrf = client.cookies.get("township_csrf", "")
     comm_headers = {"X-CSRF-Token": comm_csrf}
 

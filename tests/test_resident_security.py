@@ -58,7 +58,6 @@ def test_cross_flat_access_is_denied():
     swati_token, swati_user = get_auth_token("9876543211")
     neeraj_token, neeraj_user = get_auth_token("9876543210")
 
-    swati_flat_id = swati_user["flats"][0]["flat_id"]
     neeraj_flat_id = neeraj_user["flats"][0]["flat_id"]
 
     neeraj_summary = client.get(

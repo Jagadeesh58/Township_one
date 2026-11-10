@@ -3,12 +3,10 @@
 import hashlib
 import io
 import json
-from unittest.mock import Mock
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
-from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import HTTPException
@@ -166,9 +164,7 @@ def test_visitor_transition_and_supervisor_override_reject_invalid_paths(db_sess
     db_session.flush()
 
     with pytest.raises(HTTPException) as illegal:
-        service.transition_visitor_entry(
-            db_session, entry, VisitorStatus.EXITED, guard.id, "GUARD"
-        )
+        service.transition_visitor_entry(db_session, entry, VisitorStatus.EXITED, guard.id, "GUARD")
     assert illegal.value.status_code == 409
 
     with pytest.raises(HTTPException) as denied:
@@ -206,12 +202,8 @@ def test_guest_credential_verification_rejects_malformed_expired_wrong_gate_and_
     bad_hex = service.verify_guest_code(db_session, gate.id, credential_jwt="zz.ab")
     assert bad_hex["valid"] is False
 
-    expired_payload = _preapproval_payload(
-        flat.id, gate.id, start=now - timedelta(days=2), end=now - timedelta(days=1)
-    )
-    expired = service.verify_guest_code(
-        db_session, gate.id, credential_jwt=_credential(expired_payload), consume=False
-    )
+    expired_payload = _preapproval_payload(flat.id, gate.id, start=now - timedelta(days=2), end=now - timedelta(days=1))
+    expired = service.verify_guest_code(db_session, gate.id, credential_jwt=_credential(expired_payload), consume=False)
     assert expired["valid"] is False
     assert "expired" in expired["message"].lower()
 
@@ -251,13 +243,9 @@ def test_capture_preapproval_validation_rejects_invalid_states_and_accepts_once(
     payload = _preapproval_payload(flat.id, gate.id)
     signed = _credential(payload)
     wrong_gate = db_session.query(Gate).filter(Gate.gate_number == 2).one()
-    assert "another gate" in service._verify_preapproval_at_capture(
-        db_session, wrong_gate.id, signed, now
-    )[1]
+    assert "another gate" in service._verify_preapproval_at_capture(db_session, wrong_gate.id, signed, now)[1]
     outside_window = now + timedelta(days=2)
-    assert "not valid" in service._verify_preapproval_at_capture(
-        db_session, gate.id, signed, outside_window
-    )[1]
+    assert "not valid" in service._verify_preapproval_at_capture(db_session, gate.id, signed, outside_window)[1]
 
     request = PreApprovalCreate(
         flat_id=flat.id,
@@ -274,9 +262,7 @@ def test_capture_preapproval_validation_rejects_invalid_states_and_accepts_once(
     assert accepted is preapproval
     assert error is None
     assert preapproval.used_count == 1
-    accepted_again, error_again = service._verify_preapproval_at_capture(
-        db_session, gate.id, credential, now
-    )
+    accepted_again, error_again = service._verify_preapproval_at_capture(db_session, gate.id, credential, now)
     assert accepted_again is None
     assert "use limit" in error_again
 
@@ -286,7 +272,9 @@ def test_signed_time_anchor_rejects_bad_signature_scope_window_and_expired_captu
     now = datetime.now(UTC)
     key = service.get_ecdsa_private_key()
 
-    def make_anchor(anchor_time: datetime, *, user_id=guard.id, gate_id=gate.id, device_id="device-1", generation="gen-1"):
+    def make_anchor(
+        anchor_time: datetime, *, user_id=guard.id, gate_id=gate.id, device_id="device-1", generation="gen-1"
+    ):
         timestamp = int(anchor_time.timestamp())
         payload = {
             "user_id": user_id,
@@ -303,15 +291,11 @@ def test_signed_time_anchor_rejects_bad_signature_scope_window_and_expired_captu
 
     payload, signature = make_anchor(now)
     with pytest.raises(HTTPException) as bad_sig:
-        service.verify_offline_time_anchor(
-            guard.id, gate.id, now, payload, "00", "device-1", "gen-1", now
-        )
+        service.verify_offline_time_anchor(guard.id, gate.id, now, payload, "00", "device-1", "gen-1", now)
     assert bad_sig.value.status_code == 400
 
     with pytest.raises(HTTPException) as wrong_scope:
-        service.verify_offline_time_anchor(
-            guard.id, gate.id, now, payload, signature, "other-device", "gen-1", now
-        )
+        service.verify_offline_time_anchor(guard.id, gate.id, now, payload, signature, "other-device", "gen-1", now)
     assert wrong_scope.value.status_code == 403
 
     inconsistent = dict(payload)
@@ -474,9 +458,17 @@ def test_photo_stream_rejects_deleted_or_missing_storage(monkeypatch):
             return Query(self.result)
 
     cases = [
-        SimpleNamespace(retention_expires_at=datetime.now(UTC) + timedelta(days=1), deleted_at=datetime.now(UTC), storage_key="/missing/photo.jpg"),
+        SimpleNamespace(
+            retention_expires_at=datetime.now(UTC) + timedelta(days=1),
+            deleted_at=datetime.now(UTC),
+            storage_key="/missing/photo.jpg",
+        ),
         SimpleNamespace(retention_expires_at=datetime.now(UTC) + timedelta(days=1), deleted_at=None, storage_key=None),
-        SimpleNamespace(retention_expires_at=datetime.now(UTC) + timedelta(days=1), deleted_at=None, storage_key="/missing/photo.jpg"),
+        SimpleNamespace(
+            retention_expires_at=datetime.now(UTC) + timedelta(days=1),
+            deleted_at=None,
+            storage_key="/missing/photo.jpg",
+        ),
     ]
     for photo in cases:
         with pytest.raises(HTTPException) as unavailable:

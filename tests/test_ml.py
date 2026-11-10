@@ -161,6 +161,26 @@ class TestEmergencyDetection(unittest.TestCase):
         self.assertTrue(override2["is_emergency"])
         self.assertEqual(override2["trigger"], "SMOKE")
 
+    def test_clause_aware_negation_and_independent_hazards(self):
+        """Reviewer cases: negated cues or drill words in one clause do not suppress independent hazards."""
+        # Case 1: "No smoke, but there is a gas leak near tower 12" -> GAS_LEAK
+        gas_case = detect_emergency("No smoke, but there is a gas leak near tower 12")
+        self.assertTrue(gas_case["is_emergency"])
+        self.assertEqual(gas_case["trigger"], "GAS_LEAK")
+        self.assertEqual(gas_case["hazard_type"], "GAS_LEAK")
+
+        # Case 2: "Fire drill is scheduled today, and I see smoke in the basement parking" -> SMOKE
+        drill_smoke = detect_emergency("Fire drill is scheduled today, and I see smoke in the basement parking")
+        self.assertTrue(drill_smoke["is_emergency"])
+        self.assertEqual(drill_smoke["trigger"], "SMOKE")
+        self.assertEqual(drill_smoke["hazard_type"], "SMOKE")
+
+        # Case 3: "Routine check, no smoke. Fire alarm went off in block C" -> FIRE
+        routine_fire = detect_emergency("Routine check, no smoke. Fire alarm went off in block C")
+        self.assertTrue(routine_fire["is_emergency"])
+        self.assertEqual(routine_fire["trigger"], "FIRE")
+        self.assertEqual(routine_fire["hazard_type"], "FIRE")
+
     def test_non_emergency_routine_complaints(self):
         tap = detect_emergency("washbasin tap is dripping water slowly, plumber needed")
         self.assertFalse(tap["is_emergency"])

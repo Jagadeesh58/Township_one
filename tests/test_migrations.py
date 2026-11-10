@@ -80,9 +80,7 @@ def test_alembic_upgrade_head_on_fresh_database():
         assert "idempotency_key" in payment_columns
 
         # The emergency-rule actor identifier must fit on PostgreSQL as well as SQLite.
-        classification_columns = {
-            c["name"]: c for c in inspector.get_columns("classification_decisions")
-        }
+        classification_columns = {c["name"]: c for c in inspector.get_columns("classification_decisions")}
         assert "actor_type" in classification_columns
         actor_type = classification_columns["actor_type"]["type"]
         assert getattr(actor_type, "length", None) == 50

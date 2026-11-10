@@ -5,8 +5,8 @@ import json
 import logging
 import os
 import secrets
-from pathlib import Path
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from cryptography.exceptions import InvalidSignature
@@ -19,9 +19,7 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import settings
 from backend.app.models.entities import (
     AuditEvent,
-    Flat,
     FlatMembership,
-    Gate,
     GateDevice,
     PreApproval,
     SupervisorOverride,
@@ -29,12 +27,12 @@ from backend.app.models.entities import (
     VisitorEvent,
     VisitorPhoto,
 )
-from backend.app.services.storage import delete_private_object, write_private_object
 from backend.app.schemas.visitors import (
     OfflineSyncItem,
     PreApprovalCreate,
     VisitorStatus,
 )
+from backend.app.services.storage import delete_private_object, write_private_object
 
 # Explicit status transitions map
 VALID_TRANSITIONS = {
@@ -504,7 +502,9 @@ def verify_offline_time_anchor(
         or anchor_payload.get("device_id") != device_id
         or anchor_payload.get("device_generation_id") != device_generation_id
     ):
-        raise HTTPException(status_code=403, detail="Offline time anchor belongs to another guard, gate or device generation.")
+        raise HTTPException(
+            status_code=403, detail="Offline time anchor belongs to another guard, gate or device generation."
+        )
     if int(anchor_time.timestamp()) != anchor_timestamp or anchor_valid_until <= anchor_timestamp:
         raise HTTPException(status_code=400, detail="Offline time anchor payload is inconsistent.")
     capture_ts = int(capture_time.timestamp())
@@ -560,7 +560,6 @@ def sync_offline_entry_with_photo(
     photo_bytes: bytes,
 ) -> dict[str, Any]:
     """Atomically accept one offline event with its actual, hash-verified photograph."""
-    from pathlib import Path
 
     now = datetime.now(UTC)
     if not photo_bytes:
@@ -570,9 +569,14 @@ def sync_offline_entry_with_photo(
         raise HTTPException(status_code=422, detail="Offline visitor photo SHA-256 does not match metadata.")
     capture_time = _as_utc(item.capture_time)
     verify_offline_time_anchor(
-        guard_user_id, item.gate_id, capture_time,
-        item.time_anchor_payload, item.time_anchor_signature,
-        item.device_id, item.device_generation_id, now,
+        guard_user_id,
+        item.gate_id,
+        capture_time,
+        item.time_anchor_payload,
+        item.time_anchor_signature,
+        item.device_id,
+        item.device_generation_id,
+        now,
     )
 
     clean_hash, content_type, file_size, clean_bytes = validate_and_process_photo(
@@ -581,8 +585,10 @@ def sync_offline_entry_with_photo(
     existing = db.query(VisitorEntry).filter(VisitorEntry.client_event_id == item.client_event_id).first()
     if existing:
         existing_photo = db.query(VisitorPhoto).filter(VisitorPhoto.id == existing.photo_id).first()
-        if existing_photo and existing_photo.client_photo_id == item.photo_uuid and hmac.compare_digest(
-            existing_photo.sha256, clean_hash
+        if (
+            existing_photo
+            and existing_photo.client_photo_id == item.photo_uuid
+            and hmac.compare_digest(existing_photo.sha256, clean_hash)
         ):
             return {"processed_count": 0, "acknowledged_ids": [item.client_event_id], "conflicts": []}
         raise HTTPException(status_code=409, detail="Event UUID was previously used with different photo data.")
@@ -686,8 +692,9 @@ def sync_offline_entry_with_photo(
     return {
         "processed_count": 1,
         "acknowledged_ids": [item.client_event_id],
-        "conflicts": ([{"client_event_id": item.client_event_id, "reason": preapproval_error}]
-                      if preapproval_error else []),
+        "conflicts": (
+            [{"client_event_id": item.client_event_id, "reason": preapproval_error}] if preapproval_error else []
+        ),
     }
 
 

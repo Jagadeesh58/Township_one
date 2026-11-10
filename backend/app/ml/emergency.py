@@ -19,7 +19,9 @@ from typing import TypedDict
 class EmergencyResult(TypedDict):
     is_emergency: bool
     trigger: str | None
+    hazard_type: str | None
     matched_text: str | None
+    match_snippet: str | None
     language: str
 
 
@@ -82,7 +84,7 @@ EMERGENCY_PATTERNS = {
 
 # Drill / routine indicators
 DRILL_PATTERNS = [
-    r"\b(?:mock\s+drill|fire\s+drill|drill|practice\s+run|test\s+alarm|scheduled\s+drill)\b",
+    r"\b(?:mock\s+drill|fire\s+drill|drill|practice\s+run|test\s+alarm|scheduled\s+drill|fire\s+safety(?:\s+practice)?|safety\s+drill|evacuation\s+drill)\b",
     r"(?:मॉक\s*ड्रिल|फायर\s*ड्रिल|अभ्यास\s*दौरा)",
     r"\b(?:routine\s+drill|routine\s+check\s+no\s+smoke|no\s+fire\s+drill)\b",
 ]
@@ -187,87 +189,104 @@ def detect_emergency(text: str) -> EmergencyResult:
     Deterministic safety trigger detector.
 
     Returns structured verdict with trigger name, matched snippet, and detected language.
-    Applies conservative negation: when ambiguous or uncertain, escalates to True.
+    Applies clause-aware and context-sensitive negation: when ambiguous or uncertain, escalates to True.
     """
     if not text or not text.strip():
         return {
             "is_emergency": False,
             "trigger": None,
+            "hazard_type": None,
             "matched_text": None,
+            "match_snippet": None,
             "language": "en",
         }
 
     lang = detect_language(text)
     lowered = text.lower()
 
-    matched_trigger = None
-    matched_snippet = None
+    # Check for explicit emergency overrides that defeat any drill suppression
+    has_override = any(bool(re.search(p, lowered, re.IGNORECASE)) for p in OVERRIDE_PATTERNS)
+
+    # Locate drill spans that are not themselves negated
+    drill_spans: list[tuple[int, int]] = []
+    if not has_override:
+        for p in DRILL_PATTERNS:
+            for m in re.finditer(p, text, re.IGNORECASE):
+                span_text = text[max(0, m.start() - 15) : m.end()]
+                if not re.search(r"\b(?:not|no|never)\s+(?:a\s+)?(?:fire\s+)?drill\b", span_text, re.IGNORECASE):
+                    drill_spans.append((m.start(), m.end()))
+
+    active_hazards: list[tuple[str, str]] = []
 
     # Iterate through triggers in priority sequence
     for trigger, patterns in EMERGENCY_PATTERNS.items():
         for pat in patterns:
-            match = re.search(pat, text, re.IGNORECASE)
-            if match:
-                matched_trigger = trigger
-                matched_snippet = match.group(0)
-                break
-        if matched_trigger:
+            for m in re.finditer(pat, text, re.IGNORECASE):
+                m_start, m_end = m.start(), m.end()
+
+                # 1. Skip if the hazard word is purely internal to an active drill phrase
+                in_drill = any(d_start <= m_start and m_end <= d_end for d_start, d_end in drill_spans)
+                if in_drill and not has_override:
+                    continue
+
+                # 2. Check localized prefix negation (e.g. 'no smoke', 'no fire', 'without leak')
+                prefix_start = max(0, m_start - 35)
+                punct_indices = [text.rfind(c, prefix_start, m_start) for c in (".", "?", "!", ";", "\n")]
+                last_punct = max(punct_indices)
+                if last_punct != -1:
+                    prefix_start = last_punct + 1
+                prefix = text[prefix_start:m_start]
+
+                is_negated = bool(
+                    re.search(r"\b(?:no|not|without|neither|nor)\s+(?:\w+\s+){0,3}$", prefix, re.IGNORECASE)
+                )
+                if not is_negated:
+                    is_negated = bool(
+                        re.search(r"(?:^|\s)(?:नाही|नाहीत|नाहीये|नहीं|न|काही\s*नाही)\s+(?:[^\s,;.?!]+\s+){0,2}$", prefix)
+                    )
+
+                # 3. Check localized suffix negation (e.g. Hindi/Marathi 'dhuan nahi', 'aag nahi')
+                if not is_negated:
+                    suffix_end = min(len(text), m_end + 30)
+                    next_puncts = [
+                        text.find(c, m_end, suffix_end)
+                        for c in (".", "?", "!", ";", "\n")
+                        if text.find(c, m_end, suffix_end) != -1
+                    ]
+                    next_punct = min(next_puncts, default=-1)
+                    if next_punct != -1:
+                        suffix_end = next_punct
+                    suffix = text[m_end:suffix_end]
+                    is_negated = bool(
+                        re.search(
+                            r"^\s*(?:hot\s+|ahe\s+|hai\s+|aahe\s+|hote\s+)?(?:नाही|नाहीत|नाहीये|नहीं|न|nahi|nahin|naahi)(?:\s|[.,;!?]|$)",
+                            suffix,
+                            re.IGNORECASE,
+                        )
+                    )
+
+                if not is_negated or has_override:
+                    active_hazards.append((trigger, m.group(0)))
+                    break
+        if active_hazards:
             break
 
-    # If no life-safety pattern matched, return non-emergency
-    if not matched_trigger:
-        return {
-            "is_emergency": False,
-            "trigger": None,
-            "matched_text": None,
-            "language": lang,
-        }
-
-    # Life safety trigger matched: inspect for conservative negation / drills
-    has_drill = any(bool(re.search(p, lowered, re.IGNORECASE)) for p in DRILL_PATTERNS)
-    has_override = any(bool(re.search(p, lowered, re.IGNORECASE)) for p in OVERRIDE_PATTERNS)
-    has_benign_negation = any(bool(re.search(p, lowered, re.IGNORECASE)) for p in BENIGN_NEGATIONS)
-
-    # If an override or conflict is present (e.g., "no fire drill today, real fire"), always escalate
-    if has_override:
+    if active_hazards:
+        trig, snip = active_hazards[0]
         return {
             "is_emergency": True,
-            "trigger": matched_trigger,
-            "matched_text": matched_snippet,
+            "trigger": trig,
+            "hazard_type": trig,
+            "matched_text": snip,
+            "match_snippet": snip,
             "language": lang,
         }
 
-    # Routine drills without real emergency cues are suppressed
-    if has_drill and not has_override:
-        # Check if the text actually says "no fire drill" (drill was negated)
-        if re.search(r"\bno\s+fire\s+drill\b|\bnot\s+a\s+drill\b", lowered):
-            # The drill is negated, so the fire is real - escalate conservatively
-            return {
-                "is_emergency": True,
-                "trigger": matched_trigger,
-                "matched_text": matched_snippet,
-                "language": lang,
-            }
-        return {
-            "is_emergency": False,
-            "trigger": None,
-            "matched_text": None,
-            "language": lang,
-        }
-
-    # Benign negation check (e.g. "routine check, no smoke")
-    if has_benign_negation and not has_override:
-        return {
-            "is_emergency": False,
-            "trigger": None,
-            "matched_text": None,
-            "language": lang,
-        }
-
-    # Conservative fail-safe: default to escalation for all matched hazards
     return {
-        "is_emergency": True,
-        "trigger": matched_trigger,
-        "matched_text": matched_snippet,
+        "is_emergency": False,
+        "trigger": None,
+        "hazard_type": None,
+        "matched_text": None,
+        "match_snippet": None,
         "language": lang,
     }

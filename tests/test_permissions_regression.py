@@ -111,7 +111,6 @@ def test_resident_cannot_access_other_flat_complaints_or_photos_or_bills():
     swati_client, swati_user, _ = get_auth_client("9876543211")  # T12-0408
 
     db = SessionLocal()
-    neeraj_flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
     swati_flat = db.query(Flat).filter(Flat.flat_number == "T12-0408").first()
     db.close()
 

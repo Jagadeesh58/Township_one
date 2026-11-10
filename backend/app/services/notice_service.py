@@ -140,28 +140,30 @@ def update_notice_create_revision(
     return new_revision
 
 
-
 def publish_notice(db: Session, notice_id: str, author_user_id: str) -> Notice:
     notice = db.query(Notice).filter(Notice.id == notice_id).with_for_update().first()
     if not notice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notice not found.")
     if notice.status == "WITHDRAWN":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A withdrawn notice cannot be published again.")
-    revision = (
-        db.query(NoticeRevision)
-        .filter(NoticeRevision.id == notice.current_revision_id)
-        .first()
-    )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="A withdrawn notice cannot be published again."
+        )
+    revision = db.query(NoticeRevision).filter(NoticeRevision.id == notice.current_revision_id).first()
     if not revision:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Notice has no current revision.")
     notice.status = "PUBLISHED"
     notice.published_at = revision.publish_at
     notice.expires_at = revision.expires_at
-    db.add(AuditEvent(
-        entity_type="NOTICE", entity_id=notice.id, action="PUBLISH_NOTICE",
-        actor_user_id=author_user_id, actor_role="COMMITTEE",
-        reason=f"Published notice {notice.id}, revision {revision.revision_number}.",
-    ))
+    db.add(
+        AuditEvent(
+            entity_type="NOTICE",
+            entity_id=notice.id,
+            action="PUBLISH_NOTICE",
+            actor_user_id=author_user_id,
+            actor_role="COMMITTEE",
+            reason=f"Published notice {notice.id}, revision {revision.revision_number}.",
+        )
+    )
     db.flush()
     return notice
 

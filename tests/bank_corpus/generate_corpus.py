@@ -32,7 +32,7 @@ WRONG_ACCOUNT_NO = "99998888777766"
 
 
 def generate_corpus(seed: int = 42) -> list[dict]:
-    rng = random.Random(seed)
+    _ = random.Random(seed)
     base_dt = datetime(2026, 11, 1, 9, 0, 0)
 
     rows: list[dict] = []
@@ -88,7 +88,7 @@ def generate_corpus(seed: int = 42) -> list[dict]:
         + [(f"T02-{fl:02d}02", "9230.00", f"user.t02.{fl:02d}02@okaxis") for fl in range(1, 11)]
         + [(f"T02-{fl:02d}03", "7475.00", f"user.t02.{fl:02d}03@icici") for fl in range(1, 11)]
     )
-    for flat_num, amount, upi in upi_only_flats:
+    for _flat_num, amount, upi in upi_only_flats:
         hour_idx += 1
         txn_d, val_d = dt_str(hour_idx)
         utr = next_utr()

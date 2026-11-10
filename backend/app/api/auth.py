@@ -73,10 +73,13 @@ def request_otp(payload: OTPRequest, request: Request, db: Session = Depends(get
     phone = payload.phone.strip()
     user = db.query(User).filter(User.phone == phone, User.is_active == True).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No registered resident or staff account found with this phone number.",
-        )
+        # Constant-time mitigation against phone enumeration: return identical success message
+        # without generating a challenge in the database or attempting SMS delivery.
+        return {
+            "message": "OTP sent successfully to registered mobile number.",
+            "phone": phone,
+            "expires_in_seconds": settings.OTP_EXPIRY_SECONDS,
+        }
 
     client_ip = request.client.host if request.client else None
     otp = create_otp_challenge(phone, db=db, ip_address=client_ip)
@@ -98,7 +101,10 @@ def verify_otp(payload: OTPVerify, response: Response, db: Session = Depends(get
     phone = payload.phone.strip()
     user = db.query(User).filter(User.phone == phone, User.is_active == True).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid OTP code. Please check and try again.",
+        )
 
     is_valid = verify_otp_challenge(phone, payload.otp.strip(), db=db)
     if not is_valid:

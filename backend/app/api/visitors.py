@@ -1,10 +1,8 @@
-import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -46,12 +44,12 @@ from backend.app.services.visitor_service import (
     generate_signed_photo_url,
     get_ecdsa_private_key,
     get_ecdsa_public_key_pem,
-    visitor_photo_storage_key,
     sync_offline_entry_with_photo,
     transition_visitor_entry,
     validate_and_process_photo,
     verify_guest_code,
     verify_photo_signature,
+    visitor_photo_storage_key,
 )
 
 router = APIRouter(prefix="/visitors", tags=["visitors"])
@@ -73,8 +71,7 @@ def list_guard_gates(
     else:
         raise HTTPException(status_code=403, detail="Gate operator access is required.")
     return [
-        {"id": gate.id, "gate_number": gate.gate_number, "name": gate.name,
-         "description": gate.location_description}
+        {"id": gate.id, "gate_number": gate.gate_number, "name": gate.name, "description": gate.location_description}
         for gate in query.order_by(Gate.gate_number).all()
     ]
 
@@ -147,8 +144,7 @@ def list_visitor_entries(
     # 2. Residents see only entries for flats they belong to
     elif "RESIDENT" in roles and "ADMIN" not in roles and "HELPDESK" not in roles and "HELP_DESK" not in roles:
         user_flat_ids = [
-            m.flat_id for m in current_user.flat_memberships
-            if m.is_active is True and m.can_approve_visitors is True
+            m.flat_id for m in current_user.flat_memberships if m.is_active is True and m.can_approve_visitors is True
         ]
         if not user_flat_ids:
             return []
@@ -250,10 +246,16 @@ def create_visitor_entry(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=verification.get("message"))
         if verification.get("flat_id") != payload.flat_id:
             db.rollback()
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Guest credential does not match the selected flat.")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Guest credential does not match the selected flat.",
+            )
         if str(verification.get("guest_name", "")).strip().casefold() != payload.visitor_name.strip().casefold():
             db.rollback()
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Guest credential does not match the visitor name.")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Guest credential does not match the visitor name.",
+            )
         pre_approval_id = verification.get("pre_approval_id")
         entry_status = VisitorStatus.APPROVED.value
 
@@ -612,7 +614,9 @@ def stream_visitor_photo(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Photograph file not found or retention period expired."
         )
-    return Response(content, media_type=photo.content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"})
+    return Response(
+        content, media_type=photo.content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"}
+    )
 
 
 # =========================================================================
@@ -642,8 +646,7 @@ def list_pre_approvals(
     db: Session = Depends(get_db),
 ):
     user_flat_ids = [
-        m.flat_id for m in current_user.flat_memberships
-        if m.is_active is True and m.can_approve_visitors is True
+        m.flat_id for m in current_user.flat_memberships if m.is_active is True and m.can_approve_visitors is True
     ]
     roles = get_user_roles(current_user)
     query = db.query(PreApproval)
@@ -691,12 +694,7 @@ def enroll_gate_device(
     db: Session = Depends(get_db),
 ):
     enforce_guard_gate_scope(current_user, payload.gate_id)
-    device = (
-        db.query(GateDevice)
-        .filter(GateDevice.device_id == payload.device_id)
-        .with_for_update()
-        .first()
-    )
+    device = db.query(GateDevice).filter(GateDevice.device_id == payload.device_id).with_for_update().first()
     if device is None:
         device = GateDevice(
             device_id=payload.device_id,
@@ -751,12 +749,16 @@ def get_time_anchor(
 ):
     """Returns a signed, gate-scoped UTC time anchor for offline capture evidence."""
     enforce_guard_gate_scope(current_user, gate_id)
-    device = db.query(GateDevice).filter(
-        GateDevice.device_id == device_id,
-        GateDevice.generation_id == generation_id,
-        GateDevice.gate_id == gate_id,
-        GateDevice.is_active.is_(True),
-    ).first()
+    device = (
+        db.query(GateDevice)
+        .filter(
+            GateDevice.device_id == device_id,
+            GateDevice.generation_id == generation_id,
+            GateDevice.gate_id == gate_id,
+            GateDevice.is_active.is_(True),
+        )
+        .first()
+    )
     if not device:
         raise HTTPException(status_code=403, detail="Gate device must be enrolled before obtaining a time anchor.")
     now = datetime.now(UTC)
@@ -783,7 +785,9 @@ async def sync_offline_entry_endpoint(
 ):
     roles = set(get_user_roles(current_user))
     if "GUARD" not in roles and "ADMIN" not in roles:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only active guards can synchronize gate entries.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only active guards can synchronize gate entries."
+        )
     try:
         item = OfflineSyncItem.model_validate_json(metadata)
     except Exception as exc:

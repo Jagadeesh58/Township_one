@@ -219,6 +219,7 @@ def test_hosted_demo_requires_cloudinary_credentials_and_persistent_secrets():
     from backend.app.core.config import Settings
 
     valid = Settings(
+        _env_file=None,
         APP_ENV="demo",
         DEBUG=False,
         STORAGE_BACKEND="cloudinary",
@@ -233,6 +234,7 @@ def test_hosted_demo_requires_cloudinary_credentials_and_persistent_secrets():
     valid.validate_production_guards()
 
     invalid = Settings(
+        _env_file=None,
         APP_ENV="demo",
         DEBUG=False,
         STORAGE_BACKEND="cloudinary",

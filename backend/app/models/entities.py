@@ -675,9 +675,7 @@ class NoticeRevision(Base):
 
 class NoticeRead(Base):
     __tablename__ = "notice_reads"
-    __table_args__ = (
-        UniqueConstraint("notice_revision_id", "user_id", name="uq_notice_reads_revision_user"),
-    )
+    __table_args__ = (UniqueConstraint("notice_revision_id", "user_id", name="uq_notice_reads_revision_user"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, nullable=False)
     notice_revision_id: Mapped[str] = mapped_column(String(36), ForeignKey("notice_revisions.id"), nullable=False)
@@ -754,7 +752,9 @@ class VisitorEntry(Base):
     __tablename__ = "visitor_entries"
     __table_args__ = (
         UniqueConstraint(
-            "device_id", "device_generation_id", "device_sequence",
+            "device_id",
+            "device_generation_id",
+            "device_sequence",
             name="uq_visitor_device_generation_sequence",
         ),
     )

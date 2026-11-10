@@ -354,10 +354,14 @@ def test_rules_booking_lists_and_closed_slot_visibility():
         flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
         hall = db.query(Amenity).filter(Amenity.name == "Clubhouse Banquet Hall").first()
         assert flat is not None and hall is not None
-        slot = db.query(AmenitySlot).filter(
-            AmenitySlot.amenity_id == hall.id,
-            AmenitySlot.slot_date == get_effective_now().date() + timedelta(days=5),
-        ).first()
+        slot = (
+            db.query(AmenitySlot)
+            .filter(
+                AmenitySlot.amenity_id == hall.id,
+                AmenitySlot.slot_date == get_effective_now().date() + timedelta(days=5),
+            )
+            .first()
+        )
         assert slot is not None
         slot_id = slot.id
         flat_id = flat.id
@@ -376,9 +380,7 @@ def test_rules_booking_lists_and_closed_slot_visibility():
     assert resident_list.status_code == 200
     assert any(item["id"] == booking_id for item in resident_list.json())
 
-    committee_list = committee_client.get(
-        f"/api/v1/amenities/bookings?flat_id={flat_id}", headers=committee_headers
-    )
+    committee_list = committee_client.get(f"/api/v1/amenities/bookings?flat_id={flat_id}", headers=committee_headers)
     assert committee_list.status_code == 200
     assert any(item["id"] == booking_id for item in committee_list.json())
 

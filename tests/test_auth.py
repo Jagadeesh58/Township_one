@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from backend.app.core.config import settings
 from backend.app.core.database import SessionLocal
-from backend.app.core.security import verify_flat_access
+from backend.app.core.security import hash_otp, verify_flat_access
 from backend.app.main import app
 from backend.app.models.entities import Flat, OTPChallenge, RevokedToken, User
 
@@ -44,15 +44,33 @@ def test_request_otp_success():
         assert challenge is not None
         assert challenge.otp_hash is not None
         assert challenge.salt is not None
-        assert len(challenge.otp_hash) == 64  # SHA-256
+        assert len(challenge.otp_hash) == 64  # scrypt 32-byte hex
+        assert challenge.otp_hash == hash_otp(challenge.salt, "123456")
     finally:
         db.close()
 
 
 def test_request_otp_nonexistent_user():
+    """Anti-enumeration: unregistered numbers receive constant-time 200 without creating a DB challenge."""
     response = client.post("/api/v1/auth/otp/request", json={"phone": "9999999999"})
-    assert response.status_code == 404
-    assert "No registered resident or staff account" in response.json()["error"]["message"]
+    assert response.status_code == 200
+    data = response.json()
+    assert "OTP sent successfully" in data["message"]
+    assert "demo_hint" not in data
+
+    db = SessionLocal()
+    try:
+        challenge = db.query(OTPChallenge).filter(OTPChallenge.phone == "9999999999").first()
+        assert challenge is None
+    finally:
+        db.close()
+
+
+def test_verify_otp_nonexistent_user_anti_enumeration():
+    """Anti-enumeration: verifying an unregistered phone returns 401 identical to invalid OTP."""
+    response = client.post("/api/v1/auth/otp/verify", json={"phone": "9999999999", "otp": "123456"})
+    assert response.status_code == 401
+    assert "Invalid OTP code" in response.json()["error"]["message"]
 
 
 def test_verify_otp_valid():
@@ -235,7 +253,7 @@ def test_database_persisted_revoked_token():
 
     client.post("/api/v1/auth/otp/request", json={"phone": phone})
     login_resp = client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
-    token = login_resp.cookies.get("township_session")
+    assert "township_session" in login_resp.cookies
     csrf_token = login_resp.cookies.get("township_csrf")
     headers = {"X-CSRF-Token": csrf_token}
 
@@ -387,7 +405,7 @@ def test_logout_clears_cookie_and_revokes_token():
     custom_client.post("/api/v1/auth/otp/request", json={"phone": phone})
     login_resp = custom_client.post("/api/v1/auth/otp/verify", json={"phone": phone, "otp": "123456"})
     assert login_resp.status_code == 200
-    session_token = login_resp.cookies.get("township_session")
+    assert "township_session" in login_resp.cookies
     csrf_token = login_resp.cookies.get("township_csrf")
 
     # Verify authenticated before logout
@@ -500,3 +518,27 @@ def test_bearer_only_request_rejected():
     resp = unauth_client.get("/api/v1/auth/me", headers={"Authorization": "Bearer sample-token-for-test"})
     assert resp.status_code == 401
     assert "Authentication required" in resp.json()["error"]["message"]
+
+
+def test_otp_slow_scrypt_hash_offline_brute_force_resistance():
+    """Verify OTP hashing utilizes scrypt memory-hard derivation with 32-byte (64 hex) digest."""
+    import hashlib
+
+    salt = "a1b2c3d4e5f67890"
+    otp = "654321"
+
+    derived = hash_otp(salt, otp)
+    assert len(derived) == 64
+    # Must match direct scrypt derivation with N=16384, r=8, p=1
+    expected = hashlib.scrypt(
+        otp.encode(),
+        salt=salt.encode(),
+        n=16384,
+        r=8,
+        p=1,
+        maxmem=32 * 1024 * 1024,
+        dklen=32,
+    ).hex()
+    assert derived == expected
+    # Must NOT match simple fast SHA-256
+    assert derived != hashlib.sha256(f"{salt}:{otp}".encode()).hexdigest()

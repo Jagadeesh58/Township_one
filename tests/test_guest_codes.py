@@ -1,13 +1,13 @@
 import json
-import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from cryptography.exceptions import InvalidSignature
 from fastapi.testclient import TestClient
 
 from backend.app.core.database import SessionLocal
 from backend.app.main import app
-from backend.app.models.entities import Flat, Gate, OTPChallenge, PreApproval, VisitorEntry
+from backend.app.models.entities import Flat, Gate, OTPChallenge, PreApproval
 
 
 def get_auth_client(phone: str) -> tuple[TestClient, dict]:
@@ -206,6 +206,7 @@ def test_gate_public_key_and_time_anchor_endpoints():
 def test_guest_signing_key_survives_service_cache_reload(monkeypatch):
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
+
     from backend.app.core.config import settings
     from backend.app.services import visitor_service
 
@@ -234,8 +235,6 @@ def test_guest_signing_key_survives_service_cache_reload(monkeypatch):
     ).decode("utf-8")
     monkeypatch.setattr(settings, "SIGNING_KEY", pem_two)
     visitor_service._ECDSA_PRIVATE_KEY = None
-    with pytest.raises(Exception):
-        visitor_service.get_ecdsa_private_key().public_key().verify(
-            signature, payload, ec.ECDSA(hashes.SHA256())
-        )
+    with pytest.raises(InvalidSignature):
+        visitor_service.get_ecdsa_private_key().public_key().verify(signature, payload, ec.ECDSA(hashes.SHA256()))
     visitor_service._ECDSA_PRIVATE_KEY = None

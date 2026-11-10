@@ -26,6 +26,8 @@ if "township_one.db" in settings.TEST_DATABASE_URL and not settings.TEST_DATABAS
 
 # Force test environment flag
 os.environ["TOWNSHIP_ENV"] = "test"
+os.environ["STORAGE_BACKEND"] = "local"
+settings.STORAGE_BACKEND = "local"
 
 # Dedicated Test Engine
 test_db_url = settings.TEST_DATABASE_URL
@@ -45,12 +47,14 @@ test_engine = create_engine(
 )
 
 if test_db_url.startswith("sqlite"):
+
     @event.listens_for(test_engine, "connect")
     def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
         """Make SQLite test runs enforce the same declared foreign keys as PostgreSQL."""
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
 
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 

@@ -77,9 +77,9 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
     db.query(BankRow).delete(synchronize_session=False)
     db.query(BankImportFile).delete(synchronize_session=False)
     db.query(Receipt).filter(Receipt.payment_id.in_(target_payment_ids)).delete(synchronize_session=False)
-    db.query(PaymentIdempotencyRecord).filter(
-        PaymentIdempotencyRecord.flat_id.in_(target_flat_ids)
-    ).delete(synchronize_session=False)
+    db.query(PaymentIdempotencyRecord).filter(PaymentIdempotencyRecord.flat_id.in_(target_flat_ids)).delete(
+        synchronize_session=False
+    )
     db.query(FlatLedgerEntry).filter(FlatLedgerEntry.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
     db.query(BillLine).filter(BillLine.bill_id.in_(target_bill_ids)).delete(synchronize_session=False)
     db.query(Payment).filter(Payment.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
@@ -486,7 +486,7 @@ def test_corpus_processing_and_zero_false_automatic_postings():
         held_count = 0
         total_rows_evaluated = len(corpus_rows)
 
-        for b_row, expected in zip(committed_rows, corpus_rows):
+        for b_row, expected in zip(committed_rows, corpus_rows, strict=True):
             exp_decision = expected["expected_decision"]
             actual_decision = b_row.decision
 
@@ -627,7 +627,7 @@ def test_concurrent_approval_safety():
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(run_approval, i) for i in range(5)]
-            results = [f.result() for f in futures]
+            _ = [f.result() for f in futures]
 
         db.refresh(row)
         assert row.review_status == "APPROVED"
@@ -1015,8 +1015,7 @@ def test_concurrent_import_and_approval_duplicate_prevention():
         with ThreadPoolExecutor(max_workers=2) as executor:
             f1 = executor.submit(worker_import, 1)
             f2 = executor.submit(worker_import, 2)
-            res1 = f1.result()
-            res2 = f2.result()
+            _ = (f1.result(), f2.result())
 
         # Database state: exactly ONE posting, ONE payment, and ONE ledger entry
         postings = db.query(BankPosting).filter(BankPosting.utr == "UTRCONCURRIMP01").all()
@@ -1061,8 +1060,7 @@ def test_concurrent_import_and_approval_duplicate_prevention():
         with ThreadPoolExecutor(max_workers=2) as executor:
             fa1 = executor.submit(worker_approve, 1)
             fa2 = executor.submit(worker_approve, 2)
-            ra1 = fa1.result()
-            ra2 = fa2.result()
+            _ = (fa1.result(), fa2.result())
 
         # Database state: exactly ONE posting, ONE payment, and ONE ledger entry
         postings_appr = db.query(BankPosting).filter(BankPosting.utr == "UTRCONCURRAPPR01").all()

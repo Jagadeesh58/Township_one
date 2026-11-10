@@ -240,10 +240,14 @@ def test_notice_management_denies_inactive_role_assignment():
 
         user = db.query(User).filter(User.phone == "9876543250").first()
         assert user is not None
-        assignment = db.query(UserRoleAssignment).filter(
-            UserRoleAssignment.user_id == user.id,
-            UserRoleAssignment.role_code == "COMMITTEE",
-        ).first()
+        assignment = (
+            db.query(UserRoleAssignment)
+            .filter(
+                UserRoleAssignment.user_id == user.id,
+                UserRoleAssignment.role_code == "COMMITTEE",
+            )
+            .first()
+        )
         assert assignment is not None
         assignment.is_active = False
         db.commit()

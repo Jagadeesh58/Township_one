@@ -205,7 +205,7 @@ async def raise_complaint(
     if is_emergency:
         is_safety_escalation = True
         urgency = "CRITICAL"
-        hazard_type = str(emergency_info.get("hazard_type", "GENERAL"))
+        hazard_type = str(emergency_info.get("hazard_type") or emergency_info.get("trigger") or "GENERAL")
         category = hazard_to_category.get(hazard_type, "GENERAL")
         provider = "rule_emergency_engine"
         confidence_val = 1.0
@@ -293,8 +293,8 @@ async def raise_complaint(
     if is_safety_escalation:
         safety_ev = SafetyEvent(
             complaint_id=complaint.id,
-            trigger_pattern=emergency_info.get("hazard_type", "HAZARD"),
-            matched_text=f"Emergency trigger: {emergency_info.get('match_snippet', 'Safety rule matched')}",
+            trigger_pattern=str(emergency_info.get("hazard_type") or emergency_info.get("trigger") or "HAZARD"),
+            matched_text=f"Emergency trigger: {emergency_info.get('match_snippet') or emergency_info.get('matched_text') or 'Safety rule matched'}",
             language=language or "en",
             duty_manager_notified=True,
             status="ACTIVE",

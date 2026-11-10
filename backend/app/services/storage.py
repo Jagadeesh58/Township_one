@@ -18,7 +18,6 @@ import uuid
 from pathlib import Path, PurePosixPath
 
 import httpx
-
 from fastapi import HTTPException, status
 from PIL import Image
 
@@ -60,17 +59,17 @@ def get_storage_path(storage_key: str) -> str:
 
 
 def _legacy_local_path(storage_key: str) -> str | None:
-    """Accept old absolute local keys only when they remain inside STORAGE_DIR."""
+    """Accept old local keys (absolute or relative) only when they remain inside STORAGE_DIR."""
     raw = (storage_key or "").strip()
-    if not os.path.isabs(raw):
+    if not raw:
         return None
-    base = Path(settings.STORAGE_DIR).resolve()
-    path = Path(raw).resolve()
     try:
+        base = Path(settings.STORAGE_DIR).resolve()
+        path = Path(raw).resolve()
         path.relative_to(base)
-    except ValueError:
+        return str(path)
+    except (ValueError, OSError):
         return None
-    return str(path)
 
 
 def _cloudinary_components():
@@ -124,7 +123,9 @@ def _r2_client():
     endpoint = settings.R2_ENDPOINT_URL.strip() or (
         f"https://{account_id}.r2.cloudflarestorage.com" if account_id else ""
     )
-    if not all((endpoint, settings.R2_ACCESS_KEY_ID.strip(), settings.R2_SECRET_ACCESS_KEY.strip(), settings.R2_BUCKET.strip())):
+    if not all(
+        (endpoint, settings.R2_ACCESS_KEY_ID.strip(), settings.R2_SECRET_ACCESS_KEY.strip(), settings.R2_BUCKET.strip())
+    ):
         raise RuntimeError(
             "Cloudflare R2 storage is selected but R2_ACCOUNT_ID/R2_ENDPOINT_URL, "
             "R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET are not fully configured."

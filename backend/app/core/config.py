@@ -109,18 +109,22 @@ class Settings(BaseSettings):
                 "RETENTION_JOB_TOKEN": self.RETENTION_JOB_TOKEN,
             }
             if self.STORAGE_BACKEND.lower() == "cloudinary":
-                required_hosted_values.update({
-                    "CLOUDINARY_CLOUD_NAME": self.CLOUDINARY_CLOUD_NAME,
-                    "CLOUDINARY_API_KEY": self.CLOUDINARY_API_KEY,
-                    "CLOUDINARY_API_SECRET": self.CLOUDINARY_API_SECRET,
-                })
+                required_hosted_values.update(
+                    {
+                        "CLOUDINARY_CLOUD_NAME": self.CLOUDINARY_CLOUD_NAME,
+                        "CLOUDINARY_API_KEY": self.CLOUDINARY_API_KEY,
+                        "CLOUDINARY_API_SECRET": self.CLOUDINARY_API_SECRET,
+                    }
+                )
             else:
-                required_hosted_values.update({
-                    "R2_ACCOUNT_ID": self.R2_ACCOUNT_ID,
-                    "R2_ACCESS_KEY_ID": self.R2_ACCESS_KEY_ID,
-                    "R2_SECRET_ACCESS_KEY": self.R2_SECRET_ACCESS_KEY,
-                    "R2_BUCKET": self.R2_BUCKET,
-                })
+                required_hosted_values.update(
+                    {
+                        "R2_ACCOUNT_ID": self.R2_ACCOUNT_ID,
+                        "R2_ACCESS_KEY_ID": self.R2_ACCESS_KEY_ID,
+                        "R2_SECRET_ACCESS_KEY": self.R2_SECRET_ACCESS_KEY,
+                        "R2_BUCKET": self.R2_BUCKET,
+                    }
+                )
             missing = [name for name, value in required_hosted_values.items() if not str(value).strip()]
             explicitly_configured = {"DATABASE_URL", "SECRET_KEY", "SIGNING_KEY", "RETENTION_JOB_TOKEN"}
             missing_explicit = sorted(explicitly_configured - self.model_fields_set)
@@ -132,7 +136,9 @@ class Settings(BaseSettings):
             if not self.DATABASE_URL.startswith(("postgresql://", "postgresql+")):
                 raise RuntimeError("FATAL HOSTED DEMO CONFIGURATION: DATABASE_URL must use PostgreSQL.")
             if len(self.SECRET_KEY) < 32 or len(self.RETENTION_JOB_TOKEN) < 32:
-                raise RuntimeError("FATAL HOSTED DEMO CONFIGURATION: SECRET_KEY and RETENTION_JOB_TOKEN must be 32+ characters.")
+                raise RuntimeError(
+                    "FATAL HOSTED DEMO CONFIGURATION: SECRET_KEY and RETENTION_JOB_TOKEN must be 32+ characters."
+                )
 
         if self.APP_ENV.lower() == "production":
             insecure_markers = [
@@ -160,7 +166,9 @@ class Settings(BaseSettings):
                 raise RuntimeError("FATAL SECURITY VIOLATION: DEBUG mode must be False in production.")
 
             if not self.SIGNING_KEY.strip() and not self.SIGNING_KEY_FILE.strip():
-                raise RuntimeError("FATAL SECURITY VIOLATION: SIGNING_KEY or SIGNING_KEY_FILE is required in production.")
+                raise RuntimeError(
+                    "FATAL SECURITY VIOLATION: SIGNING_KEY or SIGNING_KEY_FILE is required in production."
+                )
 
             if not self.SMS_PROVIDER_API_KEY or len(self.SMS_PROVIDER_API_KEY.strip()) < 8:
                 raise RuntimeError(
