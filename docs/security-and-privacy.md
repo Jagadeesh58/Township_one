@@ -35,7 +35,7 @@ When an idempotency key is submitted:
 - **Zero Information Disclosure:** The response does not leak the original payer's name, flat number, bill details, or receipt voucher.
 
 ### 2.4 Cryptographic OTP Security
-- Raw OTPs are never stored. Challenges store a 16-byte random salt and SHA-256 hash.
+- Raw OTPs are never stored. Challenges store a 16-byte random salt and memory-hard `scrypt` hash.
 - Verification employs `hmac.compare_digest` to prevent timing-based side-channel leaks.
 - Production OTPs are generated using `secrets.randbelow(900000) + 100000`. The static demo OTP (`123456`) is accepted **only** in development and testing environments.
 

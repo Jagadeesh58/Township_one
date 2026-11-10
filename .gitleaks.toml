@@ -12,6 +12,7 @@ regexes = [
     '''(?i)replace-with-a-strong-random''',
     '''(?i)CHANGE_ME''',
     '''(?i)test-secret''',
+    '''(?i)gsk_test_''',
 ]
 paths = [
     # Safe example environment template containing dummy variable placeholders
