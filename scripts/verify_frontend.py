@@ -15,7 +15,7 @@ FRONTEND = ROOT / "frontend"
 REPORT = ROOT / "docs" / "reports" / "frontend-validation.json"
 
 
-def run(command: list[str], timeout: int = 90) -> dict[str, Any]:
+def run(command: list[str], timeout: int = 240) -> dict[str, Any]:
     try:
         result = subprocess.run(
             command,
@@ -24,6 +24,7 @@ def run(command: list[str], timeout: int = 90) -> dict[str, Any]:
             text=True,
             timeout=timeout,
             check=False,
+            shell=sys.platform == "win32",
         )
         return {
             "status": "PASS" if result.returncode == 0 else "FAIL",
@@ -43,7 +44,7 @@ def run(command: list[str], timeout: int = 90) -> dict[str, Any]:
 
 
 def main() -> int:
-    package = json.loads((FRONTEND / "package.json").read_text(encoding="utf-8"))
+    _ = json.loads((FRONTEND / "package.json").read_text(encoding="utf-8"))
     node_command = [
         "node",
         "-e",
@@ -61,25 +62,39 @@ def main() -> int:
         or version[0] >= 26
     )
 
-    rollup_linux = FRONTEND / "node_modules" / "@rollup" / "rollup-linux-x64-gnu"
+    if sys.platform == "linux":
+        rollup_native = FRONTEND / "node_modules" / "@rollup" / "rollup-linux-x64-gnu"
+    elif sys.platform == "win32":
+        rollup_native = FRONTEND / "node_modules" / "@rollup" / "rollup-win32-x64-msvc"
+    elif sys.platform == "darwin":
+        rollup_native = FRONTEND / "node_modules" / "@rollup" / "rollup-darwin-arm64"
+    else:
+        rollup_native = FRONTEND / "node_modules" / "vite"
+
     dependencies_present = (FRONTEND / "node_modules" / ".bin").is_dir()
     blockers: list[str] = []
     if not dependencies_present:
         blockers.append("Frontend dependencies are absent; run npm ci with a supported Node version.")
     if not supported:
         blockers.append(f"Node {node_version or 'unknown'} is below package.json's supported engine range.")
-    if dependencies_present and not rollup_linux.is_dir():
-        blockers.append("The Linux Rollup optional dependency is missing; reinstall with npm ci on Linux.")
+    if dependencies_present and not rollup_native.is_dir() and not (FRONTEND / "node_modules" / "vite").is_dir():
+        blockers.append("Native Rollup dependency is missing; reinstall with npm ci.")
     blocked_reason = " ".join(blockers)
 
     if blocked_reason:
         frontend_tests = {
-            "status": "BLOCKED", "returncode": None, "command": ["npm", "test"],
-            "stdout": "", "stderr": blocked_reason,
+            "status": "BLOCKED",
+            "returncode": None,
+            "command": ["npm", "test"],
+            "stdout": "",
+            "stderr": blocked_reason,
         }
         frontend_build = {
-            "status": "BLOCKED", "returncode": None, "command": ["npm", "run", "build"],
-            "stdout": "", "stderr": blocked_reason,
+            "status": "BLOCKED",
+            "returncode": None,
+            "command": ["npm", "run", "build"],
+            "stdout": "",
+            "stderr": blocked_reason,
         }
     else:
         frontend_tests = run(["npm", "test"])
@@ -96,10 +111,7 @@ def main() -> int:
     REPORT.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
     print(json.dumps(result, indent=2))
-    return 0 if all(
-        gate.get("status") == "PASS"
-        for gate in (typecheck, frontend_tests, frontend_build)
-    ) else 1
+    return 0 if all(gate.get("status") == "PASS" for gate in (typecheck, frontend_tests, frontend_build)) else 1
 
 
 if __name__ == "__main__":

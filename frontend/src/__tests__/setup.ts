@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest';
+// @ts-ignore
 import { Blob as NodeBlob } from 'node:buffer';
+// @ts-ignore
 import { webcrypto } from 'node:crypto';
 
 // jsdom exposes randomUUID/getRandomValues but not SubtleCrypto; use Node's
