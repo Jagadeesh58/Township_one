@@ -10,6 +10,11 @@ class OTPVerify(BaseModel):
     otp: str = Field(..., description="6-digit OTP code, demo code is 123456")
 
 
+class PasswordLoginRequest(BaseModel):
+    phone: str = Field(..., description="10-digit mobile number, e.g. 9876543210")
+    password: str = Field(..., description="Account or demo password, e.g. 123456 or demo123")
+
+
 class RoleAssignmentResponse(BaseModel):
     role_code: str
     scope_type: str

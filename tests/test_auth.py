@@ -137,6 +137,45 @@ def test_logout_and_revocation():
     assert "revoked" in revoked_cookie_resp.json()["error"]["message"].lower()
 
 
+def test_password_login_success():
+    """Verify password-based authentication succeeds for pre-seeded users using demo code."""
+    response = client.post("/api/v1/auth/login", json={"phone": "9876543210", "password": "123456"})
+    assert response.status_code == 200
+    data = response.json()
+    assert "township_session" in response.cookies
+    assert "township_csrf" in response.cookies
+    assert data["user"]["name"] == "Neeraj Kulkarni"
+    assert data["user"]["phone"] == "9876543210"
+    assert len(data["user"]["flats"]) >= 1
+
+
+def test_password_login_alternate_demo_passwords():
+    """Verify accepted demo passwords (e.g. demo123) allow immediate sign-in."""
+    response = client.post("/api/v1/auth/login", json={"phone": "9876543211", "password": "demo123"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user"]["name"] == "Swati Joshi"
+    assert "township_session" in response.cookies
+
+
+def test_password_login_invalid_password():
+    """Verify invalid password is rejected with 401 Unauthorized."""
+    response = client.post("/api/v1/auth/login", json={"phone": "9876543210", "password": "bad"})
+    assert response.status_code == 401
+    assert "Invalid" in response.json()["error"]["message"]
+
+
+def test_password_login_auto_provisions_unregistered_number_in_demo():
+    """In demo/test environments, any new phone number is auto-provisioned to avoid review blockers."""
+    test_phone = "9888877777"
+    response = client.post("/api/v1/auth/login", json={"phone": test_phone, "password": "123456"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["user"]["phone"] == test_phone
+    assert any(r["role_code"] == "RESIDENT" for r in data["user"]["roles"])
+    assert "township_session" in response.cookies
+
+
 def test_cross_flat_access_idor_denied():
     db = SessionLocal()
     try:

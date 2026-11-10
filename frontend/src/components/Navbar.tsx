@@ -288,22 +288,69 @@ export const Navbar: React.FC<NavbarProps> = ({
             ))}
           </div>
 
+          {/* User Profile Pill & Prominent Sign Out */}
           {user && (
-            <button
-              onClick={onLogout}
-              style={{
-                border: '1px solid var(--border)',
-                background: '#ffffff',
-                color: 'var(--text-muted)',
-                fontSize: '0.8rem',
-                padding: '0.35rem 0.65rem',
-                borderRadius: '6px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-            >
-              {t.logout}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'nowrap' }}>
+              <div
+                title={`Signed in as ${user.name} (${user.phone})`}
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid var(--border)',
+                  borderRadius: '6px',
+                  padding: '0.3rem 0.55rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: 'var(--text-main)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  maxWidth: '180px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span>👤</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user.name.split(' ')[0]}
+                </span>
+                <span style={{
+                  fontSize: '0.68rem',
+                  background: '#e2e8f0',
+                  color: '#475569',
+                  padding: '1px 5px',
+                  borderRadius: '4px',
+                  textTransform: 'uppercase',
+                  fontWeight: 700
+                }}>
+                  {userRoles[0] || (hasFlats ? 'Resident' : 'User')}
+                </span>
+              </div>
+
+              <button
+                onClick={onLogout}
+                data-testid="navbar-logout-btn"
+                title="Sign out of your session"
+                style={{
+                  border: '1.5px solid #f87171',
+                  background: '#fef2f2',
+                  color: '#b91c1c',
+                  fontSize: '0.82rem',
+                  padding: '0.32rem 0.75rem',
+                  borderRadius: '6px',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(185, 28, 28, 0.08)',
+                  transition: 'background-color 0.15s ease'
+                }}
+              >
+                <span>🚪</span>
+                <span>{t.logout}</span>
+              </button>
+            </div>
           )}
         </div>
       </div>

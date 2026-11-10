@@ -72,6 +72,8 @@ async def csrf_protect_middleware(request: Request, call_next):
             "/auth/otp/request",
             f"{settings.API_PREFIX}/auth/otp/verify",
             "/auth/otp/verify",
+            f"{settings.API_PREFIX}/auth/login",
+            "/auth/login",
             "/docs",
             "/redoc",
             "/openapi.json",

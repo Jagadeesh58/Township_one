@@ -107,6 +107,7 @@ export default function App() {
           <LoginPage
             lang={currentLang}
             onLoginSuccess={handleLoginSuccess}
+            onLanguageChange={setCurrentLang}
           />
         ) : activeTab === 'amenities' ? (
           <AmenityBookingPage
@@ -150,6 +151,7 @@ export default function App() {
             selectedFlatId={selectedFlatId}
             lang={currentLang}
             onNavigateTab={setActiveTab}
+            onLogout={handleLogout}
           />
         )}
       </main>

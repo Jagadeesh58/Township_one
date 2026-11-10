@@ -483,6 +483,19 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
 }
 
 export const api = {
+  async loginWithPassword(phone: string, password: string): Promise<{ user: UserProfile }> {
+    const res = await fetchWithAuth(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || err.detail || 'Login failed. Please check your credentials.');
+    }
+    return res.json();
+  },
+
   async requestOtp(phone: string) {
     const res = await fetchWithAuth(`${API_BASE}/auth/otp/request`, {
       method: 'POST',

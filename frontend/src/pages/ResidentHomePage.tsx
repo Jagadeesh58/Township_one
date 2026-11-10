@@ -24,6 +24,7 @@ interface ResidentHomePageProps {
   selectedFlatId: string;
   lang: Language;
   onNavigateTab?: (tab: 'home' | 'complaints' | 'accounts' | 'helpdesk' | 'amenities' | 'guard' | 'committee' | 'notices' | 'notice-management') => void;
+  onLogout?: () => void;
 }
 
 export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
@@ -31,6 +32,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
   selectedFlatId,
   lang,
   onNavigateTab,
+  onLogout,
 }) => {
   const t = translations[lang];
   const [summary, setSummary] = useState<BillingSummary | null>(null);
@@ -198,40 +200,67 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
           </div>
         </div>
 
-        {/* Tab switch between Home and Ledger */}
-        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', padding: '3px' }}>
-          <button
-            onClick={() => setActiveTab('HOME')}
-            style={{
-              minHeight: '44px',
-              background: activeTab === 'HOME' ? '#ffffff' : 'transparent',
-              color: activeTab === 'HOME' ? '#1e293b' : '#cbd5e1',
-              border: 'none',
-              padding: '0.4rem 0.8rem',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-              cursor: 'pointer'
-            }}
-          >
-            {t.home}
-          </button>
-          <button
-            onClick={() => setActiveTab('LEDGER')}
-            style={{
-              minHeight: '44px',
-              background: activeTab === 'LEDGER' ? '#ffffff' : 'transparent',
-              color: activeTab === 'LEDGER' ? '#1e293b' : '#cbd5e1',
-              border: 'none',
-              padding: '0.4rem 0.8rem',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-              cursor: 'pointer'
-            }}
-          >
-            {t.ledger_statement}
-          </button>
+        {/* Right side controls: Tab switch between Home and Ledger + Sign Out */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', padding: '3px' }}>
+            <button
+              onClick={() => setActiveTab('HOME')}
+              style={{
+                minHeight: '44px',
+                background: activeTab === 'HOME' ? '#ffffff' : 'transparent',
+                color: activeTab === 'HOME' ? '#1e293b' : '#cbd5e1',
+                border: 'none',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              {t.home}
+            </button>
+            <button
+              onClick={() => setActiveTab('LEDGER')}
+              style={{
+                minHeight: '44px',
+                background: activeTab === 'LEDGER' ? '#ffffff' : 'transparent',
+                color: activeTab === 'LEDGER' ? '#1e293b' : '#cbd5e1',
+                border: 'none',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              {t.ledger_statement}
+            </button>
+          </div>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              data-testid="resident-logout-btn"
+              title="Sign out of Township One"
+              style={{
+                minHeight: '44px',
+                background: 'rgba(239, 68, 68, 0.2)',
+                border: '1px solid rgba(248, 113, 113, 0.5)',
+                color: '#fee2e2',
+                padding: '0.4rem 0.85rem',
+                borderRadius: '6px',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+            >
+              <span>🚪</span>
+              <span>{t.logout}</span>
+            </button>
+          )}
         </div>
       </div>
 
