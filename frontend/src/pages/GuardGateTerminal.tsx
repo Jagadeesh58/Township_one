@@ -1,60 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { api, UserProfile, VisitorEntryItem, GuestCodeVerificationResult } from '../api/client';
 import { Language, translations } from '../i18n/translations';
+import {
+  acknowledgeGateQueueEntry, expireOldGatePhotos, getGateDeviceIdentity, getGateQueueSummary, getSignedTimeAnchor,
+  listGateQueueEntries, queueVisitorPhoto, recordGateSyncFailure, saveSignedTimeAnchor,
+} from '../lib/gateQueue';
 
 interface GuardGateTerminalProps {
   user: UserProfile;
   lang: Language;
 }
 
-const GATES = [
-  { id: 'gate_1', number: 1, name: 'Main North Gate', desc: 'Main boulevard vehicle & visitor entry' },
-  { id: 'gate_2', number: 2, name: 'South Gate', desc: 'Near Tower 18-28 service exit' },
-  { id: 'gate_3', number: 3, name: 'East Gate', desc: 'Pedestrian & school bus pickup gate' },
-  { id: 'gate_4', number: 4, name: 'West Gate', desc: 'Clubhouse and sports arena delivery gate' },
-];
-
 export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang }) => {
   const t = translations[lang];
-  const [selectedGateNum, setSelectedGateNum] = useState<number>(1);
+  const [gates, setGates] = useState<Array<{ id: string; gate_number: number; name: string; description?: string }>>([]);
+  const [selectedGateId, setSelectedGateId] = useState<string>('');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [darkTheme, setDarkTheme] = useState<boolean>(false);
   const [entries, setEntries] = useState<VisitorEntryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [queueCount, setQueueCount] = useState<number>(0);
+  const [oldestQueueAge, setOldestQueueAge] = useState<number>(0);
+  const [syncFailure, setSyncFailure] = useState<string | null>(null);
 
-  // Verification
   const [verifyCode, setVerifyCode] = useState<string>('');
   const [verifyResult, setVerifyResult] = useState<GuestCodeVerificationResult | null>(null);
-
-  // New Visitor Form
   const [visitorName, setVisitorName] = useState<string>('');
   const [visitorPhone, setVisitorPhone] = useState<string>('');
   const [visitorPurpose, setVisitorPurpose] = useState<string>('Delivery');
   const [targetFlatId, setTargetFlatId] = useState<string>('');
   const [uploadedPhotoId, setUploadedPhotoId] = useState<string | null>(null);
+  const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState<boolean>(false);
-
-  // Override Modal
   const [overrideEntryId, setOverrideEntryId] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState<string>('');
 
-  // Gate matching
-  const currentGate = GATES.find((g) => g.number === selectedGateNum) || GATES[0];
+  const currentGate = gates.find((gate) => gate.id === selectedGateId) ?? gates[0];
 
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+  const refreshQueue = async () => {
+    try {
+      await expireOldGatePhotos();
+      const summary = await getGateQueueSummary();
+      setQueueCount(summary.pendingCount);
+      setOldestQueueAge(summary.oldestAgeMs);
+    } catch (queueError) {
+      setSyncFailure(queueError instanceof Error ? queueError.message : 'Gate queue storage is unavailable.');
+    }
+  };
 
   const fetchEntries = async () => {
+    if (!currentGate) return;
     setLoading(true);
     setError(null);
     try {
@@ -67,48 +64,167 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
     }
   };
 
+  const refreshSignedAnchor = async () => {
+    if (!isOnline || !currentGate) return;
+    try {
+      const identity = await getGateDeviceIdentity();
+      await api.enrollGateDevice(currentGate.id, identity);
+      const signed = await api.getGateTimeAnchor(currentGate.id, identity.deviceId, identity.generationId);
+      await saveSignedTimeAnchor(user.id, currentGate.id, signed);
+    } catch (anchorError) {
+      setSyncFailure(anchorError instanceof Error ? anchorError.message : 'Unable to refresh signed gate time.');
+    }
+  };
+
+  const synchronizeQueue = async () => {
+    if (!isOnline) return;
+    try {
+      await expireOldGatePhotos();
+      const queued = await listGateQueueEntries();
+      for (const item of queued) {
+        if (!['PENDING', 'RETRY'].includes(item.status) || item.nextRetryAt > Date.now()) continue;
+        if (!item.photoBlob) continue;
+        try {
+          const result = await api.syncOfflineGate(item);
+          if (result.acknowledged_ids.includes(item.eventUuid)) {
+            await acknowledgeGateQueueEntry(item.eventUuid);
+            setSyncFailure(null);
+          } else {
+            throw new Error('Server did not acknowledge the visitor event and photograph.');
+          }
+        } catch (syncError) {
+          const reason = syncError instanceof Error ? syncError.message : 'Gate synchronization failed.';
+          await recordGateSyncFailure(item.eventUuid, reason);
+          setSyncFailure(reason);
+        }
+      }
+      await refreshQueue();
+      await fetchEntries();
+    } catch (queueError) {
+      setSyncFailure(queueError instanceof Error ? queueError.message : 'Unable to read the offline queue.');
+    }
+  };
+
   useEffect(() => {
-    fetchEntries();
-  }, [selectedGateNum]);
+    let active = true;
+    api.listGateOptions().then((options) => {
+      if (!active) return;
+      setGates(options);
+      setSelectedGateId((current) => options.some((gate) => gate.id === current) ? current : (options[0]?.id ?? ''));
+    }).catch((gateError) => {
+      if (active) setError(gateError instanceof Error ? gateError.message : 'Unable to load assigned gates.');
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handleResume = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshQueue();
+        void refreshSignedAnchor();
+        void synchronizeQueue();
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleResume);
+    const timer = window.setInterval(() => {
+      void refreshQueue();
+      if (navigator.onLine) void synchronizeQueue();
+    }, 30000);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleResume);
+      window.clearInterval(timer);
+    };
+  }, [isOnline, currentGate?.id, user.id]);
+
+  useEffect(() => {
+    if (!currentGate) return;
+    void fetchEntries();
+    void refreshQueue();
+    if (isOnline) {
+      void refreshSignedAnchor();
+      void synchronizeQueue();
+    }
+  }, [selectedGateId, isOnline]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     const file = e.target.files[0];
-    setUploadingPhoto(true);
+    setSelectedPhotoFile(file);
+    setUploadedPhotoId(null);
+    setUploadingPhoto(false);
     setError(null);
-    try {
-      const res = await api.uploadVisitorPhoto(file);
-      setUploadedPhotoId(res.photo_id);
-      setSuccessMsg('Photograph captured and verified (90-day retention).');
-    } catch (err: any) {
-      setError(err.message || 'Failed to process visitor photo');
-    } finally {
-      setUploadingPhoto(false);
-    }
+    setSuccessMsg(isOnline
+      ? 'Photo selected. It will be uploaded with the visitor entry.'
+      : 'Photo selected. Submit the visitor form to save the photo and entry offline.');
   };
 
   const handleRecordArrival = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentGate) {
+      setError('No authorized gate is assigned to this guard.');
+      return;
+    }
     if (!visitorName.trim() || !targetFlatId.trim()) {
-      setError('Visitor Name and Flat ID are required.');
+      setError('Visitor name and flat ID are required.');
+      return;
+    }
+    if (!selectedPhotoFile) {
+      setError('A visitor photograph is required before the arrival can be recorded.');
       return;
     }
     setError(null);
     setSuccessMsg(null);
     try {
-      await api.createVisitorEntry({
-        gate_id: currentGate.id,
-        flat_id: targetFlatId.trim(),
-        visitor_name: visitorName.trim(),
-        phone: visitorPhone.trim() || undefined,
-        purpose: visitorPurpose.trim(),
-        photo_id: uploadedPhotoId || undefined,
-      });
-      setSuccessMsg(`Arrival recorded for ${visitorName}. Resident approval requested.`);
+      if (!isOnline) {
+        const anchor = await getSignedTimeAnchor(user.id, currentGate.id);
+        if (!anchor) throw new Error('No signed time anchor is cached for this gate. Connect before capturing the first offline visit.');
+        await queueVisitorPhoto({
+          userId: user.id,
+          gateId: currentGate.id,
+          flatId: targetFlatId.trim(),
+          visitorName: visitorName.trim(),
+          phone: visitorPhone.trim() || undefined,
+          purpose: visitorPurpose.trim(),
+          photo: selectedPhotoFile,
+          timeAnchor: anchor,
+          preApprovalCredential: verifyCode.includes('.') ? verifyCode.trim() : undefined,
+        });
+        setSuccessMsg(`Saved offline for ${visitorName}. The server will validate any cached pre-approval during synchronization; otherwise resident approval is required after reconnection.`);
+      } else {
+        let photoId = uploadedPhotoId;
+        if (!photoId) {
+          const uploaded = await api.uploadVisitorPhoto(selectedPhotoFile, currentGate.id);
+          photoId = uploaded.photo_id;
+        }
+        const created = await api.createVisitorEntry({
+          gate_id: currentGate.id,
+          flat_id: targetFlatId.trim(),
+          visitor_name: visitorName.trim(),
+          phone: visitorPhone.trim() || undefined,
+          purpose: visitorPurpose.trim(),
+          photo_id: photoId,
+          guest_code: verifyCode && !verifyCode.includes('.') ? verifyCode.trim() : undefined,
+          pre_approval_credential: verifyCode.includes('.') ? verifyCode.trim() : undefined,
+        });
+        setSuccessMsg(created.status === 'APPROVED'
+          ? `Pre-approved arrival recorded for ${visitorName}.`
+          : `Arrival recorded for ${visitorName}. Resident approval requested.`);
+        await fetchEntries();
+      }
       setVisitorName('');
       setVisitorPhone('');
       setUploadedPhotoId(null);
-      fetchEntries();
+      setSelectedPhotoFile(null);
+      setTargetFlatId('');
+      setVerifyCode('');
+      setVerifyResult(null);
+      await refreshQueue();
     } catch (err: any) {
       setError(err.message || 'Failed to record visitor arrival');
     }
@@ -141,6 +257,14 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
     setError(null);
     setVerifyResult(null);
     try {
+      if (!isOnline) {
+        if (verifyCode.includes('.')) {
+          setSuccessMsg('Signed guest credential saved for server verification when this gate reconnects. The visitor remains pending until synchronization.');
+          return;
+        }
+        setError('A six-digit guest code requires a connection. The visitor can still be recorded offline, but will remain pending for resident approval.');
+        return;
+      }
       const isJwt = verifyCode.includes('.');
       const res = await api.verifyGuestCode(
         currentGate.id,
@@ -149,6 +273,8 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
       );
       setVerifyResult(res);
       if (res.valid) {
+        if (res.flat_id) setTargetFlatId(res.flat_id);
+        if (res.guest_name) setVisitorName(res.guest_name);
         setSuccessMsg(`Guest Verified: ${res.guest_name || 'Authorized'} (Remaining Uses: ${res.remaining_uses})`);
       } else {
         setError(res.message);
@@ -232,22 +358,22 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
 
         {/* Gate Selection Pills */}
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.2rem' }}>
-          {GATES.map((g) => (
+          {gates.map((g) => (
             <button
-              key={g.number}
-              onClick={() => setSelectedGateNum(g.number)}
+              key={g.id}
+              onClick={() => setSelectedGateId(g.id)}
               style={{
                 minHeight: '48px',
                 padding: '0.6rem 1.1rem',
                 borderRadius: '8px',
-                border: selectedGateNum === g.number ? '2px solid #2563EB' : `1px solid ${borderColor}`,
-                background: selectedGateNum === g.number ? (darkTheme ? '#1E3A8A' : '#EFF6FF') : cardBg,
-                color: selectedGateNum === g.number ? (darkTheme ? '#93C5FD' : '#1D4ED8') : textColor,
-                fontWeight: selectedGateNum === g.number ? 700 : 500,
+                border: selectedGateId === g.id ? '2px solid #2563EB' : `1px solid ${borderColor}`,
+                background: selectedGateId === g.id ? (darkTheme ? '#1E3A8A' : '#EFF6FF') : cardBg,
+                color: selectedGateId === g.id ? (darkTheme ? '#93C5FD' : '#1D4ED8') : textColor,
+                fontWeight: selectedGateId === g.id ? 700 : 500,
                 cursor: 'pointer',
               }}
             >
-              Gate {g.number}: {g.name}
+              Gate {g.gate_number}: {g.name}
             </button>
           ))}
         </div>
@@ -264,15 +390,27 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
           </div>
         )}
 
+        {!currentGate ? (
+          <div role="alert" style={{ padding: '1rem', borderRadius: '10px', background: '#FEF2F2', color: '#991B1B' }}>
+            No active gate assignment is available for this account. Contact the township administrator.
+          </div>
+        ) : (
+        <>
+        <div aria-live="polite" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: darkTheme ? '#1E293B' : '#E0F2FE', color: textColor }}>
+          <strong>Offline queue: {queueCount} pending</strong>
+          {queueCount > 0 && <span> · Oldest item {Math.floor(oldestQueueAge / 60000)} minutes old · {t.gate_photo_pending}</span>}
+          {syncFailure && <div role="alert" style={{ marginTop: '0.35rem', color: '#DC2626' }}>Sync issue: {syncFailure}</div>}
+          {!isOnline && <div>{t.gate_offline_approval}</div>}
+        </div>
         {/* Two-Column Grid: Quick Verification & Arrival Recording */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.2rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: '1.2rem', marginBottom: '1.5rem' }}>
           {/* Box 1: Pre-Approved Guest Pass Verifier */}
           <div style={{ background: cardBg, padding: '1.2rem', borderRadius: '10px', border: `1px solid ${borderColor}` }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginTop: 0, marginBottom: '0.8rem' }}>
               🔑 {t.verify_code}
             </h2>
             <p style={{ fontSize: '0.85rem', color: textMuted, marginTop: 0 }}>
-              Enter 6-digit resident pass code or scan offline ECDSA compact credential token.
+              Enter a resident pre-approval code while online. Offline entries remain pending until the server verifies synchronization.
             </p>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.6rem' }}>
               <input
@@ -334,7 +472,7 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
               📝 {t.record_entry}
             </h2>
             <form onSubmit={handleRecordArrival} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '0.5rem' }}>
                 <input
                   type="text"
                   placeholder="Visitor Name *"
@@ -366,7 +504,7 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '0.5rem' }}>
                 <input
                   type="text"
                   placeholder="Flat Number or ID *"
@@ -417,7 +555,7 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
                   fontSize: '0.85rem',
                   fontWeight: 500,
                 }}>
-                  📷 {uploadingPhoto ? 'Processing photo...' : uploadedPhotoId ? 'Photo Attached ✓' : 'Capture / Upload Photo'}
+                  📷 {uploadingPhoto ? 'Processing photo...' : uploadedPhotoId || selectedPhotoFile ? 'Photo Attached ✓' : 'Capture / Upload Photo'}
                   <input
                     type="file"
                     accept="image/*"
@@ -426,11 +564,14 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
                     style={{ display: 'none' }}
                   />
                 </label>
-                {uploadedPhotoId && (
-                  <span style={{ fontSize: '0.75rem', color: '#16A34A', fontWeight: 600 }}>EXIF stripped & signed</span>
+                {(uploadedPhotoId || selectedPhotoFile) && (
+                  <span style={{ fontSize: '0.75rem', color: '#16A34A', fontWeight: 600 }}>Photo selected</span>
                 )}
               </div>
 
+              <div role="note" style={{ padding: '0.7rem', borderRadius: '8px', background: darkTheme ? '#0F172A' : '#EFF6FF', color: textColor, fontSize: '0.82rem' }}>
+                {t.gate_privacy_notice}
+              </div>
               <button
                 type="submit"
                 style={{
@@ -455,7 +596,7 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
         <div style={{ background: cardBg, padding: '1.2rem', borderRadius: '10px', border: `1px solid ${borderColor}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <h2 style={{ fontSize: '1.15rem', fontWeight: 600, margin: 0 }}>
-              📋 Today's Visitors at Gate {currentGate.number} ({entries.length})
+              📋 Today's Visitors at Gate {currentGate.gate_number} ({entries.length})
             </h2>
             <button
               onClick={fetchEntries}
@@ -676,6 +817,8 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
               </div>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

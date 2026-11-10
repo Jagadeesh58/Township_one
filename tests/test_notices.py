@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from backend.app.core.database import SessionLocal
@@ -155,3 +157,98 @@ def test_draft_and_withdrawn_notices_hidden_from_residents():
         headers=resident_headers,
     )
     assert unauth_create.status_code == 403
+
+
+def test_committee_notice_management_lifecycle_and_resident_restrictions():
+    committee_client, committee_headers = get_auth_client("9876543250")
+    resident_client, resident_headers = get_auth_client("9876543210")
+
+    forbidden = resident_client.get("/api/v1/notices/manage", headers=resident_headers)
+    assert forbidden.status_code == 403
+
+    created = committee_client.post(
+        "/api/v1/notices",
+        json={
+            "title": "Committee lifecycle notice",
+            "body_en": "Maintenance work is scheduled for the clubhouse.",
+            "body_hi": "क्लब हाउस में रखरखाव का काम निर्धारित है।",
+            "body_mr": "क्लब हाऊसमध्ये देखभाल काम नियोजित आहे.",
+            "audience": "ALL",
+            "severity": "CRITICAL",
+            "status": "DRAFT",
+        },
+        headers=committee_headers,
+    )
+    assert created.status_code == 201
+    notice_id = created.json()["id"]
+
+    managed = committee_client.get("/api/v1/notices/manage?lang=mr", headers=committee_headers)
+    assert managed.status_code == 200
+    row = next(item for item in managed.json() if item["id"] == notice_id)
+    assert row["status"] == "DRAFT"
+    assert row["revision_count"] == 1
+    assert row["current_revision"]["body"] == "क्लब हाऊसमध्ये देखभाल काम नियोजित आहे."
+
+    published = committee_client.post(f"/api/v1/notices/{notice_id}/publish", headers=committee_headers)
+    assert published.status_code == 200
+    assert published.json()["status"] == "PUBLISHED"
+
+    revisions = committee_client.get(f"/api/v1/notices/{notice_id}/revisions?lang=hi", headers=committee_headers)
+    assert revisions.status_code == 200
+    assert revisions.json()[0]["body"] == "क्लब हाउस में रखरखाव का काम निर्धारित है।"
+
+    withdrawn = committee_client.post(f"/api/v1/notices/{notice_id}/withdraw", headers=committee_headers)
+    assert withdrawn.status_code == 200
+    assert withdrawn.json()["status"] == "WITHDRAWN"
+
+    republish = committee_client.post(f"/api/v1/notices/{notice_id}/publish", headers=committee_headers)
+    assert republish.status_code == 409
+
+
+def test_notice_missing_and_unavailable_revision_paths():
+    client, headers = get_auth_client("9876543210")
+
+    missing_revision = client.post("/api/v1/notices/revisions/not-a-revision/read", headers=headers)
+    assert missing_revision.status_code == 404
+
+    db = SessionLocal()
+    try:
+        notice = Notice(
+            title="Missing current revision",
+            content="Test content",
+            target_audience="ALL",
+            status="PUBLISHED",
+            published_at=datetime(2026, 11, 6, tzinfo=UTC),
+            current_revision_id="revision-that-does-not-exist",
+        )
+        db.add(notice)
+        db.commit()
+        notice_id = notice.id
+    finally:
+        db.close()
+
+    listed = client.get("/api/v1/notices", headers=headers)
+    assert listed.status_code == 200
+    assert all(item["notice_id"] != notice_id for item in listed.json())
+
+
+def test_notice_management_denies_inactive_role_assignment():
+    client, headers = get_auth_client("9876543250")
+    db = SessionLocal()
+    try:
+        from backend.app.models.entities import User, UserRoleAssignment
+
+        user = db.query(User).filter(User.phone == "9876543250").first()
+        assert user is not None
+        assignment = db.query(UserRoleAssignment).filter(
+            UserRoleAssignment.user_id == user.id,
+            UserRoleAssignment.role_code == "COMMITTEE",
+        ).first()
+        assert assignment is not None
+        assignment.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/api/v1/notices/manage", headers=headers)
+    assert response.status_code == 403

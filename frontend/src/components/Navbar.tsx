@@ -3,7 +3,7 @@ import { Language, translations } from '../i18n/translations';
 import { UserProfile } from '../api/client';
 import { NotificationBell } from './NotificationBell';
 
-export type NavTab = 'home' | 'complaints' | 'amenities' | 'accounts' | 'helpdesk' | 'guard' | 'committee';
+export type NavTab = 'home' | 'complaints' | 'amenities' | 'accounts' | 'helpdesk' | 'guard' | 'committee' | 'notices' | 'notice-management';
 
 interface NavbarProps {
   user: UserProfile | null;
@@ -115,6 +115,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                   🏊 {t.amenities}
                 </button>
                 <button
+                  onClick={() => onTabChange('notices')}
+                  style={{
+                    border: 'none',
+                    background: activeTab === 'notices' ? '#f1f5f9' : 'transparent',
+                    color: activeTab === 'notices' ? 'var(--primary)' : 'var(--text-muted)',
+                    fontWeight: activeTab === 'notices' ? 700 : 500,
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: '6px',
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📢 {t.notices}
+                </button>
+                <button
                   onClick={() => onTabChange('complaints')}
                   style={{
                     border: 'none',
@@ -201,6 +216,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
               >
                 🏛️ {t.committee_dashboard}
+              </button>
+            )}
+
+            {isCommittee && (
+              <button
+                onClick={() => onTabChange('notice-management')}
+                style={{
+                  border: 'none',
+                  background: activeTab === 'notice-management' ? '#f1f5f9' : 'transparent',
+                  color: activeTab === 'notice-management' ? 'var(--primary)' : 'var(--text-muted)',
+                  fontWeight: activeTab === 'notice-management' ? 700 : 500,
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '6px',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                }}
+              >
+                📝 {t.manage_notices}
               </button>
             )}
           </nav>

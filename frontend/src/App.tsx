@@ -10,6 +10,8 @@ import { HelpDeskQueue } from './pages/HelpDeskQueue';
 import { AmenityBookingPage } from './pages/AmenityBookingPage';
 import { GuardGateTerminal } from './pages/GuardGateTerminal';
 import { CommitteeDashboard } from './pages/CommitteeDashboard';
+import { ResidentNoticesPage } from './pages/ResidentNoticesPage';
+import { CommitteeNoticeEditor } from './pages/CommitteeNoticeEditor';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -122,6 +124,10 @@ export default function App() {
             user={user}
             lang={currentLang}
           />
+        ) : activeTab === 'notices' ? (
+          <ResidentNoticesPage user={user} lang={currentLang} />
+        ) : activeTab === 'notice-management' ? (
+          <CommitteeNoticeEditor user={user} lang={currentLang} />
         ) : activeTab === 'complaints' ? (
           <ResidentComplaints
             user={user}

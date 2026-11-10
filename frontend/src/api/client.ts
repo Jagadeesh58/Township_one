@@ -1,3 +1,4 @@
+import type { GateQueueEntry } from '../lib/gateQueue';
 // Township One - Resident API client
 // API client for resident authentication, billing summaries with multi-bill support,
 // payment checkout with idempotency and simulated outcome dispatch.
@@ -363,6 +364,13 @@ export interface AmenityClosureItem {
   created_at: string;
 }
 
+export interface ManagedNoticeItem {
+  id: string;
+  status: 'DRAFT' | 'PUBLISHED' | 'WITHDRAWN';
+  revision_count: number;
+  current_revision: NoticeRevisionItem;
+}
+
 export interface NoticeRevisionItem {
   id: string;
   notice_id: string;
@@ -462,9 +470,10 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
     }
   }
 
-  const resolvedUrl = (typeof url === 'string' && url.startsWith('/') && (typeof window === 'undefined' || !window.location.origin || window.location.origin === 'null'))
-    ? `http://localhost:8000${url}`
-    : url;
+  const baseOrigin = typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
+    ? window.location.origin
+    : 'http://localhost:8000';
+  const resolvedUrl = new URL(url, baseOrigin).toString();
 
   return fetch(resolvedUrl, {
     ...options,
@@ -821,6 +830,12 @@ export const api = {
   },
 
   // Visitors & Gates
+  async listGateOptions(): Promise<Array<{ id: string; gate_number: number; name: string; description?: string }>> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/gates`);
+    if (!res.ok) throw new Error('Failed to load authorized gates');
+    return res.json();
+  },
+
   async listVisitorEntries(gateId?: string, flatId?: string, statusFilter?: string): Promise<VisitorEntryItem[]> {
     const params = new URLSearchParams();
     if (gateId) params.append('gate_id', gateId);
@@ -839,6 +854,8 @@ export const api = {
     phone?: string;
     purpose: string;
     photo_id?: string;
+    guest_code?: string;
+    pre_approval_credential?: string;
     client_event_id?: string;
   }): Promise<VisitorEntryItem> {
     const res = await fetchWithAuth(`${API_BASE}/visitors/entries`, {
@@ -901,10 +918,10 @@ export const api = {
     return res.json();
   },
 
-  async uploadVisitorPhoto(file: File): Promise<{ photo_id: string; sha256: string; retention_expires_at: string }> {
+  async uploadVisitorPhoto(file: File, gateId: string): Promise<{ photo_id: string; sha256: string; retention_expires_at: string }> {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetchWithAuth(`${API_BASE}/visitors/photo/upload`, {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/photo/upload?gate_id=${encodeURIComponent(gateId)}`, {
       method: 'POST',
       body: formData,
     });
@@ -963,19 +980,69 @@ export const api = {
     return res.json();
   },
 
-  async getGateTimeAnchor(): Promise<{ server_time_utc: string; timestamp_unix: number; validity_window_seconds: number }> {
-    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/time-anchor`);
-    if (!res.ok) throw new Error('Failed to fetch gate time anchor');
+  async enrollGateDevice(gateId: string, identity: { deviceId: string; generationId: string }): Promise<{
+    device_id: string; generation_id: string; gate_id: string; last_sequence: number; is_active: boolean;
+  }> {
+    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/devices/enroll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: identity.deviceId, generation_id: identity.generationId, gate_id: gateId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to enroll gate device');
+    }
     return res.json();
   },
 
-  async syncOfflineGate(gateId: string, events: any[]): Promise<{ processed_count: number; acknowledged_ids: string[]; conflicts: any[] }> {
-    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gate_id: gateId, events }),
-    });
-    if (!res.ok) throw new Error('Failed to sync offline gate queue');
+  async getGateTimeAnchor(gateId: string, deviceId: string, generationId: string): Promise<{
+    payload: {
+      user_id: string;
+      gate_id: string;
+      device_id: string;
+      device_generation_id: string;
+      server_time_utc: string;
+      timestamp_unix: number;
+      valid_until_unix: number;
+    };
+    signature: string;
+    algorithm: 'ECDSA_P256_SHA256';
+  }> {
+    const params = new URLSearchParams({ gate_id: gateId, device_id: deviceId, generation_id: generationId });
+    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/time-anchor?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch signed gate time anchor');
+    return res.json();
+  },
+
+  async syncOfflineGate(entry: GateQueueEntry): Promise<{ processed_count: number; acknowledged_ids: string[]; conflicts: any[] }> {
+    if (!entry.photoBlob) throw new Error('Offline visitor photograph is missing or expired.');
+    if (Date.now() - new Date(entry.captureTime).getTime() >= 90 * 24 * 60 * 60 * 1000) {
+      throw new Error('Offline visitor photograph exceeded the 90-day retention limit.');
+    }
+    const form = new FormData();
+    form.append('metadata', JSON.stringify({
+      client_event_id: entry.eventUuid,
+      photo_uuid: entry.photoUuid,
+      gate_id: entry.gateId,
+      flat_id: entry.flatId,
+      visitor_name: entry.visitorName,
+      phone: entry.phone,
+      purpose: entry.purpose,
+      capture_time: entry.captureTime,
+      photo_sha256: entry.sha256,
+      device_id: entry.deviceId,
+      device_generation_id: entry.deviceGenerationId,
+      device_sequence: entry.deviceSequence,
+      time_anchor_payload: entry.timeAnchor.payload,
+      time_anchor_signature: entry.timeAnchor.signature,
+      pre_approval_credential: entry.preApprovalCredential,
+    }));
+    form.append('photo', entry.photoBlob, `${entry.photoUuid}.jpg`);
+    const res = await fetchWithAuth(`${API_BASE}/visitors/gate/sync`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to synchronize offline gate event');
+    }
     return res.json();
   },
 
@@ -1049,6 +1116,24 @@ export const api = {
   },
 
   // Notices
+  async listManagedNotices(lang: string = 'en'): Promise<ManagedNoticeItem[]> {
+    const res = await fetchWithAuth(`${API_BASE}/notices/manage?lang=${encodeURIComponent(lang)}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to fetch committee notices');
+    }
+    return res.json();
+  },
+
+  async publishNotice(noticeId: string): Promise<{ id: string; status: string; published_at?: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/notices/${noticeId}/publish`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to publish notice');
+    }
+    return res.json();
+  },
+
   async listActiveNotices(lang: string = 'en', towerId?: string): Promise<NoticeRevisionItem[]> {
     const params = new URLSearchParams();
     if (lang) params.append('lang', lang);
@@ -1073,7 +1158,9 @@ export const api = {
     audience?: string;
     tower_id?: string;
     severity?: string;
+    publish_at?: string;
     expires_at?: string;
+    status?: 'DRAFT' | 'PUBLISHED';
   }) {
     const res = await fetchWithAuth(`${API_BASE}/notices`, {
       method: 'POST',
@@ -1095,6 +1182,7 @@ export const api = {
     audience?: string;
     tower_id?: string;
     severity?: string;
+    publish_at?: string;
     expires_at?: string;
   }) {
     const res = await fetchWithAuth(`${API_BASE}/notices/${noticeId}/revisions`, {

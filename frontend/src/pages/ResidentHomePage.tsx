@@ -23,7 +23,7 @@ interface ResidentHomePageProps {
   user: UserProfile;
   selectedFlatId: string;
   lang: Language;
-  onNavigateTab?: (tab: 'home' | 'complaints' | 'accounts' | 'helpdesk' | 'amenities' | 'guard' | 'committee') => void;
+  onNavigateTab?: (tab: 'home' | 'complaints' | 'accounts' | 'helpdesk' | 'amenities' | 'guard' | 'committee' | 'notices' | 'notice-management') => void;
 }
 
 export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
@@ -147,7 +147,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
     setIsSubmittingPass(true);
     setGuestPassError(null);
 
-    const now = new Date('2026-11-06T08:00:00Z');
+    const now = new Date();
     const validUntil = new Date(now.getTime() + validDays * 24 * 60 * 60 * 1000);
 
     try {
@@ -158,7 +158,6 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
         purpose: guestPurpose,
         valid_from: now.toISOString(),
         valid_until: validUntil.toISOString(),
-        gate_id: 'gate-1',
         max_uses: 1,
       });
       setCreatedPass(pass);

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,6 +14,7 @@ class NoticeCreate(BaseModel):
     severity: str = "NORMAL"  # NORMAL, CRITICAL
     publish_at: datetime | None = None
     expires_at: datetime | None = None
+    status: Literal["DRAFT", "PUBLISHED"] = "PUBLISHED"
 
 
 class NoticeRevisionResponse(BaseModel):

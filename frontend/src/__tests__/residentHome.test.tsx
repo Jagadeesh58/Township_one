@@ -103,6 +103,21 @@ describe('ResidentHomePage UI Integration & State Transitions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(api, 'listVisitorEntries').mockResolvedValue([]);
+    vi.spyOn(api, 'listActiveNotices').mockResolvedValue([{
+      id: 'notice-water-cleaning-revision',
+      notice_id: 'notice-water-cleaning',
+      revision_number: 1,
+      title: 'Mandatory Water Tank Cleaning',
+      body: 'Water tank cleaning is scheduled for the community.',
+      body_en: 'Water tank cleaning is scheduled for the community.',
+      is_fallback_language: false,
+      publish_at: '2026-11-06T08:00:00Z',
+      audience: 'ALL',
+      severity: 'NORMAL',
+      created_at: '2026-11-06T07:00:00Z',
+      is_read: false,
+    }]);
   });
 
   it('renders dues, open complaints, today visitors, and broadcast notice', async () => {
