@@ -2,6 +2,7 @@ import json
 import time
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.core.database import SessionLocal
@@ -26,9 +27,9 @@ def get_auth_client(phone: str) -> tuple[TestClient, dict]:
     return client, headers
 
 
-def test_online_guest_code_verification_and_usage_decrement():
-    resident_client, resident_headers = get_auth_client("9876543210")  # Neeraj (T07-1203)
-    guard_client, guard_headers = get_auth_client("9876543230")  # Guard
+def test_online_guest_code_preview_does_not_consume_until_arrival():
+    resident_client, resident_headers = get_auth_client("9876543210")
+    guard_client, guard_headers = get_auth_client("9876543230")
 
     db = SessionLocal()
     flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
@@ -54,41 +55,52 @@ def test_online_guest_code_verification_and_usage_decrement():
     pre_app_data = create_res.json()
     raw_code = pre_app_data["code"]
     pre_app_id = pre_app_data["id"]
-    assert raw_code is not None
-    assert len(raw_code) == 6
+    assert raw_code is not None and len(raw_code) == 6
 
-    # 1. First verification at Gate 1 -> valid, remaining uses = 1
-    v1_res = guard_client.post(
+    # Preview is non-consuming; arrival creation consumes exactly one use.
+    preview = guard_client.post(
         "/api/v1/visitors/guest-code/verify",
         json={"gate_id": gate1.id, "code": raw_code},
         headers=guard_headers,
     )
-    assert v1_res.status_code == 200
-    v1_data = v1_res.json()
-    assert v1_data["valid"] is True
-    assert v1_data["remaining_uses"] == 1
+    assert preview.status_code == 200
+    assert preview.json()["valid"] is True
+    assert preview.json()["remaining_uses"] == 2
 
-    # 2. Second verification at Gate 1 -> valid, remaining uses = 0
-    v2_res = guard_client.post(
-        "/api/v1/visitors/guest-code/verify",
-        json={"gate_id": gate1.id, "code": raw_code},
+    for expected_remaining in (1, 0):
+        arrival = guard_client.post(
+            "/api/v1/visitors/entries",
+            json={
+                "gate_id": gate1.id,
+                "flat_id": flat.id,
+                "visitor_name": "Karan Malhotra",
+                "purpose": "Dinner Guest",
+                "guest_code": raw_code,
+            },
+            headers=guard_headers,
+        )
+        assert arrival.status_code == 201
+        assert arrival.json()["status"] == "APPROVED"
+        assert arrival.json()["pre_approval_id"] == pre_app_id
+
+        db = SessionLocal()
+        stored = db.query(PreApproval).filter(PreApproval.id == pre_app_id).one()
+        assert stored.used_count == 2 - expected_remaining
+        db.close()
+
+    exhausted = guard_client.post(
+        "/api/v1/visitors/entries",
+        json={
+            "gate_id": gate1.id,
+            "flat_id": flat.id,
+            "visitor_name": "Karan Malhotra",
+            "purpose": "Dinner Guest",
+            "guest_code": raw_code,
+        },
         headers=guard_headers,
     )
-    assert v2_res.status_code == 200
-    v2_data = v2_res.json()
-    assert v2_data["valid"] is True
-    assert v2_data["remaining_uses"] == 0
-
-    # 3. Third verification -> rejected (limit reached)
-    v3_res = guard_client.post(
-        "/api/v1/visitors/guest-code/verify",
-        json={"gate_id": gate1.id, "code": raw_code},
-        headers=guard_headers,
-    )
-    assert v3_res.status_code == 200
-    v3_data = v3_res.json()
-    assert v3_data["valid"] is False
-    assert "maximum allowed uses" in v3_data["message"]
+    assert exhausted.status_code == 422
+    assert "maximum allowed uses" in exhausted.json()["detail"]
 
 
 def test_offline_ecdsa_credential_verification_and_tamper_rejection():
@@ -135,9 +147,8 @@ def test_offline_ecdsa_credential_verification_and_tamper_rejection():
         json={"gate_id": gate2.id, "credential_jwt": cred_jwt},
         headers=guard_headers,
     )
-    assert v_wrong_gate.status_code == 200
-    assert v_wrong_gate.json()["valid"] is False
-    assert "restricted to gate" in v_wrong_gate.json()["message"]
+    assert v_wrong_gate.status_code == 403
+    assert "not assigned to the requested gate" in v_wrong_gate.json()["detail"]
 
     # 3. Tampered payload -> cryptographic verification failure
     payload_hex, sig_hex = cred_jwt.split(".")
@@ -158,69 +169,73 @@ def test_offline_ecdsa_credential_verification_and_tamper_rejection():
 
 def test_gate_public_key_and_time_anchor_endpoints():
     guard_client, guard_headers = get_auth_client("9876543230")
+    db = SessionLocal()
+    gate = db.query(Gate).filter(Gate.gate_number == 1).first()
+    db.close()
+    device_id = "device-test-0000000001"
+    generation_id = "generation-test-000001"
 
-    # 1. Public key endpoint
-    pk_res = guard_client.get("/api/v1/visitors/gate/public-key")
+    pk_res = guard_client.get("/api/v1/visitors/gate/public-key", headers=guard_headers)
     assert pk_res.status_code == 200
     pk_data = pk_res.json()
     assert pk_data["algorithm"] == "ECDSA_P256_SHA256"
     assert "BEGIN PUBLIC KEY" in pk_data["public_key_pem"]
     assert "offline_notice" in pk_data
 
-    # 2. Time anchor endpoint
-    ta_res = guard_client.get("/api/v1/visitors/gate/time-anchor")
+    enroll_res = guard_client.post(
+        "/api/v1/visitors/gate/devices/enroll",
+        json={"device_id": device_id, "generation_id": generation_id, "gate_id": gate.id},
+        headers=guard_headers,
+    )
+    assert enroll_res.status_code == 200
+    assert enroll_res.json()["last_sequence"] == 0
+
+    ta_res = guard_client.get(
+        "/api/v1/visitors/gate/time-anchor",
+        params={"gate_id": gate.id, "device_id": device_id, "generation_id": generation_id},
+        headers=guard_headers,
+    )
     assert ta_res.status_code == 200
     ta_data = ta_res.json()
-    assert "server_time_utc" in ta_data
-    assert ta_data["validity_window_seconds"] == 86400
+    assert ta_data["payload"]["gate_id"] == gate.id
+    assert ta_data["payload"]["device_id"] == device_id
+    assert ta_data["payload"]["device_generation_id"] == generation_id
+    assert ta_data["payload"]["valid_until_unix"] - ta_data["payload"]["timestamp_unix"] == 86400
 
 
-def test_offline_sync_deduplication_and_conflict_flagging():
-    guard_client, guard_headers = get_auth_client("9876543230")
+def test_guest_signing_key_survives_service_cache_reload(monkeypatch):
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from backend.app.core.config import settings
+    from backend.app.services import visitor_service
 
-    db = SessionLocal()
-    flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
-    gate1 = db.query(Gate).filter(Gate.gate_number == 1).first()
-    pre_app = db.query(PreApproval).filter(PreApproval.flat_id == flat.id).first()
-    db.close()
+    key_one = ec.generate_private_key(ec.SECP256R1())
+    pem_one = key_one.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode("utf-8")
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+    monkeypatch.setattr(settings, "SIGNING_KEY", pem_one)
+    monkeypatch.setattr(settings, "SIGNING_KEY_FILE", "")
+    visitor_service._ECDSA_PRIVATE_KEY = None
+    payload = b"persistent-guest-credential"
+    signature = visitor_service.get_ecdsa_private_key().sign(payload, ec.ECDSA(hashes.SHA256()))
 
-    client_event_id = f"evt_offline_{int(time.time() * 1000)}"
-    sync_payload = {
-        "gate_id": gate1.id,
-        "events": [
-            {
-                "client_event_id": client_event_id,
-                "gate_id": gate1.id,
-                "flat_id": flat.id,
-                "visitor_name": "Offline Arrival 1",
-                "phone": "9812300001",
-                "purpose": "Maintenance",
-                "pre_approval_id": pre_app.id if pre_app else None,
-                "capture_time": datetime.now(UTC).isoformat(),
-            }
-        ],
-    }
+    visitor_service._ECDSA_PRIVATE_KEY = None
+    reloaded_key = visitor_service.get_ecdsa_private_key()
+    reloaded_key.public_key().verify(signature, payload, ec.ECDSA(hashes.SHA256()))
 
-    # 1. First sync ingest
-    sync1 = guard_client.post(
-        "/api/v1/visitors/gate/sync",
-        json=sync_payload,
-        headers=guard_headers,
-    )
-    assert sync1.status_code == 200
-    assert client_event_id in sync1.json()["acknowledged_ids"]
-
-    # 2. Re-submitting the same client_event_id is deduplicated
-    sync2 = guard_client.post(
-        "/api/v1/visitors/gate/sync",
-        json=sync_payload,
-        headers=guard_headers,
-    )
-    assert sync2.status_code == 200
-    assert client_event_id in sync2.json()["acknowledged_ids"]
-
-    # Verify database has exactly 1 entry for this client_event_id
-    db = SessionLocal()
-    count = db.query(VisitorEntry).filter(VisitorEntry.client_event_id == client_event_id).count()
-    db.close()
-    assert count == 1
+    key_two = ec.generate_private_key(ec.SECP256R1())
+    pem_two = key_two.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode("utf-8")
+    monkeypatch.setattr(settings, "SIGNING_KEY", pem_two)
+    visitor_service._ECDSA_PRIVATE_KEY = None
+    with pytest.raises(Exception):
+        visitor_service.get_ecdsa_private_key().public_key().verify(
+            signature, payload, ec.ECDSA(hashes.SHA256())
+        )
+    visitor_service._ECDSA_PRIVATE_KEY = None

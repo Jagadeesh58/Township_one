@@ -1,6 +1,9 @@
+import hashlib
 import io
+import json
 import os
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -11,10 +14,12 @@ from backend.app.models.entities import (
     AuditEvent,
     Flat,
     Gate,
+    GateDevice,
     OTPChallenge,
     VisitorEntry,
     VisitorPhoto,
 )
+from backend.app.services.storage import delete_private_object, private_object_exists
 from backend.app.services.visitor_service import (
     get_storage_path,
     purge_visitor_photos,
@@ -275,10 +280,14 @@ def test_guard_gate_scoping_and_resident_scoping():
 
 def test_photo_upload_validation_exif_stripping_and_streaming():
     guard_client, guard_headers = get_auth_client("9876543230")
+    db = SessionLocal()
+    gate = db.query(Gate).filter(Gate.gate_number == 1).first()
+    gate_id = gate.id
+    db.close()
 
     # 1. Invalid non-image upload -> 400 Bad Request
     invalid_res = guard_client.post(
-        "/api/v1/visitors/photo/upload",
+        f"/api/v1/visitors/photo/upload?gate_id={gate_id}",
         files={"file": ("malicious.txt", b"plain text is not an image", "text/plain")},
         headers=guard_headers,
     )
@@ -287,7 +296,7 @@ def test_photo_upload_validation_exif_stripping_and_streaming():
     # 2. Valid JPEG upload -> 200 OK with photo_id and 90-day retention metadata
     jpeg_data = create_jpeg_bytes(width=300, height=300)
     upload_res = guard_client.post(
-        "/api/v1/visitors/photo/upload",
+        f"/api/v1/visitors/photo/upload?gate_id={gate_id}",
         files={"file": ("visitor.jpg", jpeg_data, "image/jpeg")},
         headers=guard_headers,
     )
@@ -380,6 +389,53 @@ def test_photo_retention_purge_job_deletes_files_and_is_idempotent():
     assert second_run == 0
 
 
+
+def test_photo_retention_failure_preserves_storage_reference_for_retry(monkeypatch):
+    db = SessionLocal()
+    storage_dir = Path(get_storage_path())
+    dummy_file = storage_dir / "purge_failure_retry_photo.jpg"
+    dummy_file.write_bytes(create_jpeg_bytes())
+    expired_time = datetime.now(UTC) - timedelta(days=1)
+    photo = VisitorPhoto(
+        storage_key=str(dummy_file),
+        sha256=hashlib.sha256(dummy_file.read_bytes()).hexdigest(),
+        capture_time=expired_time - timedelta(days=90),
+        content_type="image/jpeg",
+        size=dummy_file.stat().st_size,
+        retention_expires_at=expired_time,
+    )
+    db.add(photo)
+    db.commit()
+    photo_id = photo.id
+    db.close()
+
+    original_unlink = Path.unlink
+
+    def fail_for_target(path: Path, *args, **kwargs):
+        if path == dummy_file:
+            raise OSError("simulated storage permission failure")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_for_target)
+    assert purge_visitor_photos(as_of=datetime.now(UTC)) == 0
+    assert dummy_file.exists()
+
+    db = SessionLocal()
+    retained = db.query(VisitorPhoto).filter(VisitorPhoto.id == photo_id).one()
+    assert retained.storage_key == str(dummy_file)
+    assert retained.deleted_at is None
+    db.close()
+
+    monkeypatch.setattr(Path, "unlink", original_unlink)
+    assert purge_visitor_photos(as_of=datetime.now(UTC)) == 1
+    assert not dummy_file.exists()
+
+    db = SessionLocal()
+    deleted = db.query(VisitorPhoto).filter(VisitorPhoto.id == photo_id).one()
+    assert deleted.storage_key is None
+    assert deleted.deleted_at is not None
+    db.close()
+
 def test_guard_cannot_access_billing_complaints_or_bank_endpoints():
     guard_client, guard_headers = get_auth_client("9876543230")
 
@@ -430,7 +486,7 @@ def test_guard_cross_gate_scope_authorization_denied():
     # 1. Guard cannot query Gate 2 entries
     list_res = guard_client.get(f"/api/v1/visitors/entries?gate_id={gate2_id}", headers=guard_headers)
     assert list_res.status_code == 403
-    assert "cannot perform operations on gate" in list_res.json()["detail"]
+    assert "not assigned to the requested gate" in list_res.json()["detail"]
 
     # 2. Guard cannot create visitor entry for Gate 2
     create_res = guard_client.post(
@@ -445,14 +501,137 @@ def test_guard_cross_gate_scope_authorization_denied():
         headers=guard_headers,
     )
     assert create_res.status_code == 403
-    assert "cannot perform operations on gate" in create_res.json()["detail"]
+    assert "not assigned to the requested gate" in create_res.json()["detail"]
 
     # 3. Guard cannot admit visitor at Gate 2
     admit_res = guard_client.post(f"/api/v1/visitors/{entry_gate2_id}/admit", headers=guard_headers)
     assert admit_res.status_code == 403
-    assert "cannot perform operations on gate" in admit_res.json()["detail"]
+    assert "not assigned to the requested gate" in admit_res.json()["detail"]
 
     # 4. Guard cannot exit visitor at Gate 2
     exit_res = guard_client.post(f"/api/v1/visitors/{entry_gate2_id}/exit", headers=guard_headers)
     assert exit_res.status_code == 403
-    assert "cannot perform operations on gate" in exit_res.json()["detail"]
+    assert "not assigned to the requested gate" in exit_res.json()["detail"]
+
+
+def test_offline_sync_requires_photo_and_is_idempotent():
+    from uuid import uuid4
+
+    guard_client, guard_headers = get_auth_client("9876543230")
+    db = SessionLocal()
+    flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
+    gate = db.query(Gate).filter(Gate.gate_number == 1).first()
+    db.close()
+
+    device_id = str(uuid4())
+    generation_id = str(uuid4())
+    enroll_response = guard_client.post(
+        "/api/v1/visitors/gate/devices/enroll",
+        json={"device_id": device_id, "generation_id": generation_id, "gate_id": gate.id},
+        headers=guard_headers,
+    )
+    assert enroll_response.status_code == 200
+
+    anchor_response = guard_client.get(
+        "/api/v1/visitors/gate/time-anchor",
+        params={"gate_id": gate.id, "device_id": device_id, "generation_id": generation_id},
+        headers=guard_headers,
+    )
+    assert anchor_response.status_code == 200
+    anchor = anchor_response.json()
+    event_id = str(uuid4())
+    photo_uuid = str(uuid4())
+    photo_bytes = create_jpeg_bytes()
+    metadata = {
+        "client_event_id": event_id,
+        "photo_uuid": photo_uuid,
+        "gate_id": gate.id,
+        "flat_id": flat.id,
+        "visitor_name": "Offline Arrival Test",
+        "phone": "9812300001",
+        "purpose": "Maintenance",
+        "capture_time": anchor["payload"]["server_time_utc"],
+        "photo_sha256": hashlib.sha256(photo_bytes).hexdigest(),
+        "device_id": device_id,
+        "device_generation_id": generation_id,
+        "device_sequence": 1,
+        "time_anchor_payload": anchor["payload"],
+        "time_anchor_signature": anchor["signature"],
+        "pre_approval_credential": None,
+    }
+    payload = {"metadata": json.dumps(metadata)}
+    photo_file = {"photo": ("visitor.jpg", photo_bytes, "image/jpeg")}
+    first = guard_client.post(
+        "/api/v1/visitors/gate/sync", data=payload, files=photo_file, headers=guard_headers
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["processed_count"] == 1
+    assert event_id in first.json()["acknowledged_ids"]
+
+    repeated = guard_client.post(
+        "/api/v1/visitors/gate/sync", data=payload, files=photo_file, headers=guard_headers
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["processed_count"] == 0
+    assert event_id in repeated.json()["acknowledged_ids"]
+
+    db = SessionLocal()
+    saved_photo = None
+    try:
+        entry = db.query(VisitorEntry).filter(VisitorEntry.client_event_id == event_id).one()
+        saved_photo = db.query(VisitorPhoto).filter(VisitorPhoto.id == entry.photo_id).one()
+        device = db.query(GateDevice).filter(GateDevice.device_id == device_id).one()
+        assert entry.status == "AWAITING_APPROVAL"
+        assert saved_photo.client_photo_id == photo_uuid
+        assert saved_photo.storage_key and private_object_exists(saved_photo.storage_key)
+        assert device.last_sequence == 1
+        assert db.query(VisitorEntry).filter(VisitorEntry.device_id == device_id).count() == 1
+    finally:
+        if saved_photo and saved_photo.storage_key:
+            delete_private_object(saved_photo.storage_key)
+        db.close()
+
+
+def test_offline_sync_rejects_wrong_photo_hash():
+    from uuid import uuid4
+
+    guard_client, guard_headers = get_auth_client("9876543230")
+    db = SessionLocal()
+    flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
+    gate = db.query(Gate).filter(Gate.gate_number == 1).first()
+    db.close()
+    device_id, generation_id = str(uuid4()), str(uuid4())
+    assert guard_client.post(
+        "/api/v1/visitors/gate/devices/enroll",
+        json={"device_id": device_id, "generation_id": generation_id, "gate_id": gate.id},
+        headers=guard_headers,
+    ).status_code == 200
+    anchor = guard_client.get(
+        "/api/v1/visitors/gate/time-anchor",
+        params={"gate_id": gate.id, "device_id": device_id, "generation_id": generation_id},
+        headers=guard_headers,
+    ).json()
+    photo_bytes = create_jpeg_bytes()
+    metadata = {
+        "client_event_id": str(uuid4()), "photo_uuid": str(uuid4()),
+        "gate_id": gate.id, "flat_id": flat.id, "visitor_name": "Hash Mismatch",
+        "purpose": "Delivery", "capture_time": anchor["payload"]["server_time_utc"],
+        "photo_sha256": "0" * 64, "device_id": device_id,
+        "device_generation_id": generation_id, "device_sequence": 1,
+        "time_anchor_payload": anchor["payload"], "time_anchor_signature": anchor["signature"],
+    }
+    response = guard_client.post(
+        "/api/v1/visitors/gate/sync",
+        data={"metadata": json.dumps(metadata)},
+        files={"photo": ("visitor.jpg", photo_bytes, "image/jpeg")},
+        headers=guard_headers,
+    )
+    assert response.status_code == 422
+    assert "SHA-256" in response.json()["detail"]
+    db = SessionLocal()
+    try:
+        assert db.query(VisitorEntry).filter(VisitorEntry.device_id == device_id).count() == 0
+        device = db.query(GateDevice).filter(GateDevice.device_id == device_id).one()
+        assert device.last_sequence == 0
+    finally:
+        db.close()

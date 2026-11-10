@@ -22,6 +22,8 @@ class VisitorEntryCreate(BaseModel):
     phone: str | None = Field(None, max_length=20)
     purpose: str = Field(..., min_length=2, max_length=100)
     photo_id: str | None = None
+    guest_code: str | None = Field(None, min_length=6, max_length=6)
+    pre_approval_credential: str | None = Field(None, min_length=32, max_length=4096)
     client_event_id: str | None = None
     source: str = "ONLINE"
 
@@ -106,20 +108,36 @@ class GuestCodeVerifyResponse(BaseModel):
     conflict_flagged: bool = False
 
 
+class GateDeviceEnrollmentRequest(BaseModel):
+    device_id: str = Field(..., min_length=16, max_length=64)
+    generation_id: str = Field(..., min_length=16, max_length=64)
+    gate_id: str
+
+
+class GateDeviceEnrollmentResponse(BaseModel):
+    device_id: str
+    generation_id: str
+    gate_id: str
+    last_sequence: int
+    is_active: bool
+
+
 class OfflineSyncItem(BaseModel):
-    client_event_id: str
+    client_event_id: str = Field(..., min_length=16, max_length=64)
+    photo_uuid: str = Field(..., min_length=16, max_length=64)
     gate_id: str
     flat_id: str
-    visitor_name: str
-    phone: str | None = None
-    purpose: str
+    visitor_name: str = Field(..., min_length=2, max_length=100)
+    phone: str | None = Field(None, max_length=20)
+    purpose: str = Field(..., min_length=2, max_length=100)
     capture_time: datetime
-    photo_sha256: str | None = None
-    pre_approval_id: str | None = None
-
-
-class OfflineSyncRequest(BaseModel):
-    events: list[OfflineSyncItem]
+    photo_sha256: str = Field(..., pattern=r"^[a-fA-F0-9]{64}$")
+    device_id: str = Field(..., min_length=16, max_length=64)
+    device_generation_id: str = Field(..., min_length=16, max_length=64)
+    device_sequence: int = Field(..., ge=1)
+    time_anchor_payload: dict[str, str | int]
+    time_anchor_signature: str = Field(..., min_length=16)
+    pre_approval_credential: str | None = None
 
 
 class OfflineSyncResponse(BaseModel):
