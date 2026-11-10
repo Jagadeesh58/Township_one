@@ -10,6 +10,7 @@ Uses standard csv module and scikit-learn without requiring pandas.
 import csv
 import os
 import sys
+
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
@@ -18,11 +19,11 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from backend.app.ml.classifier import (
-    build_pipeline,
+from backend.app.ml.classifier import (  # noqa: E402
+    DEFAULT_DATA_PATH,
     VALID_CATEGORIES,
     VALID_URGENCIES,
-    DEFAULT_DATA_PATH,
+    build_pipeline,
 )
 
 DATASET_VERSION = "complaints_v1.csv (v1.0)"
@@ -49,14 +50,14 @@ def evaluate():
         print(f"ERROR: Dataset file not found at {DEFAULT_DATA_PATH}")
         sys.exit(1)
 
-    with open(DEFAULT_DATA_PATH, "r", encoding="utf-8") as f:
+    with open(DEFAULT_DATA_PATH, encoding="utf-8") as f:
         records = list(csv.DictReader(f))
 
     total_records = len(records)
     unique_families = len(set(r["incident_family"] for r in records))
     print(f"Total labeled records: {total_records}")
     print(f"Unique incident families: {unique_families}")
-    print(f"Grouping strategy: GroupShuffleSplit on 'incident_family'")
+    print("Grouping strategy: GroupShuffleSplit on 'incident_family'")
 
     # Balanced category-stratified incident family grouping (zero leakage across train/test)
     # Selects 1 test family per category to ensure every category is evaluated on unseen families
@@ -110,14 +111,7 @@ def evaluate():
     for i, cat_name in enumerate(VALID_CATEGORIES):
         supp = int(cat_supp[i])
         tag = format_support_tag(supp)
-        print(col_fmt.format(
-            cat_name,
-            f"{cat_prec[i]:.4f}",
-            f"{cat_rec[i]:.4f}",
-            f"{cat_f1[i]:.4f}",
-            supp,
-            tag
-        ))
+        print(col_fmt.format(cat_name, f"{cat_prec[i]:.4f}", f"{cat_rec[i]:.4f}", f"{cat_f1[i]:.4f}", supp, tag))
 
     cat_acc = accuracy_score(y_cat_test, cat_preds)
     cat_macro_f1 = np.mean(cat_f1)
@@ -139,14 +133,7 @@ def evaluate():
     for i, urg_name in enumerate(VALID_URGENCIES):
         supp = int(urg_supp[i])
         tag = format_support_tag(supp)
-        print(col_fmt.format(
-            urg_name,
-            f"{urg_prec[i]:.4f}",
-            f"{urg_rec[i]:.4f}",
-            f"{urg_f1[i]:.4f}",
-            supp,
-            tag
-        ))
+        print(col_fmt.format(urg_name, f"{urg_prec[i]:.4f}", f"{urg_rec[i]:.4f}", f"{urg_f1[i]:.4f}", supp, tag))
 
     urg_acc = accuracy_score(y_urg_test, urg_preds)
     urg_macro_f1 = np.mean(urg_f1)
@@ -159,11 +146,15 @@ def evaluate():
     # -------------------------------------------------------------------------
     print_table_header("Per-Language Performance Breakdown (Held-out Test Partition)")
     lang_col_fmt = "{:<12} {:>10} {:>16} {:>16}  {:<30}"
-    print(lang_col_fmt.format("Language", "Support", "Category Accuracy", "Urgency Accuracy", "Support Reliability Status"))
+    print(
+        lang_col_fmt.format(
+            "Language", "Support", "Category Accuracy", "Urgency Accuracy", "Support Reliability Status"
+        )
+    )
     print("-" * 90)
 
     languages = ["en", "hi", "mr"]
-    for r, cp, up in zip(test_records, cat_preds, urg_preds):
+    for r, cp, up in zip(test_records, cat_preds, urg_preds, strict=True):
         r["cat_pred"] = cp
         r["urg_pred"] = up
 
@@ -178,13 +169,15 @@ def evaluate():
             lang_cat_acc = accuracy_score(y_c, y_cp)
             lang_urg_acc = accuracy_score(y_u, y_up)
             tag = format_support_tag(supp)
-            print(lang_col_fmt.format(
-                lang,
-                supp,
-                f"{lang_cat_acc:.4f} ({lang_cat_acc * 100:.1f}%)",
-                f"{lang_urg_acc:.4f} ({lang_urg_acc * 100:.1f}%)",
-                tag
-            ))
+            print(
+                lang_col_fmt.format(
+                    lang,
+                    supp,
+                    f"{lang_cat_acc:.4f} ({lang_cat_acc * 100:.1f}%)",
+                    f"{lang_urg_acc:.4f} ({lang_urg_acc * 100:.1f}%)",
+                    tag,
+                )
+            )
         else:
             print(lang_col_fmt.format(lang, 0, "N/A", "N/A", "[NO DATA]"))
 

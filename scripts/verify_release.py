@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -145,12 +144,15 @@ def check_database_and_seed() -> dict[str, Any]:
                 if overdue is None:
                     due_date = getattr(bill, "due_date", None)
                     from datetime import date
+
                     reference = date(2026, 11, 6)
-                    overdue = max((reference - due_date.date()).days, 0) if hasattr(due_date, "date") else max((reference - due_date).days, 0)
-                if overdue != expected_overdue:
-                    raise AssertionError(
-                        f"{flat_number} overdue expected {expected_overdue}, got {overdue}"
+                    overdue = (
+                        max((reference - due_date.date()).days, 0)
+                        if hasattr(due_date, "date")
+                        else max((reference - due_date).days, 0)
                     )
+                if overdue != expected_overdue:
+                    raise AssertionError(f"{flat_number} overdue expected {expected_overdue}, got {overdue}")
                 balances[flat_number] = {
                     "outstanding": f"{bill.balance_amount:.2f}",
                     "overdue_days": int(overdue),
@@ -240,7 +242,7 @@ def frontend_blocked(reason: str) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify Township One using measured commands.")
-    parser.add_argument("--command-timeout", type=int, default=180)
+    parser.add_argument("--command-timeout", type=int, default=600)
     parser.add_argument("--database-check-worker", action="store_true")
     parser.add_argument("--skip-coverage", action="store_true", help="Explicitly mark the coverage gate as unverified.")
     args = parser.parse_args()
@@ -264,11 +266,24 @@ def main() -> int:
     pg_test_url = (os.environ.get("PG_DATABASE_URL") or os.environ.get("TEST_DATABASE_URL") or "").strip()
     pg_migration_url = os.environ.get("PG_MIGRATION_DATABASE_URL", "").strip()
     if not pg_migration_url.startswith(("postgresql://", "postgresql+")):
-        gates.append(("postgresql_migrations", {
-            "status": "BLOCKED", "returncode": None, "duration_seconds": 0,
-            "command": ["alembic upgrade head", "alembic check", "alembic downgrade base", "alembic upgrade head"],
-            "stdout": "", "stderr": "Set PG_MIGRATION_DATABASE_URL to a disposable PostgreSQL database; no PostgreSQL server was available for this run.",
-        }))
+        gates.append(
+            (
+                "postgresql_migrations",
+                {
+                    "status": "BLOCKED",
+                    "returncode": None,
+                    "duration_seconds": 0,
+                    "command": [
+                        "alembic upgrade head",
+                        "alembic check",
+                        "alembic downgrade base",
+                        "alembic upgrade head",
+                    ],
+                    "stdout": "",
+                    "stderr": "Set PG_MIGRATION_DATABASE_URL to a disposable PostgreSQL database; no PostgreSQL server was available for this run.",
+                },
+            )
+        )
 
     # Quality tools are recorded as blocked before the main test process when
     # they are not installed; no shell command is launched for a missing tool.
@@ -278,17 +293,33 @@ def main() -> int:
         ("mypy", "mypy", [sys.executable, "-m", "mypy", "backend/app"]),
     ]:
         if importlib.util.find_spec(module_name) is None:
-            gates.append((gate_name, {
-                "status": "BLOCKED", "returncode": None, "duration_seconds": 0,
-                "command": command_args, "stdout": "",
-                "stderr": f"Python module {module_name!r} is not installed in this environment.",
-            }))
+            gates.append(
+                (
+                    gate_name,
+                    {
+                        "status": "BLOCKED",
+                        "returncode": None,
+                        "duration_seconds": 0,
+                        "command": command_args,
+                        "stdout": "",
+                        "stderr": f"Python module {module_name!r} is not installed in this environment.",
+                    },
+                )
+            )
         else:
-            gates.append((gate_name, {
-                "status": "BLOCKED", "returncode": None, "duration_seconds": 0,
-                "command": command_args, "stdout": "",
-                "stderr": "Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run.",
-            }))
+            gates.append(
+                (
+                    gate_name,
+                    {
+                        "status": "BLOCKED",
+                        "returncode": None,
+                        "duration_seconds": 0,
+                        "command": command_args,
+                        "stdout": "",
+                        "stderr": "Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run.",
+                    },
+                )
+            )
 
     # Frontend verification is performed by its own single-purpose command.
     # This keeps Node/Vite lifecycle and backend test processes isolated.
@@ -300,11 +331,28 @@ def main() -> int:
             frontend_generated = frontend_generated.replace(tzinfo=UTC)
         if (datetime.now(UTC) - frontend_generated).total_seconds() > 24 * 60 * 60:
             raise ValueError("Frontend validation report is older than 24 hours.")
-        gates.extend([
-            ("frontend_typescript", frontend_report.get("typescript", frontend_blocked("TypeScript result missing from frontend report."))),
-            ("frontend_tests", frontend_report.get("frontend_tests", frontend_blocked("Frontend test result missing from frontend report."))),
-            ("frontend_build", frontend_report.get("frontend_build", frontend_blocked("Frontend build result missing from frontend report."))),
-        ])
+        gates.extend(
+            [
+                (
+                    "frontend_typescript",
+                    frontend_report.get(
+                        "typescript", frontend_blocked("TypeScript result missing from frontend report.")
+                    ),
+                ),
+                (
+                    "frontend_tests",
+                    frontend_report.get(
+                        "frontend_tests", frontend_blocked("Frontend test result missing from frontend report.")
+                    ),
+                ),
+                (
+                    "frontend_build",
+                    frontend_report.get(
+                        "frontend_build", frontend_blocked("Frontend build result missing from frontend report.")
+                    ),
+                ),
+            ]
+        )
     except (OSError, KeyError, ValueError, json.JSONDecodeError) as exc:
         reason = f"Run python scripts/verify_frontend.py first: {exc}"
         for gate_name in ("frontend_typescript", "frontend_tests", "frontend_build"):
@@ -319,29 +367,53 @@ def main() -> int:
         coverage_env["COVERAGE_CORE"] = "sysmon"
     backend_database_url = os.environ.get("DATABASE_URL", "sqlite:///./township_release_app.db")
     if pg_test_url.startswith(("postgresql://", "postgresql+")):
-        coverage_env.update({
-            "DATABASE_URL": backend_database_url,
-            "TEST_DATABASE_URL": pg_test_url,
-            "PG_DATABASE_URL": pg_test_url,
-        })
-        gates.append(("postgresql_backend_tests", {
-            "status": "PENDING", "returncode": None, "duration_seconds": 0,
-            "command": [sys.executable, "-m", "pytest", "tests/", "-rs"],
-            "stdout": "", "stderr": "PostgreSQL test result is determined by the full backend run below.",
-        }))
+        coverage_env.update(
+            {
+                "DATABASE_URL": backend_database_url,
+                "TEST_DATABASE_URL": pg_test_url,
+                "PG_DATABASE_URL": pg_test_url,
+            }
+        )
+        gates.append(
+            (
+                "postgresql_backend_tests",
+                {
+                    "status": "PENDING",
+                    "returncode": None,
+                    "duration_seconds": 0,
+                    "command": [sys.executable, "-m", "pytest", "tests/", "-rs"],
+                    "stdout": "",
+                    "stderr": "PostgreSQL test result is determined by the full backend run below.",
+                },
+            )
+        )
     else:
-        gates.append(("postgresql_backend_tests", {
-            "status": "BLOCKED", "returncode": None, "duration_seconds": 0,
-            "command": [sys.executable, "-m", "pytest", "tests/", "-rs"],
-            "stdout": "", "stderr": "Set PG_DATABASE_URL and TEST_DATABASE_URL to a dedicated PostgreSQL test database. The three row-lock tests are not verified by SQLite.",
-        }))
+        gates.append(
+            (
+                "postgresql_backend_tests",
+                {
+                    "status": "BLOCKED",
+                    "returncode": None,
+                    "duration_seconds": 0,
+                    "command": [sys.executable, "-m", "pytest", "tests/", "-rs"],
+                    "stdout": "",
+                    "stderr": "Set PG_DATABASE_URL and TEST_DATABASE_URL to a dedicated PostgreSQL test database. The three row-lock tests are not verified by SQLite.",
+                },
+            )
+        )
 
     if args.skip_coverage:
         backend_command = [sys.executable, "-m", "pytest", "-rs", "-q"]
     else:
         backend_command = [
-            sys.executable, "-m", "pytest", "-rs", "--cov=backend/app",
-            "--cov-report=term", "--cov-fail-under=90", "-q",
+            sys.executable,
+            "-m",
+            "pytest",
+            "-rs",
+            "--cov=backend/app",
+            "--cov-report=term",
+            "--cov-fail-under=90",
+            "-q",
         ]
 
     print("[RUNNING] backend tests and coverage", flush=True)
@@ -365,20 +437,34 @@ def main() -> int:
         "status": "PASS" if dataset_record else "FAIL",
         "returncode": 0 if dataset_record else 1,
         "duration_seconds": backend_result.get("duration_seconds", 0),
-        "command": ["pytest tests/test_fresh_install.py::test_fresh_database_migration_seed_and_ground_truth_invariants"],
-        "stdout": json.dumps(dataset_record, indent=2) if dataset_record else "Fresh-install test did not emit its measured database record.",
-        "stderr": "" if dataset_record else "Fresh-install migrations, schema parity, repeated seed or ground-truth assertions did not pass.",
+        "command": [
+            "pytest tests/test_fresh_install.py::test_fresh_database_migration_seed_and_ground_truth_invariants"
+        ],
+        "stdout": json.dumps(dataset_record, indent=2)
+        if dataset_record
+        else "Fresh-install test did not emit its measured database record.",
+        "stderr": ""
+        if dataset_record
+        else "Fresh-install migrations, schema parity, repeated seed or ground-truth assertions did not pass.",
     }
     if dataset_record:
         database_gate.update(dataset_record)
     gates.append(("database_seed_and_ground_truth", database_gate))
 
     if args.skip_coverage:
-        gates.append(("backend_coverage", {
-            "status": "BLOCKED", "returncode": None, "duration_seconds": 0,
-            "command": [sys.executable, "-m", "pytest", "-rs", "--cov=backend/app", "--cov-fail-under=90"],
-            "stdout": "", "stderr": "Coverage was explicitly skipped by the caller.",
-        }))
+        gates.append(
+            (
+                "backend_coverage",
+                {
+                    "status": "BLOCKED",
+                    "returncode": None,
+                    "duration_seconds": 0,
+                    "command": [sys.executable, "-m", "pytest", "-rs", "--cov=backend/app", "--cov-fail-under=90"],
+                    "stdout": "",
+                    "stderr": "Coverage was explicitly skipped by the caller.",
+                },
+            )
+        )
     else:
         coverage_output = backend_result.get("stdout", "")
         precise_match = re.search(r"Total coverage:\s*([0-9]+(?:\.[0-9]+)?)%", coverage_output)
@@ -392,12 +478,19 @@ def main() -> int:
 
     if pg_test_url.startswith(("postgresql://", "postgresql+")):
         gates = [
-            (name, {**result, "status": backend_result.get("status", "UNKNOWN"),
+            (
+                name,
+                {
+                    **result,
+                    "status": backend_result.get("status", "UNKNOWN"),
                     "returncode": backend_result.get("returncode"),
                     "duration_seconds": backend_result.get("duration_seconds", 0),
                     "stdout": backend_result.get("stdout", ""),
-                    "stderr": backend_result.get("stderr", "")})
-            if name == "postgresql_backend_tests" else (name, result)
+                    "stderr": backend_result.get("stderr", ""),
+                },
+            )
+            if name == "postgresql_backend_tests"
+            else (name, result)
             for name, result in gates
         ]
 
@@ -423,15 +516,19 @@ def main() -> int:
         renderer_spec.loader.exec_module(renderer_module)
         renderer_module.render()
         summary["readme_summary_render"] = {
-            "status": "PASS", "returncode": 0,
+            "status": "PASS",
+            "returncode": 0,
             "command": [sys.executable, "scripts/render_readme_summary.py"],
-            "stdout": "README verification table rendered from summary.json.", "stderr": "",
+            "stdout": "README verification table rendered from summary.json.",
+            "stderr": "",
         }
     except Exception as exc:
         summary["readme_summary_render"] = {
-            "status": "FAIL", "returncode": 1,
+            "status": "FAIL",
+            "returncode": 1,
             "command": [sys.executable, "scripts/render_readme_summary.py"],
-            "stdout": "", "stderr": f"{type(exc).__name__}: {exc}",
+            "stdout": "",
+            "stderr": f"{type(exc).__name__}: {exc}",
         }
         summary["overall_status"] = "FAIL"
         summary["all_gates_passed"] = False

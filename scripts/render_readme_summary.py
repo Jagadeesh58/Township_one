@@ -21,12 +21,18 @@ def detail_for(name: str, result: dict) -> str:
         output = result.get("stdout", "")
         match = re.search(r"(\d+ passed(?:, \d+ skipped)?(?:, \d+ failed)?[^\n]*)", output)
         coverage = result.get("coverage_percentage")
-        text = match.group(1) if match else (result.get("stderr", "") or result.get("error", "Command output recorded in summary.json"))
+        text = (
+            match.group(1)
+            if match
+            else (result.get("stderr", "") or result.get("error", "Command output recorded in summary.json"))
+        )
         if coverage is not None:
             text += f"; coverage {coverage}%"
         return text.strip().replace("\n", " ")[-180:]
     if name == "frontend_typescript":
-        node_version = result.get("stdout", "").strip().splitlines()[0] if result.get("stdout") else "Node version not recorded"
+        node_version = (
+            result.get("stdout", "").strip().splitlines()[0] if result.get("stdout") else "Node version not recorded"
+        )
         return f"TypeScript compiler passed ({node_version})."
     if name.startswith("frontend_"):
         return result.get("stderr", "")[:180].replace("\n", " ") or "Command output recorded in summary.json"

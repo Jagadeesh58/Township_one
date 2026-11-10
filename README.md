@@ -106,20 +106,18 @@ For a demo environment, set `DEMO_OTP_CODE=123456` and use one of the synthetic 
 <!-- verification-summary:start -->
 | Check | Result | Measured evidence |
 |---|---|---|
-| `postgresql_migrations` | **BLOCKED** | No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour. |
-| `ruff_check` | **BLOCKED** | Ruff is declared in requirements.txt but is not installed in this execution environment. |
-| `ruff_format` | **BLOCKED** | Ruff is declared in requirements.txt but is not installed in this execution environment. |
-| `mypy` | **BLOCKED** | Mypy is declared in requirements.txt but is not installed in this execution environment. |
-| `frontend_typescript` | **PASS** | TypeScript compiler passed (v22.16.0). |
-| `frontend_tests` | **BLOCKED** | Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. Run npm ci, |
-| `frontend_build` | **BLOCKED** | Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. The Docker  |
-| `postgresql_backend_tests` | **BLOCKED** | No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour. |
-| `backend_tests` | **PASS** | 199 passed, 3 skipped, 22 warnings in 29.82s. All executed assertions passed. Three PostgreSQL row-lock tests were skipped because no PostgreSQL service was available. |
-| `database_seed_and_ground_truth` | **PASS** | towers: 28, flats: 2400, staff: 180, gates: 4 |
-| `backend_coverage` | **BLOCKED** | 199 passed, 3 skipped, 22 warnings. The coverage process did not finish shutdown before the execution timeout, so no current coverage percentage was captured. |
-| `compileall` | **PASS** | Python modules compiled successfully. |
+| `postgresql_migrations` | **BLOCKED** | Set PG_MIGRATION_DATABASE_URL to a disposable PostgreSQL database; no PostgreSQL server was available for this run. |
+| `ruff_check` | **BLOCKED** | Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run. |
+| `ruff_format` | **BLOCKED** | Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run. |
+| `mypy` | **BLOCKED** | Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run. |
+| `frontend_typescript` | **PASS** | TypeScript compiler passed (v24.16.0). |
+| `frontend_tests` | **PASS** | npm notice run township-one-frontend@1.0.0 test npm notice run vitest run [90mstderr[2m \| src/__tests__/residentHome.test.tsx[2m > [22m[2mResidentHomePage UI Integration & Sta |
+| `frontend_build` | **PASS** | npm notice run township-one-frontend@1.0.0 build npm notice run tsc --noEmit && vite build  |
+| `postgresql_backend_tests` | **BLOCKED** | Set PG_DATABASE_URL and TEST_DATABASE_URL to a dedicated PostgreSQL test database. The three row-lock tests are not verified by SQLite. |
+| `backend_tests` | **PASS** | 203 passed, 3 skipped, 14 warnings in 467.05s (0:07:47) |
+| `database_seed_and_ground_truth` | **PASS** | flats: 2400, gates: 4, staff: 180, towers: 28 |
+| `backend_coverage` | **PASS** | 203 passed, 3 skipped, 14 warnings in 467.05s (0:07:47); coverage 90.01% |
 | `wording_scan` | **PASS** | 0 finding(s). |
-| `test_runner_shutdown` | **BLOCKED** | Pytest printed the complete summary: 199 passed, 3 skipped, 22 warnings in 29.82s. |
 
 Overall result: **FAIL**
 <!-- verification-summary:end -->

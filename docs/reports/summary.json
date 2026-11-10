@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-11-09T18:51:32.710198+00:00",
-  "python": "3.13.5 (main, Jul 15 2026, 20:25:40) [GCC 14.2.0]",
-  "platform": "linux",
+  "generated_at": "2026-11-10T09:01:19.056115+00:00",
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "platform": "win32",
   "gates": {
     "postgresql_migrations": {
       "status": "BLOCKED",
@@ -14,28 +14,28 @@
         "alembic upgrade head"
       ],
       "stdout": "",
-      "stderr": "No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour."
+      "stderr": "Set PG_MIGRATION_DATABASE_URL to a disposable PostgreSQL database; no PostgreSQL server was available for this run."
     },
     "ruff_check": {
       "status": "BLOCKED",
       "returncode": null,
       "duration_seconds": 0,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
         "-m",
         "ruff",
         "check",
         "."
       ],
       "stdout": "",
-      "stderr": "Ruff is declared in requirements.txt but is not installed in this execution environment."
+      "stderr": "Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run."
     },
     "ruff_format": {
       "status": "BLOCKED",
       "returncode": null,
       "duration_seconds": 0,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
         "-m",
         "ruff",
         "format",
@@ -43,20 +43,20 @@
         "."
       ],
       "stdout": "",
-      "stderr": "Ruff is declared in requirements.txt but is not installed in this execution environment."
+      "stderr": "Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run."
     },
     "mypy": {
       "status": "BLOCKED",
       "returncode": null,
       "duration_seconds": 0,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
         "-m",
         "mypy",
         "backend/app"
       ],
       "stdout": "",
-      "stderr": "Mypy is declared in requirements.txt but is not installed in this execution environment."
+      "stderr": "Run this quality command in the configured development/CI environment; this verifier does not invoke additional tool processes before the full test run."
     },
     "frontend_typescript": {
       "status": "PASS",
@@ -66,81 +66,75 @@
         "-e",
         "console.log(process.version); process.argv = [process.argv[0], 'tsc', '--noEmit']; require('./node_modules/typescript/lib/tsc.js')"
       ],
-      "stdout": "v22.16.0\n",
+      "stdout": "v24.16.0\n",
       "stderr": ""
     },
     "frontend_tests": {
-      "status": "BLOCKED",
-      "returncode": null,
+      "status": "PASS",
+      "returncode": 0,
       "command": [
         "npm",
         "test"
       ],
-      "stdout": "",
-      "stderr": "Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. Run npm ci, npm test on supported Node in CI."
+      "stdout": "\n\u001b[1m\u001b[30m\u001b[46m RUN \u001b[49m\u001b[39m\u001b[22m \u001b[36mv5.1.0 \u001b[39m\u001b[90mC:/Township_one/frontend\u001b[39m\n\n \u001b[32mâœ“\u001b[39m src/__tests__/residentHome.test.tsx \u001b[2m(\u001b[22m\u001b[2m4 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 3155\u001b[2mms\u001b[22m\u001b[39m\n   \u001b[32mâœ“\u001b[39m ResidentHomePage UI Integration & State Transitions \u001b[2m(4)\u001b[22m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m renders dues, open complaints, today visitors, and broadcast notice\u001b[33m 1466\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m opens simulated payment modal in <= 2 clicks from home (1 tap on Pay Now)\u001b[33m 1019\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m renders clean empty state when all dues are fully cleared\u001b[33m 344\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m handles API loading and failure states gracefully\u001b[33m 308\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/features.test.tsx \u001b[2m(\u001b[22m\u001b[2m7 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 2487\u001b[2mms\u001b[22m\u001b[39m\n   \u001b[32mâœ“\u001b[39m AccountsWorkspace Component \u001b[2m(2)\u001b[22m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m renders accounts workspace with accounts list and review queue\u001b[33m 860\u001b[2mms\u001b[22m\u001b[39m\n   \u001b[32mâœ“\u001b[39m ResidentComplaints Component \u001b[2m(2)\u001b[22m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m submits a new complaint successfully\u001b[33m 406\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/notices.test.tsx \u001b[2m(\u001b[22m\u001b[2m5 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 2232\u001b[2mms\u001b[22m\u001b[39m\n   \u001b[32mâœ“\u001b[39m resident notices \u001b[2m(2)\u001b[22m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m shows tower audience, critical severity and explicit English fallback\u001b[33m 643\u001b[2mms\u001b[22m\u001b[39m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m marks the exact revision as read\u001b[33m 317\u001b[2mms\u001b[22m\u001b[39m\n   \u001b[32mâœ“\u001b[39m committee notice editor \u001b[2m(1)\u001b[22m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m creates a multilingual tower-scoped draft with a publish window\u001b[33m 826\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/components.test.tsx \u001b[2m(\u001b[22m\u001b[2m8 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 1984\u001b[2mms\u001b[22m\u001b[39m\n   \u001b[32mâœ“\u001b[39m React Components: String/Decimal Runtime Resilience \u001b[2m(5)\u001b[22m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m renders DuesCard with exact backend string numbers without throwing .toFixed TypeError\u001b[33m 1349\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/viewport.test.tsx \u001b[2m(\u001b[22m\u001b[2m3 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[33m 434\u001b[2mms\u001b[22m\u001b[39m\n   \u001b[32mâœ“\u001b[39m Responsive Viewport Smoke Tests \u001b[2m(3)\u001b[22m\n     \u001b[33m\u001b[2mâœ“\u001b[22m\u001b[39m ensures touch targets and layout fit within 320px viewport without horizontal overflow\u001b[33m 312\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/gateQueue.test.ts \u001b[2m(\u001b[22m\u001b[2m10 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 255\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/app.test.ts \u001b[2m(\u001b[22m\u001b[2m11 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 93\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/translations.test.ts \u001b[2m(\u001b[22m\u001b[2m6 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 61\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/serviceWorker.test.ts \u001b[2m(\u001b[22m\u001b[2m2 tests\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 63\u001b[2mms\u001b[22m\u001b[39m\n \u001b[32mâœ“\u001b[39m src/__tests__/apiClient.test.ts \u001b[2m(\u001b[22m\u001b[2m1 test\u001b[22m\u001b[2m)\u001b[22m\u001b[32m 28\u001b[2mms\u001b[22m\u001b[39m\n\n\u001b[2m Test Files \u001b[22m \u001b[1m\u001b[32m10 passed\u001b[39m\u001b[22m\u001b[90m (10)\u001b[39m\n\u001b[2m      Tests \u001b[22m \u001b[1m\u001b[32m57 passed\u001b[39m\u001b[22m\u001b[90m (57)\u001b[39m\n\u001b[2m   Start at \u001b[22m 14:02:21\n\u001b[2m   Duration \u001b[22m 131.41s\u001b[2m (environment 69%, setup 17%, tests 9%, import 3%, worker 1%, transform 1%)\u001b[22m\n\n\u001b[2mEnvironment \u001b[22m \u001b[33mjsdom was created 10 times\u001b[39m\u001b[2m Â· 82.99s total, 69% of tracked time\u001b[22m\n\u001b[2m            \u001b[22m \u001b[2mcreate it once per worker with \u001b[22m\u001b[33mpool: 'vmThreads'\u001b[39m\u001b[2m (keeps per-file isolation) or \u001b[22m\u001b[33misolate: false\u001b[39m\u001b[2m (shares it across files)\u001b[22m\n\u001b[2m            \u001b[22m \u001b[2mlearn more: https://vitest.dev/guide/improving-performance#test-environments\u001b[22m\n\n",
+      "stderr": "npm notice run township-one-frontend@1.0.0 test\nnpm notice run vitest run\n\u001b[90mstderr\u001b[2m | src/__tests__/residentHome.test.tsx\u001b[2m > \u001b[22m\u001b[2mResidentHomePage UI Integration & State Transitions\u001b[2m > \u001b[22m\u001b[2mhandles API loading and failure states gracefully\n\u001b[22m\u001b[39mError: Network error\n    at C:/Township_one/frontend/src/__tests__/residentHome.test.tsx:188:58\n    at \u001b[90mfile:///C:/Township_one/frontend/\u001b[39mnode_modules/\u001b[4mvitest\u001b[24m/dist/chunks/run.CjdgFZiW.js:1632:35\n    at \u001b[90mfile:///C:/Township_one/frontend/\u001b[39mnode_modules/\u001b[4mvitest\u001b[24m/dist/chunks/run.CjdgFZiW.js:2801:26\n    at \u001b[90mfile:///C:/Township_one/frontend/\u001b[39mnode_modules/\u001b[4mvitest\u001b[24m/dist/chunks/run.CjdgFZiW.js:3338:20\n    at new Promise (<anonymous>)\n    at runWithCancel \u001b[90m(file:///C:/Township_one/frontend/\u001b[39mnode_modules/\u001b[4mvitest\u001b[24m/dist/chunks/run.CjdgFZiW.js:3333:10\u001b[90m)\u001b[39m\n    at \u001b[90mfile:///C:/Township_one/frontend/\u001b[39mnode_modules/\u001b[4mvitest\u001b[24m/dist/chunks/run.CjdgFZiW.js:3318:20\n    at new Promise (<anonymous>)\n    at runWithTimeout \u001b[90m(file:///C:/Township_one/frontend/\u001b[39mnode_modules/\u001b[4mvitest\u001b[24m/dist/chunks/run.CjdgFZiW.js:3276:10\u001b[90m)\u001b[39m\n    at \u001b[90mfile:///C:/Township_one/frontend/\u001b[39mnode_modules/\u001b[4mvitest\u001b[24m/dist/chunks/run.CjdgFZiW.js:3922:64\n\n"
     },
     "frontend_build": {
-      "status": "BLOCKED",
-      "returncode": null,
+      "status": "PASS",
+      "returncode": 0,
       "command": [
         "npm",
         "run",
         "build"
       ],
-      "stdout": "",
-      "stderr": "Not run: available Node is v22.16.0, below the declared minimum 22.22.2; clean npm ci could not complete because the npm registry was unreachable from this environment. The Docker builder is pinned to Node 24.15.0."
+      "stdout": "\u001b[36mvite v6.4.5 \u001b[32mbuilding for production...\u001b[36m\u001b[39m\ntransforming...\n\u001b[32mâœ“\u001b[39m 50 modules transformed.\nrendering chunks...\ncomputing gzip size...\n\u001b[2mdist/\u001b[22m\u001b[32mindex.html                 \u001b[39m\u001b[1m\u001b[2m  0.80 kB\u001b[22m\u001b[1m\u001b[22m\u001b[2m â”‚ gzip:   0.43 kB\u001b[22m\n\u001b[2mdist/\u001b[22m\u001b[35massets/index-ChVwCbCn.css  \u001b[39m\u001b[1m\u001b[2m  1.35 kB\u001b[22m\u001b[1m\u001b[22m\u001b[2m â”‚ gzip:   0.74 kB\u001b[22m\n\u001b[2mdist/\u001b[22m\u001b[36massets/index-j8V9018c.js   \u001b[39m\u001b[1m\u001b[2m422.40 kB\u001b[22m\u001b[1m\u001b[22m\u001b[2m â”‚ gzip: 112.65 kB\u001b[22m\n\u001b[32mâœ“ built in 8.65s\u001b[39m\n",
+      "stderr": "npm notice run township-one-frontend@1.0.0 build\nnpm notice run tsc --noEmit && vite build\n"
     },
     "postgresql_backend_tests": {
       "status": "BLOCKED",
       "returncode": null,
       "duration_seconds": 0,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
         "-m",
         "pytest",
         "tests/",
         "-rs"
       ],
       "stdout": "",
-      "stderr": "No PostgreSQL server/URL was available in this environment. SQLite does not prove PostgreSQL row-lock or concurrent-payment behaviour."
+      "stderr": "Set PG_DATABASE_URL and TEST_DATABASE_URL to a dedicated PostgreSQL test database. The three row-lock tests are not verified by SQLite."
     },
     "backend_tests": {
       "status": "PASS",
-      "returncode": null,
-      "duration_seconds": 29.82,
+      "returncode": 0,
+      "duration_seconds": 504.92,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
         "-m",
         "pytest",
-        "-q",
         "-rs",
-        "-p",
-        "no:ddtrace",
-        "-p",
-        "no:cov"
+        "--cov=backend/app",
+        "--cov-report=term",
+        "--cov-fail-under=90",
+        "-q"
       ],
-      "stdout": "199 passed, 3 skipped, 22 warnings in 29.82s. All executed assertions passed. Three PostgreSQL row-lock tests were skipped because no PostgreSQL service was available.",
-      "stderr": "The execution wrapper timed out during process cleanup after pytest printed its complete green summary; no test failure was reported. Re-run in CI to confirm clean process exit."
+      "stdout": "........................................................................ [ 34%]\r\n................................................................ss...... [ 69%]\r\n....s.........................................................           [100%]\r\n============================== warnings summary ===============================\r\n..\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\fastapi\\testclient.py:1\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\r\n    from starlette.testclient import TestClient as TestClient  # noqa\r\n\r\ntests/test_api_operations.py::test_amenities_booking_and_cancellation\r\ntests/test_payments.py::test_mandatory_idempotency_key_enforcement\r\ntests/test_payments.py::test_invalid_payment_outcomes_rejected\r\ntests/test_visitors.py::test_supervisor_override_requires_valid_role_and_reason\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\starlette\\_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.\r\n    response = await handler(conn, exc)  # type: ignore[arg-type]\r\n\r\ntests/test_auth.py::test_logout_and_revocation\r\ntests/test_billing.py::test_billing_cross_flat_idor_denied\r\ntests/test_resident_security.py::test_cross_flat_access_is_denied\r\ntests/test_resident_security.py::test_cross_flat_access_is_denied\r\ntests/test_resident_security.py::test_cross_flat_access_is_denied\r\ntests/test_resident_security.py::test_tenant_and_family_permissions\r\ntests/test_resident_security.py::test_tenant_and_family_permissions\r\ntests/test_resident_security.py::test_tenant_and_family_permissions\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\starlette\\testclient.py:518: DeprecationWarning: Setting per-request cookies=<...> is being deprecated, because the expected behaviour on cookie persistence is ambiguous. Set cookies directly on the client instance instead.\r\n    return super().request(\r\n\r\ntests/test_guest_codes.py::test_online_guest_code_preview_does_not_consume_until_arrival\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\fastapi\\telemetry\\_api.py:244: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.\r\n    return function(**arguments)\r\n\r\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\r\n=============================== tests coverage ================================\r\n_______________ coverage: platform win32, python 3.11.9-final-0 _______________\r\n\r\nName                                        Stmts   Miss  Cover\r\n---------------------------------------------------------------\r\nbackend\\app\\__init__.py                         0      0   100%\r\nbackend\\app\\api\\__init__.py                     0      0   100%\r\nbackend\\app\\api\\amenities.py                   80      2    98%\r\nbackend\\app\\api\\auth.py                        59      0   100%\r\nbackend\\app\\api\\bank.py                        93     15    84%\r\nbackend\\app\\api\\billing.py                     82      9    89%\r\nbackend\\app\\api\\committee.py                   32      0   100%\r\nbackend\\app\\api\\complaints.py                 288     56    81%\r\nbackend\\app\\api\\health.py                      17      3    82%\r\nbackend\\app\\api\\notices.py                    127     16    87%\r\nbackend\\app\\api\\notifications.py               32      1    97%\r\nbackend\\app\\api\\operations.py                  13      0   100%\r\nbackend\\app\\api\\payments.py                    42      7    83%\r\nbackend\\app\\api\\visitors.py                   305     72    76%\r\nbackend\\app\\core\\config.py                     86     16    81%\r\nbackend\\app\\core\\database.py                   35     14    60%\r\nbackend\\app\\core\\security.py                  161     22    86%\r\nbackend\\app\\main.py                            84      3    96%\r\nbackend\\app\\ml\\__init__.py                      0      0   100%\r\nbackend\\app\\ml\\classifier.py                  120     28    77%\r\nbackend\\app\\ml\\duplicates.py                   53     14    74%\r\nbackend\\app\\ml\\emergency.py                    75      1    99%\r\nbackend\\app\\models\\__init__.py                  2      0   100%\r\nbackend\\app\\models\\entities.py                657      0   100%\r\nbackend\\app\\schemas\\amenities.py               65      0   100%\r\nbackend\\app\\schemas\\auth.py                    28      0   100%\r\nbackend\\app\\schemas\\bank.py                   108      0   100%\r\nbackend\\app\\schemas\\billing.py                 61      0   100%\r\nbackend\\app\\schemas\\committee.py               47      0   100%\r\nbackend\\app\\schemas\\complaints.py              88      0   100%\r\nbackend\\app\\schemas\\notices.py                 40      0   100%\r\nbackend\\app\\schemas\\notifications.py           11      0   100%\r\nbackend\\app\\schemas\\payments.py                49      2    96%\r\nbackend\\app\\schemas\\visitors.py               117      0   100%\r\nbackend\\app\\services\\amenity_service.py       106     13    88%\r\nbackend\\app\\services\\bank_matching.py         465     83    82%\r\nbackend\\app\\services\\billing.py                91     13    86%\r\nbackend\\app\\services\\committee_service.py     165     13    92%\r\nbackend\\app\\services\\complaints.py             74      1    99%\r\nbackend\\app\\services\\notice_service.py         86      5    94%\r\nbackend\\app\\services\\payments.py               99      8    92%\r\nbackend\\app\\services\\sms.py                    24      1    96%\r\nbackend\\app\\services\\storage.py               234     34    85%\r\nbackend\\app\\services\\visitor_service.py       345     22    94%\r\n---------------------------------------------------------------\r\nTOTAL                                        4746    474    90%\r\nRequired test coverage of 90% reached. Total coverage: 90.01%\r\n=========================== short test summary info ===========================\r\nSKIPPED [1] tests\\test_payment_concurrency.py:189: needs PostgreSQL row locks\r\nSKIPPED [1] tests\\test_payment_concurrency.py:260: needs PostgreSQL row locks\r\nSKIPPED [1] tests\\test_payments.py:427: needs PostgreSQL row locks\r\n203 passed, 3 skipped, 14 warnings in 467.05s (0:07:47)\r\n",
+      "stderr": ""
     },
     "database_seed_and_ground_truth": {
       "status": "PASS",
       "returncode": 0,
-      "duration_seconds": 0,
+      "duration_seconds": 504.92,
       "command": [
-        "python",
-        "scripts/verify_release.py",
-        "--database-check-worker"
+        "pytest tests/test_fresh_install.py::test_fresh_database_migration_seed_and_ground_truth_invariants"
       ],
-      "stdout": "{\n  \"status\": \"PASS\",\n  \"migration\": \"alembic upgrade head\",\n  \"schema_parity\": \"alembic check reported no new upgrade operations\",\n  \"seed_runs\": 2,\n  \"counts\": {\n    \"towers\": 28,\n    \"flats\": 2400,\n    \"staff\": 180,\n    \"gates\": 4\n  },\n  \"ground_truth\": {\n    \"T07-1203\": {\n      \"outstanding\": \"0.00\",\n      \"overdue_days\": 0\n    },\n    \"T12-0408\": {\n      \"outstanding\": \"6370.00\",\n      \"overdue_days\": 47\n    },\n    \"T21-1601\": {\n      \"outstanding\": \"5660.00\",\n      \"overdue_days\": 18\n    }\n  }\n}",
+      "stdout": "{\n  \"counts\": {\n    \"flats\": 2400,\n    \"gates\": 4,\n    \"staff\": 180,\n    \"towers\": 28\n  },\n  \"ground_truth\": {\n    \"T07-1203\": {\n      \"outstanding\": \"0.00\",\n      \"overdue_days\": 0\n    },\n    \"T12-0408\": {\n      \"outstanding\": \"6370.00\",\n      \"overdue_days\": 47\n    },\n    \"T21-1601\": {\n      \"outstanding\": \"5660.00\",\n      \"overdue_days\": 18\n    }\n  },\n  \"migration\": \"alembic upgrade head\",\n  \"schema_parity\": \"alembic check reported no new upgrade operations\",\n  \"seed_runs\": 2\n}",
       "stderr": "",
-      "migration": "alembic upgrade head",
-      "schema_parity": "alembic check reported no new upgrade operations",
-      "seed_runs": 2,
       "counts": {
-        "towers": 28,
         "flats": 2400,
+        "gates": 4,
         "staff": 180,
-        "gates": 4
+        "towers": 28
       },
       "ground_truth": {
         "T07-1203": {
@@ -155,61 +149,46 @@
           "outstanding": "5660.00",
           "overdue_days": 18
         }
-      }
+      },
+      "migration": "alembic upgrade head",
+      "schema_parity": "alembic check reported no new upgrade operations",
+      "seed_runs": 2
     },
     "backend_coverage": {
-      "status": "BLOCKED",
-      "returncode": null,
-      "duration_seconds": 120,
+      "status": "PASS",
+      "returncode": 0,
+      "duration_seconds": 504.92,
       "command": [
-        "/opt/pyvenv/bin/python",
+        "C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
         "-m",
         "pytest",
-        "-q",
         "-rs",
         "--cov=backend/app",
         "--cov-report=term",
-        "--cov-fail-under=90"
+        "--cov-fail-under=90",
+        "-q"
       ],
-      "stdout": "All test assertions completed and pytest printed 199 passed, 3 skipped, 22 warnings. The coverage process did not finish shutdown before the execution timeout, so no current coverage percentage was captured.",
-      "stderr": "The previous 90.00% report belongs to the earlier 196-pass code state and is not reused as evidence for this Cloudinary storage change."
-    },
-    "compileall": {
-      "status": "PASS",
-      "returncode": 0,
-      "duration_seconds": 0,
-      "command": [
-        "/opt/pyvenv/bin/python",
-        "-m",
-        "compileall",
-        "-q",
-        "backend",
-        "seed",
-        "tests"
-      ],
-      "stdout": "Python modules compiled successfully.",
-      "stderr": ""
+      "stdout": "........................................................................ [ 34%]\r\n................................................................ss...... [ 69%]\r\n....s.........................................................           [100%]\r\n============================== warnings summary ===============================\r\n..\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\fastapi\\testclient.py:1\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\fastapi\\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\r\n    from starlette.testclient import TestClient as TestClient  # noqa\r\n\r\ntests/test_api_operations.py::test_amenities_booking_and_cancellation\r\ntests/test_payments.py::test_mandatory_idempotency_key_enforcement\r\ntests/test_payments.py::test_invalid_payment_outcomes_rejected\r\ntests/test_visitors.py::test_supervisor_override_requires_valid_role_and_reason\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\starlette\\_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.\r\n    response = await handler(conn, exc)  # type: ignore[arg-type]\r\n\r\ntests/test_auth.py::test_logout_and_revocation\r\ntests/test_billing.py::test_billing_cross_flat_idor_denied\r\ntests/test_resident_security.py::test_cross_flat_access_is_denied\r\ntests/test_resident_security.py::test_cross_flat_access_is_denied\r\ntests/test_resident_security.py::test_cross_flat_access_is_denied\r\ntests/test_resident_security.py::test_tenant_and_family_permissions\r\ntests/test_resident_security.py::test_tenant_and_family_permissions\r\ntests/test_resident_security.py::test_tenant_and_family_permissions\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\starlette\\testclient.py:518: DeprecationWarning: Setting per-request cookies=<...> is being deprecated, because the expected behaviour on cookie persistence is ambiguous. Set cookies directly on the client instance instead.\r\n    return super().request(\r\n\r\ntests/test_guest_codes.py::test_online_guest_code_preview_does_not_consume_until_arrival\r\n  C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\fastapi\\telemetry\\_api.py:244: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.\r\n    return function(**arguments)\r\n\r\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\r\n=============================== tests coverage ================================\r\n_______________ coverage: platform win32, python 3.11.9-final-0 _______________\r\n\r\nName                                        Stmts   Miss  Cover\r\n---------------------------------------------------------------\r\nbackend\\app\\__init__.py                         0      0   100%\r\nbackend\\app\\api\\__init__.py                     0      0   100%\r\nbackend\\app\\api\\amenities.py                   80      2    98%\r\nbackend\\app\\api\\auth.py                        59      0   100%\r\nbackend\\app\\api\\bank.py                        93     15    84%\r\nbackend\\app\\api\\billing.py                     82      9    89%\r\nbackend\\app\\api\\committee.py                   32      0   100%\r\nbackend\\app\\api\\complaints.py                 288     56    81%\r\nbackend\\app\\api\\health.py                      17      3    82%\r\nbackend\\app\\api\\notices.py                    127     16    87%\r\nbackend\\app\\api\\notifications.py               32      1    97%\r\nbackend\\app\\api\\operations.py                  13      0   100%\r\nbackend\\app\\api\\payments.py                    42      7    83%\r\nbackend\\app\\api\\visitors.py                   305     72    76%\r\nbackend\\app\\core\\config.py                     86     16    81%\r\nbackend\\app\\core\\database.py                   35     14    60%\r\nbackend\\app\\core\\security.py                  161     22    86%\r\nbackend\\app\\main.py                            84      3    96%\r\nbackend\\app\\ml\\__init__.py                      0      0   100%\r\nbackend\\app\\ml\\classifier.py                  120     28    77%\r\nbackend\\app\\ml\\duplicates.py                   53     14    74%\r\nbackend\\app\\ml\\emergency.py                    75      1    99%\r\nbackend\\app\\models\\__init__.py                  2      0   100%\r\nbackend\\app\\models\\entities.py                657      0   100%\r\nbackend\\app\\schemas\\amenities.py               65      0   100%\r\nbackend\\app\\schemas\\auth.py                    28      0   100%\r\nbackend\\app\\schemas\\bank.py                   108      0   100%\r\nbackend\\app\\schemas\\billing.py                 61      0   100%\r\nbackend\\app\\schemas\\committee.py               47      0   100%\r\nbackend\\app\\schemas\\complaints.py              88      0   100%\r\nbackend\\app\\schemas\\notices.py                 40      0   100%\r\nbackend\\app\\schemas\\notifications.py           11      0   100%\r\nbackend\\app\\schemas\\payments.py                49      2    96%\r\nbackend\\app\\schemas\\visitors.py               117      0   100%\r\nbackend\\app\\services\\amenity_service.py       106     13    88%\r\nbackend\\app\\services\\bank_matching.py         465     83    82%\r\nbackend\\app\\services\\billing.py                91     13    86%\r\nbackend\\app\\services\\committee_service.py     165     13    92%\r\nbackend\\app\\services\\complaints.py             74      1    99%\r\nbackend\\app\\services\\notice_service.py         86      5    94%\r\nbackend\\app\\services\\payments.py               99      8    92%\r\nbackend\\app\\services\\sms.py                    24      1    96%\r\nbackend\\app\\services\\storage.py               234     34    85%\r\nbackend\\app\\services\\visitor_service.py       345     22    94%\r\n---------------------------------------------------------------\r\nTOTAL                                        4746    474    90%\r\nRequired test coverage of 90% reached. Total coverage: 90.01%\r\n=========================== short test summary info ===========================\r\nSKIPPED [1] tests\\test_payment_concurrency.py:189: needs PostgreSQL row locks\r\nSKIPPED [1] tests\\test_payment_concurrency.py:260: needs PostgreSQL row locks\r\nSKIPPED [1] tests\\test_payments.py:427: needs PostgreSQL row locks\r\n203 passed, 3 skipped, 14 warnings in 467.05s (0:07:47)\r\n",
+      "stderr": "",
+      "coverage_percentage": 90.01,
+      "purpose": "Coverage threshold measured by the same full backend test run."
     },
     "wording_scan": {
       "status": "PASS",
       "count": 0,
       "items": []
-    },
-    "test_runner_shutdown": {
-      "status": "BLOCKED",
-      "returncode": null,
-      "duration_seconds": 120,
-      "command": [
-        "/opt/pyvenv/bin/python",
-        "-m",
-        "pytest",
-        "-q",
-        "-rs"
-      ],
-      "stdout": "Pytest printed the complete summary: 199 passed, 3 skipped, 22 warnings in 29.82s.",
-      "stderr": "The outer execution wrapper did not observe a clean process exit before timeout. Re-run on CI or a normal local shell to confirm exit code."
     }
   },
   "overall_status": "FAIL",
-  "all_gates_passed": false
+  "all_gates_passed": false,
+  "readme_summary_render": {
+    "status": "PASS",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\Jagadeesh\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+      "scripts/render_readme_summary.py"
+    ],
+    "stdout": "README verification table rendered from summary.json.",
+    "stderr": ""
+  }
 }

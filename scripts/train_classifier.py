@@ -13,11 +13,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from backend.app.ml.classifier import (
-    train_model,
-    DEFAULT_DATA_PATH,
-    DEFAULT_MODEL_PATH
-)
+from backend.app.ml.classifier import DEFAULT_DATA_PATH, DEFAULT_MODEL_PATH, train_model  # noqa: E402
 
 
 def main():
@@ -28,11 +24,7 @@ def main():
     print("Fixed seed  : 42")
     print("=" * 60)
 
-    cat_pipeline, urg_pipeline = train_model(
-        csv_path=DEFAULT_DATA_PATH,
-        save_path=DEFAULT_MODEL_PATH,
-        random_seed=42
-    )
+    cat_pipeline, urg_pipeline = train_model(csv_path=DEFAULT_DATA_PATH, save_path=DEFAULT_MODEL_PATH, random_seed=42)
 
     print("\nTraining completed successfully!")
     print(f"Category classes ({len(cat_pipeline.classes_)}): {list(cat_pipeline.classes_)}")
