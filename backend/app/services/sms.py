@@ -34,24 +34,24 @@ class MockSMSProvider(BaseSMSProvider):
 
 
 class ProductionSMSProvider(BaseSMSProvider):
-    """Production provider requiring valid SMS gateway API key credentials."""
+    """Fail-closed placeholder until a real, configured SMS transport is implemented."""
 
     def __init__(self, api_key: str):
-        if not api_key or len(api_key.strip()) < 8:
-            raise RuntimeError(
-                "FATAL CONFIGURATION ERROR: Production SMS provider requires a valid SMS_PROVIDER_API_KEY. "
-                "Failing closed to prevent unverified logins."
-            )
         self.api_key = api_key
 
     def send_otp(self, phone: str, otp: str) -> bool:
-        # In a deployed production instance, this dispatches via HTTPS to the SMS gateway.
-        logger.info(f"[PROD SMS GATEWAY] Dispatched OTP to phone ending in ...{phone[-4:]}")
-        return True
+        # A configured key alone is not evidence that an HTTP gateway integration exists.
+        logger.error("Production OTP delivery is unavailable: no SMS transport adapter is configured.")
+        return False
 
 
 def get_sms_provider() -> BaseSMSProvider:
     """Factory resolving the appropriate SMS provider based on APP_ENV."""
     if settings.APP_ENV.lower() == "production":
+        if not settings.SMS_PROVIDER_API_KEY or len(settings.SMS_PROVIDER_API_KEY.strip()) < 8:
+            raise RuntimeError(
+                "Production SMS provider requires a valid SMS_PROVIDER_API_KEY. "
+                "OTP delivery remains unavailable until a real gateway adapter is configured."
+            )
         return ProductionSMSProvider(settings.SMS_PROVIDER_API_KEY)
     return MockSMSProvider()

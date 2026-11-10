@@ -21,6 +21,7 @@ from PIL import Image
 from backend.app.core.database import SessionLocal
 from backend.app.main import app
 from backend.app.models.entities import (
+    ClassificationDecision,
     Flat,
 )
 
@@ -131,6 +132,18 @@ def test_emergency_detector_safety_escalation_and_invariants():
     assert comp_data["urgency"] == "CRITICAL"
     assert comp_data["is_safety_escalation"] is True
     complaint_id = comp_data["id"]
+
+    # Persist the full deterministic rule identifier; PostgreSQL enforces VARCHAR lengths.
+    db = SessionLocal()
+    try:
+        decision = db.query(ClassificationDecision).filter(
+            ClassificationDecision.complaint_id == complaint_id,
+            ClassificationDecision.is_active.is_(True),
+        ).one()
+        assert decision.actor_type == "rule_emergency_engine"
+        assert len(decision.actor_type) == 21
+    finally:
+        db.close()
 
     # Help Desk tries to downgrade urgency below CRITICAL -> MUST FAIL (HTTP 400)
     client_admin, headers_admin = get_authenticated_client("9876543200")

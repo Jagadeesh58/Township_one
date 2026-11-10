@@ -153,6 +153,27 @@ class Gate(Base):
     location_description: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
+class GateDevice(Base):
+    __tablename__ = "gate_devices"
+    __table_args__ = (
+        UniqueConstraint("device_id", name="uq_gate_devices_device_id"),
+        Index("ix_gate_devices_gate_id", "gate_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, nullable=False)
+    device_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    generation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    gate_id: Mapped[str] = mapped_column(String(36), ForeignKey("gates.id"), nullable=False)
+    enrolled_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    enrolled_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+    gate = relationship("Gate")
+    enrolled_by = relationship("User")
+
+
 class BillingRule(Base):
     __tablename__ = "billing_rules"
 
@@ -542,7 +563,7 @@ class ClassificationDecision(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, nullable=False)
     complaint_id: Mapped[str] = mapped_column(String(36), ForeignKey("complaints.id"), nullable=False)
-    actor_type: Mapped[str] = mapped_column(String(20), nullable=False)  # AI_GROQ, AI_LOCAL, HUMAN_HELP_DESK
+    actor_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Classifier or deterministic rule identifier
     actor_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     category: Mapped[str] = mapped_column(String(30), nullable=False)
     urgency: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -654,6 +675,9 @@ class NoticeRevision(Base):
 
 class NoticeRead(Base):
     __tablename__ = "notice_reads"
+    __table_args__ = (
+        UniqueConstraint("notice_revision_id", "user_id", name="uq_notice_reads_revision_user"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, nullable=False)
     notice_revision_id: Mapped[str] = mapped_column(String(36), ForeignKey("notice_revisions.id"), nullable=False)
@@ -686,7 +710,8 @@ class VisitorPhoto(Base):
     __tablename__ = "visitor_photos"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, nullable=False)
-    storage_key: Mapped[str | None] = mapped_column(String(255), nullable=True)  # nulled on 90-day retention purge
+    client_photo_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     capture_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
     content_type: Mapped[str] = mapped_column(String(50), nullable=False, default="image/jpeg")
@@ -727,6 +752,12 @@ class PreApproval(Base):
 
 class VisitorEntry(Base):
     __tablename__ = "visitor_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "device_id", "device_generation_id", "device_sequence",
+            name="uq_visitor_device_generation_sequence",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid, nullable=False)
     gate_id: Mapped[str] = mapped_column(String(36), ForeignKey("gates.id"), nullable=False)
@@ -745,6 +776,9 @@ class VisitorEntry(Base):
     pre_approval_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("pre_approvals.id"), nullable=True)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="ONLINE")  # ONLINE, OFFLINE_SYNC
     client_event_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    device_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    device_generation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    device_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

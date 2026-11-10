@@ -32,6 +32,8 @@ from backend.app.models.entities import (
     Flat,
     FlatLedgerEntry,
     Payment,
+    PaymentIdempotencyRecord,
+    Receipt,
     RegisteredUPI,
     User,
 )
@@ -67,14 +69,20 @@ def provision_corpus_environment(db: Session, account_no: str = "98765432100012"
     test_towers = ["T01-", "T02-", "T03-", "T04-", "T05-", "T06-"]
     target_flat_ids = [f.id for f_num, f in flats.items() if any(f_num.startswith(tw) for tw in test_towers)]
 
+    target_bill_ids = db.query(Bill.id).filter(Bill.flat_id.in_(target_flat_ids))
+    target_payment_ids = db.query(Payment.id).filter(Payment.flat_id.in_(target_flat_ids))
+
+    # Delete referencing rows first; PostgreSQL enforces these foreign keys.
     db.query(BankPosting).delete(synchronize_session=False)
     db.query(BankRow).delete(synchronize_session=False)
     db.query(BankImportFile).delete(synchronize_session=False)
+    db.query(Receipt).filter(Receipt.payment_id.in_(target_payment_ids)).delete(synchronize_session=False)
+    db.query(PaymentIdempotencyRecord).filter(
+        PaymentIdempotencyRecord.flat_id.in_(target_flat_ids)
+    ).delete(synchronize_session=False)
     db.query(FlatLedgerEntry).filter(FlatLedgerEntry.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
+    db.query(BillLine).filter(BillLine.bill_id.in_(target_bill_ids)).delete(synchronize_session=False)
     db.query(Payment).filter(Payment.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
-    db.query(BillLine).filter(BillLine.bill_id.in_(db.query(Bill.id).filter(Bill.flat_id.in_(target_flat_ids)))).delete(
-        synchronize_session=False
-    )
     db.query(Bill).filter(Bill.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
     db.query(RegisteredUPI).filter(RegisteredUPI.flat_id.in_(target_flat_ids)).delete(synchronize_session=False)
     db.commit()
@@ -1081,7 +1089,9 @@ def test_alembic_bank_postings_upgrade_and_downgrade():
 
     try:
         env = os.environ.copy()
-        env["DATABASE_URL"] = f"sqlite:///{temp_db_path}"
+        sqlite_url = f"sqlite:///{temp_db_path}"
+        env["DATABASE_URL"] = sqlite_url
+        env["TEST_DATABASE_URL"] = sqlite_url
 
         # 1. Upgrade to head
         res_head = subprocess.run(

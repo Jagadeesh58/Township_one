@@ -13,11 +13,10 @@ Provides:
 - Safety escalation event management
 """
 
-import os
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from backend.app.core.database import get_db
@@ -61,7 +60,7 @@ from backend.app.services.complaints import (
 )
 from backend.app.services.storage import (
     generate_signed_photo_url,
-    get_storage_path,
+    read_private_object,
     save_complaint_photo,
     verify_signed_photo_token,
 )
@@ -816,10 +815,10 @@ def stream_complaint_photo(
             if not has_membership:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    file_path = get_storage_path(storage_key)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found on disk")
+    content = read_private_object(storage_key)
+    if content is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
 
-    return FileResponse(
-        path=file_path, media_type=att.content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"}
+    return Response(
+        content, media_type=att.content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"}
     )

@@ -79,6 +79,14 @@ def test_alembic_upgrade_head_on_fresh_database():
         assert "transaction_reference" in payment_columns
         assert "idempotency_key" in payment_columns
 
+        # The emergency-rule actor identifier must fit on PostgreSQL as well as SQLite.
+        classification_columns = {
+            c["name"]: c for c in inspector.get_columns("classification_decisions")
+        }
+        assert "actor_type" in classification_columns
+        actor_type = classification_columns["actor_type"]["type"]
+        assert getattr(actor_type, "length", None) == 50
+
         # Verify idempotency key index exists
         idempotency_columns = {c["name"] for c in inspector.get_columns("payment_idempotency_records")}
         assert "idempotency_key" in idempotency_columns

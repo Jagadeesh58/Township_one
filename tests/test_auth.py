@@ -198,13 +198,12 @@ def test_guard_access_to_finance_denied():
     assert "Gate security staff do not have access" in resp.json()["error"]["message"]
 
 
-def test_demo_hint_hidden_in_production(monkeypatch):
+def test_production_otp_fails_closed_when_gateway_adapter_is_unavailable(monkeypatch):
     monkeypatch.setattr(settings, "APP_ENV", "production")
     monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", f"test-sms-key-{secrets.token_urlsafe(32)}")
     resp = client.post("/api/v1/auth/otp/request", json={"phone": "9876543210"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "demo_hint" not in data or data.get("demo_hint") is None
+    assert resp.status_code == 503
+    assert "OTP delivery is unavailable" in resp.json()["error"]["message"]
 
 
 def test_otp_request_rate_limiting():
@@ -283,28 +282,22 @@ def test_database_persisted_otp_challenge():
         db.close()
 
 
-def test_production_sms_provider_fails_closed_without_credentials(monkeypatch):
-    """Verify that in production mode, missing SMS_PROVIDER_API_KEY fails closed."""
+def test_production_sms_provider_requires_credentials(monkeypatch):
     from backend.app.services.sms import get_sms_provider
 
     monkeypatch.setattr(settings, "APP_ENV", "production")
     monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", "")
-
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(RuntimeError, match="SMS_PROVIDER_API_KEY"):
         get_sms_provider()
-    assert "SMS provider requires a valid SMS_PROVIDER_API_KEY" in str(exc_info.value)
 
 
-def test_production_sms_provider_succeeds_with_configured_credentials(monkeypatch):
-    """Verify that in production mode, configured SMS_PROVIDER_API_KEY initializes provider successfully."""
+def test_production_sms_provider_does_not_claim_delivery_without_gateway(monkeypatch):
     from backend.app.services.sms import get_sms_provider
 
     monkeypatch.setattr(settings, "APP_ENV", "production")
     monkeypatch.setattr(settings, "SMS_PROVIDER_API_KEY", f"test-sms-key-{secrets.token_urlsafe(32)}")
-
     provider = get_sms_provider()
-    assert provider is not None
-    assert provider.send_otp("9876543210", "654321") is True
+    assert provider.send_otp("9876543210", "654321") is False
 
 
 def test_cookie_httponly_and_csrf_on_verify_otp():

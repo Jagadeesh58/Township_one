@@ -11,6 +11,7 @@ from backend.app.models.entities import (
     AmenitySlot,
     BankRow,
     Bill,
+    BillLine,
     Flat,
     Notification,
     OTPChallenge,
@@ -212,7 +213,13 @@ def test_billing_service_operations():
     month = 11
     year = 2028
 
-    # Clean existing test bill if any
+    # Remove dependent rows before the parent bill (PostgreSQL FK enforcement).
+    existing_bill_ids = db.query(Bill.id).filter(
+        Bill.flat_id == flat.id,
+        Bill.period_month == month,
+        Bill.period_year == year,
+    )
+    db.query(BillLine).filter(BillLine.bill_id.in_(existing_bill_ids)).delete(synchronize_session=False)
     db.query(Bill).filter(Bill.flat_id == flat.id, Bill.period_month == month, Bill.period_year == year).delete()
     db.commit()
 
@@ -225,7 +232,8 @@ def test_billing_service_operations():
         generate_flat_bill(db, flat.id, period_month=month, period_year=year)
     assert exc_info.value.status_code == 409
 
-    # Clean up test bill
+    # Clean dependent lines before deleting the generated bill.
+    db.query(BillLine).filter(BillLine.bill_id == bill.id).delete(synchronize_session=False)
     db.query(Bill).filter(Bill.id == bill.id).delete()
     db.commit()
     db.close()

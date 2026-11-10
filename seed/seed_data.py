@@ -58,7 +58,12 @@ def is_safe_local_database(url_str: str) -> bool:
     return False
 
 
-def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bool = False):
+def seed_database(
+    target_engine=None,
+    mode: str = "safe",
+    confirm_local_demo: bool = False,
+    allow_remote_demo_seed: bool = False,
+):
     """
     Seeds Township One database with 2,400 flats, 28 towers, 180 staff, 4 gates,
     and verified sample records as of DEMO_AS_OF_DATE (2026-11-06T00:00:00Z).
@@ -70,10 +75,21 @@ def seed_database(target_engine=None, mode: str = "safe", confirm_local_demo: bo
     if settings.APP_ENV.lower() == "production" or os.environ.get("TOWNSHIP_ENV") == "production":
         raise RuntimeError("FATAL SECURITY VIOLATION: Seeding or resetting is strictly prohibited in production.")
 
-    if not is_safe_local_database(db_url_str):
+    local_database = is_safe_local_database(db_url_str)
+    remote_demo_seed_allowed = (
+        allow_remote_demo_seed
+        and mode == "safe"
+        and settings.APP_ENV.lower() == "demo"
+        and os.environ.get("ALLOW_REMOTE_DEMO_SEED", "").lower() == "true"
+    )
+    if not local_database and not remote_demo_seed_allowed:
         raise RuntimeError(
-            f"FATAL: Refusing to seed or modify non-local / remote database: {db_url_str}"
+            "FATAL: Refusing to seed or modify non-local / remote database. Remote seeding is allowed only "
+            "for non-destructive safe mode when APP_ENV=demo, ALLOW_REMOTE_DEMO_SEED=true, "
+            "and --allow-remote-demo-seed is explicitly supplied."
         )
+    if mode == "reset-demo" and not local_database:
+        raise RuntimeError("FATAL: Destructive demo reset is never allowed on a remote database.")
 
     if mode == "reset-demo":
         if not confirm_local_demo and os.environ.get("CONFIRM_LOCAL_DEMO_RESET") != "true":
@@ -885,6 +901,15 @@ if __name__ == "__main__":
         action="store_true",
         help="Explicit confirmation required to execute destructive reset on local demo database"
     )
+    parser.add_argument(
+        "--allow-remote-demo-seed",
+        action="store_true",
+        help="Allow non-destructive safe seeding on a remote database only when APP_ENV=demo and ALLOW_REMOTE_DEMO_SEED=true"
+    )
     args = parser.parse_args()
 
-    seed_database(mode=args.mode, confirm_local_demo=args.confirm_local_demo)
+    seed_database(
+        mode=args.mode,
+        confirm_local_demo=args.confirm_local_demo,
+        allow_remote_demo_seed=args.allow_remote_demo_seed,
+    )

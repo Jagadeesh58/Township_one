@@ -1,7 +1,7 @@
 import os
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from backend.app.core.config import settings
@@ -43,6 +43,15 @@ test_engine = create_engine(
     connect_args={"check_same_thread": False} if test_db_url.startswith("sqlite") else {},
     pool_pre_ping=True,
 )
+
+if test_db_url.startswith("sqlite"):
+    @event.listens_for(test_engine, "connect")
+    def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record):
+        """Make SQLite test runs enforce the same declared foreign keys as PostgreSQL."""
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 # Rebind global SessionLocal to test_engine during tests

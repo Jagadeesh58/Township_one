@@ -333,3 +333,69 @@ def test_amenity_closure_workflow_blocks_new_bookings_and_cancels_conflicts():
     assert blocked_book.status_code == 409
     err_msg = (blocked_book.json().get("error", {}).get("message") or blocked_book.json().get("detail", "")).lower()
     assert "closed" in err_msg
+
+
+def test_rules_booking_lists_and_closed_slot_visibility():
+    resident_client, resident_headers = get_auth_client("9876543210")
+    guard_client, guard_headers = get_auth_client("9876543230")
+    committee_client, committee_headers = get_auth_client("9876543250")
+
+    default_rules = resident_client.get("/api/v1/amenities/nonexistent-amenity/rules", headers=resident_headers)
+    assert default_rules.status_code == 200
+    assert default_rules.json()["booking_window_days"] == 7
+    assert default_rules.json()["max_daily_slots_per_flat"] == 1
+
+    empty_guard_list = guard_client.get("/api/v1/amenities/bookings", headers=guard_headers)
+    assert empty_guard_list.status_code == 200
+    assert empty_guard_list.json() == []
+
+    db = SessionLocal()
+    try:
+        flat = db.query(Flat).filter(Flat.flat_number == "T07-1203").first()
+        hall = db.query(Amenity).filter(Amenity.name == "Clubhouse Banquet Hall").first()
+        assert flat is not None and hall is not None
+        slot = db.query(AmenitySlot).filter(
+            AmenitySlot.amenity_id == hall.id,
+            AmenitySlot.slot_date == get_effective_now().date() + timedelta(days=5),
+        ).first()
+        assert slot is not None
+        slot_id = slot.id
+        flat_id = flat.id
+    finally:
+        db.close()
+
+    booking_response = resident_client.post(
+        "/api/v1/amenities/bookings",
+        json={"flat_id": flat_id, "slot_id": slot_id, "idempotency_key": f"list-{uuid.uuid4().hex}"},
+        headers=resident_headers,
+    )
+    assert booking_response.status_code == 201
+    booking_id = booking_response.json()["id"]
+
+    resident_list = resident_client.get("/api/v1/amenities/bookings", headers=resident_headers)
+    assert resident_list.status_code == 200
+    assert any(item["id"] == booking_id for item in resident_list.json())
+
+    committee_list = committee_client.get(
+        f"/api/v1/amenities/bookings?flat_id={flat_id}", headers=committee_headers
+    )
+    assert committee_list.status_code == 200
+    assert any(item["id"] == booking_id for item in committee_list.json())
+
+    closure_response = committee_client.post(
+        "/api/v1/amenities/closures",
+        json={
+            "amenity_id": hall.id,
+            "start_date": slot.slot_date.isoformat(),
+            "end_date": slot.slot_date.isoformat(),
+            "reason": "Scheduled safety inspection",
+        },
+        headers=committee_headers,
+    )
+    assert closure_response.status_code == 201
+    slots_response = resident_client.get(
+        f"/api/v1/amenities/{hall.id}/slots?target_date={slot.slot_date.isoformat()}",
+        headers=resident_headers,
+    )
+    assert slots_response.status_code == 200
+    assert all(item["is_closed"] is True for item in slots_response.json())

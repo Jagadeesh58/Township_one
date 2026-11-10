@@ -71,6 +71,11 @@ def get_effective_migration_url() -> str:
         )
 
     # Validate URL structure
+    if selected_url.startswith("postgres://"):
+        selected_url = "postgresql+psycopg://" + selected_url[len("postgres://"):]
+    elif selected_url.startswith("postgresql://"):
+        selected_url = "postgresql+psycopg://" + selected_url[len("postgresql://"):]
+
     try:
         make_url(selected_url)
     except Exception as exc:

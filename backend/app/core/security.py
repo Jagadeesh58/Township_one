@@ -92,11 +92,15 @@ def create_otp_challenge(phone: str, db: Session, ip_address: str | None = None)
         created_at=now,
     )
     db.add(challenge)
+    # Persist only when the selected provider confirms delivery. The current production
+    # adapter intentionally fails closed until an actual gateway transport is added.
+    if not sms_provider.send_otp(phone, otp_code):
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OTP delivery is unavailable. Contact the administrator or use the configured demo environment.",
+        )
     db.commit()
-
-    # Dispatch via SMS provider
-    sms_provider.send_otp(phone, otp_code)
-
     return otp_code
 
 
