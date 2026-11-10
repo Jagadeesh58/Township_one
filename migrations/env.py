@@ -20,6 +20,7 @@ from sqlalchemy.engine.url import make_url
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import all models to ensure they are registered with Base.metadata
+import backend.app.models.entities  # noqa: F401
 from backend.app.core.config import settings
 from backend.app.core.database import Base
 
