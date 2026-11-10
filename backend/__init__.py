@@ -1,1 +1,1 @@
-# Township One Backend Package
+# App package

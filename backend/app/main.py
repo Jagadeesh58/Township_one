@@ -1,11 +1,12 @@
 import secrets
 import time
 import uuid
+from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.api import (
@@ -18,6 +19,7 @@ from backend.app.api import (
     health,
     notices,
     notifications,
+    operations,
     payments,
     visitors,
 )
@@ -141,8 +143,50 @@ app.include_router(visitors.router, prefix=settings.API_PREFIX)
 app.include_router(amenities.router, prefix=settings.API_PREFIX)
 app.include_router(notices.router, prefix=settings.API_PREFIX)
 app.include_router(committee.router, prefix=settings.API_PREFIX)
+app.include_router(operations.router, prefix=settings.API_PREFIX)
+
+
+FRONTEND_DIST = (Path(__file__).resolve().parents[2] / "frontend" / "dist").resolve()
 
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to Township One API", "documentation": "/docs", "health": "/health", "version": "1.0.0"}
+    """Serve the compiled resident application when present; retain an API fallback for local tests."""
+    index_file = FRONTEND_DIST / "index.html"
+    if index_file.is_file():
+        return FileResponse(index_file)
+    return {
+        "message": "Welcome to Township One API",
+        "documentation": "/docs",
+        "health": "/health",
+        "version": "1.0.0",
+    }
+
+
+@app.get("/{requested_path:path}", include_in_schema=False)
+def serve_frontend_route(requested_path: str):
+    """Serve static assets and React Router paths from the same origin as the API."""
+    reserved_prefixes = ("api/", "docs", "redoc", "openapi.json", "health")
+    if requested_path.startswith(reserved_prefixes):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Not found")
+
+    candidate = (FRONTEND_DIST / requested_path).resolve()
+    try:
+        candidate.relative_to(FRONTEND_DIST)
+    except ValueError:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if candidate.is_file():
+        return FileResponse(candidate)
+
+    index_file = FRONTEND_DIST / "index.html"
+    if index_file.is_file():
+        return FileResponse(index_file)
+
+    from fastapi import HTTPException
+
+    raise HTTPException(status_code=404, detail="Frontend build is unavailable")

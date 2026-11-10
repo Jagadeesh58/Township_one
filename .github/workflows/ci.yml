@@ -40,6 +40,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://township_user:township_pass@localhost:5432/township_app
       TEST_DATABASE_URL: postgresql+psycopg://township_user:township_pass@localhost:5432/township_test
       PG_DATABASE_URL: postgresql+psycopg://township_user:township_pass@localhost:5432/township_test
+      PG_MIGRATION_DATABASE_URL: postgresql+psycopg://township_user:township_pass@localhost:5432/township_migration
       TOWNSHIP_ENV: test
       SECRET_KEY: ci-test-secret-key-32-chars-long-minimum!
       DEMO_AS_OF_DATE: "2026-11-06T00:00:00Z"
@@ -61,26 +62,59 @@ jobs:
 
       - name: Code Quality Checks
         run: |
-          ruff check backend
-          ruff format --check backend
+          ruff check .
+          ruff format --check .
           mypy backend/app
 
       - name: Prepare Postgres databases
         run: |
-          python -c "import psycopg; conn = psycopg.connect('postgresql://township_user:township_pass@localhost:5432/postgres', autocommit=True); conn.execute('CREATE DATABASE township_app;'); conn.close()"
+          python -c "import psycopg; conn = psycopg.connect('postgresql://township_user:township_pass@localhost:5432/postgres', autocommit=True); conn.execute('CREATE DATABASE township_app;'); conn.execute('CREATE DATABASE township_migration;'); conn.close()"
 
-      - name: Run Alembic migrations and verify zero schema drift
+      - name: Run Alembic migration cycle on a disposable database
+        env:
+          DATABASE_URL: postgresql+psycopg://township_user:township_pass@localhost:5432/township_migration
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head
+          alembic check
+
+      - name: Migrate the reviewer database
         run: |
           alembic upgrade head
           alembic check
 
-      - name: Verify Seed Script on Postgres
+      - name: Verify seed script on PostgreSQL
         run: |
-          python scripts/seed.py --mode reset-demo --confirm-local-demo
+          python -m seed.seed_data --mode reset-demo --confirm-local-demo
 
       - name: Run Pytest Suite with Coverage
         run: |
-          python -m pytest tests/ --cov=backend/app --cov-report=term -v
+          python -m pytest tests/ -rs --cov=backend/app --cov-report=term --cov-fail-under=90 -v
+
+
+  backend-sqlite:
+    runs-on: ubuntu-latest
+    env:
+      TOWNSHIP_ENV: test
+      DATABASE_URL: sqlite:///./township_ci.db
+      TEST_DATABASE_URL: sqlite:///./township_ci_test.db
+      DEMO_AS_OF_DATE: "2026-11-06T00:00:00Z"
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run SQLite backend tests
+        run: python -m pytest tests/ -rs -q
 
   frontend:
     runs-on: ubuntu-latest
@@ -93,7 +127,7 @@ jobs:
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22.22.2"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 

@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: township-one-demo
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: Township One
+      - key: APP_ENV
+        value: demo
+      - key: DEBUG
+        value: "false"
+      - key: API_PREFIX
+        value: /api/v1
+      - key: SEED_DEMO_DATA
+        value: "true"
+      - key: ALLOW_REMOTE_DEMO_SEED
+        value: "true"
+      - key: STORAGE_BACKEND
+        value: cloudinary
+      - key: STORAGE_DIR
+        value: /tmp/township-private
+      - key: DEMO_AS_OF_DATE
+        value: "2026-11-06T00:00:00Z"
+      - key: DEMO_OTP_CODE
+        value: "123456"
+      - key: SECRET_KEY
+        sync: false
+      - key: SIGNING_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: RETENTION_JOB_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

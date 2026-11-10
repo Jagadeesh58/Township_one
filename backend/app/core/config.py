@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     PORT: int = 8000
     API_PREFIX: str = "/api/v1"
     SECRET_KEY: str = ""
+    SIGNING_KEY: str = ""
+    SIGNING_KEY_FILE: str = ""
     ALLOWED_ORIGINS: str | list[str] = [
         "http://localhost:5173",
         "http://localhost:3000",
@@ -58,12 +60,22 @@ class Settings(BaseSettings):
     DEFAULT_GRACE_PERIOD_DAYS: int = 5
     DEMO_LATE_FEE_PERCENTAGE_PA: float = 18.00
 
-    # Storage & Attachments
+    # Storage & Attachments. Local is for development; hosted demo uses authenticated Cloudinary assets.
+    STORAGE_BACKEND: str = "local"
     STORAGE_DIR: str = os.path.join(os.getcwd(), "private_storage")
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+    R2_ACCOUNT_ID: str = ""
+    R2_ENDPOINT_URL: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET: str = ""
+    RETENTION_JOB_TOKEN: str = ""
 
     # AI Classification & Emergency Service
     GROQ_API_KEY: str = ""
-    GROQ_MODEL_ID: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL_ID: str = "openai/gpt-oss-20b"
     GROQ_TIMEOUT_SECONDS: float = 5.0
 
     # Demo SLA Timers (Hours per urgency)
@@ -83,12 +95,45 @@ class Settings(BaseSettings):
 
     def validate_production_guards(self):
         """
-        Fail-closed security guard:
-        In production, verifies that:
-        - SECRET_KEY is not a known default, placeholder, or low-entropy key.
-        - DEBUG is strictly False.
-        - SMS_PROVIDER_API_KEY is configured.
+        Fail-closed security guards for the production and hosted-demo profiles.
+
+        Production requires a real SMS transport. The public challenge demo uses
+        fixed OTP only, but its shared database, signing key, object storage and
+        scheduled-job credential must still be persistent and explicitly set.
         """
+        if self.APP_ENV.lower() == "demo" and self.STORAGE_BACKEND.lower() in {"cloudinary", "cloudflare_r2"}:
+            required_hosted_values = {
+                "DATABASE_URL": self.DATABASE_URL,
+                "SECRET_KEY": self.SECRET_KEY,
+                "SIGNING_KEY": self.SIGNING_KEY,
+                "RETENTION_JOB_TOKEN": self.RETENTION_JOB_TOKEN,
+            }
+            if self.STORAGE_BACKEND.lower() == "cloudinary":
+                required_hosted_values.update({
+                    "CLOUDINARY_CLOUD_NAME": self.CLOUDINARY_CLOUD_NAME,
+                    "CLOUDINARY_API_KEY": self.CLOUDINARY_API_KEY,
+                    "CLOUDINARY_API_SECRET": self.CLOUDINARY_API_SECRET,
+                })
+            else:
+                required_hosted_values.update({
+                    "R2_ACCOUNT_ID": self.R2_ACCOUNT_ID,
+                    "R2_ACCESS_KEY_ID": self.R2_ACCESS_KEY_ID,
+                    "R2_SECRET_ACCESS_KEY": self.R2_SECRET_ACCESS_KEY,
+                    "R2_BUCKET": self.R2_BUCKET,
+                })
+            missing = [name for name, value in required_hosted_values.items() if not str(value).strip()]
+            explicitly_configured = {"DATABASE_URL", "SECRET_KEY", "SIGNING_KEY", "RETENTION_JOB_TOKEN"}
+            missing_explicit = sorted(explicitly_configured - self.model_fields_set)
+            if missing or missing_explicit:
+                raise RuntimeError(
+                    "FATAL HOSTED DEMO CONFIGURATION: Set the required persistent secrets and storage/database "
+                    f"values. Missing values: {sorted(missing)}; not explicitly configured: {missing_explicit}."
+                )
+            if not self.DATABASE_URL.startswith(("postgresql://", "postgresql+")):
+                raise RuntimeError("FATAL HOSTED DEMO CONFIGURATION: DATABASE_URL must use PostgreSQL.")
+            if len(self.SECRET_KEY) < 32 or len(self.RETENTION_JOB_TOKEN) < 32:
+                raise RuntimeError("FATAL HOSTED DEMO CONFIGURATION: SECRET_KEY and RETENTION_JOB_TOKEN must be 32+ characters.")
+
         if self.APP_ENV.lower() == "production":
             insecure_markers = [
                 "super-secret",
@@ -113,6 +158,9 @@ class Settings(BaseSettings):
 
             if self.DEBUG:
                 raise RuntimeError("FATAL SECURITY VIOLATION: DEBUG mode must be False in production.")
+
+            if not self.SIGNING_KEY.strip() and not self.SIGNING_KEY_FILE.strip():
+                raise RuntimeError("FATAL SECURITY VIOLATION: SIGNING_KEY or SIGNING_KEY_FILE is required in production.")
 
             if not self.SMS_PROVIDER_API_KEY or len(self.SMS_PROVIDER_API_KEY.strip()) < 8:
                 raise RuntimeError(

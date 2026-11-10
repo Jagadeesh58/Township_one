@@ -36,10 +36,10 @@ test-frontend:
 	cd frontend && $(NPM) test
 
 seed:
-	$(PYTHON) scripts/seed.py --mode safe
+	$(PYTHON) -m seed.seed_data --mode safe
 
 reset-demo:
-	$(PYTHON) scripts/seed.py --mode reset-demo --confirm-local-demo
+	$(PYTHON) -m seed.seed_data --mode reset-demo --confirm-local-demo
 
 build:
 	cd frontend && $(NPM) run build
