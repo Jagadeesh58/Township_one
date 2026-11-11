@@ -1,10 +1,10 @@
 # Township One
 
-**Gated township resident and operations platform** · Company A, Pune · Brief 2
+**Gated township resident and operations platform** · Township One, Pune
 
 Repository: https://github.com/Jagadeesh58/Township_one
 
-Township One consolidates the high-frequency tasks of a 2,400-home gated community: maintenance dues, test payments, complaint tracking, visitor approvals, notices and amenity bookings. Role-specific workspaces support accounts reconciliation, help-desk triage, guard operations and committee oversight.
+Township One consolidates the high-frequency tasks of a 2,400-home gated community: maintenance dues, simulated payments, complaint tracking, visitor approvals, notices and amenity bookings. Role-specific workspaces support accounts reconciliation, help-desk triage, guard operations and committee oversight.
 
 ## Product surface
 

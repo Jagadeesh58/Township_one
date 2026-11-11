@@ -159,7 +159,7 @@ export const CommitteeNoticeEditor: React.FC<CommitteeNoticeEditorProps> = ({ us
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{t.manage_notices}</h1>
-          <p style={{ margin: '0.35rem 0', color: 'var(--text-muted)' }}>Committee notices, audiences and revision history</p>
+          <p style={{ margin: '0.35rem 0', color: 'var(--text-muted)' }}>Committee notices, audience targeting and revision history</p>
         </div>
         <button type="button" onClick={startNew} style={{ minHeight: 44, padding: '0.5rem 0.9rem' }}>+ {t.create_draft}</button>
       </header>

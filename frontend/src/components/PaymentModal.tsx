@@ -83,13 +83,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         onPaymentSuccess(res.receipt);
       } else if (res.status === 'FAILED') {
         setPaymentState('FAILED');
-        setErrorMsg('Simulated Payment Failed / Bank Declined (Test Mode Outcome)');
+        setErrorMsg('Payment failed. Please try again.');
       } else if (res.status === 'PENDING') {
         setPaymentState('FAILED');
-        setErrorMsg('Simulated Payment Pending (Awaiting Settlement)');
+        setErrorMsg('Payment is being processed. Check your ledger shortly.');
       } else if (res.status === 'EXPIRED') {
         setPaymentState('FAILED');
-        setErrorMsg('Simulated Payment Session Expired');
+        setErrorMsg('Your payment session has expired. Please try again.');
       }
     } catch (err: any) {
       const msg = err.message || '';
@@ -102,7 +102,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
       if (isNetwork) {
         setPaymentState('NETWORK_INTERRUPTION');
-        setErrorMsg('Network interruption detected. You can safely retry without double-charge risk (reusing the exact idempotency key).');
+        setErrorMsg('Network error. You can safely retry — your payment will not be duplicated.');
       } else {
         setPaymentState('FAILED');
         setErrorMsg(msg || 'Payment processing error');
@@ -170,7 +170,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         {unpaidBills.length > 1 && (
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '0.35rem' }}>
-              Select Bill ({unpaidBills.length} unpaid):
+              Select a Bill ({unpaidBills.length} unpaid):
             </label>
             <select
               value={selectedBillId}
@@ -285,7 +285,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 cursor: 'pointer'
               }}
             >
-              🔄 Retry Request (Safe with same Idempotency Key)
+              🔄 Retry Payment
             </button>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button
@@ -351,7 +351,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 cursor: 'pointer'
               }}
             >
-              Try New Attempt
+              Start New Attempt
             </button>
           </div>
         ) : (

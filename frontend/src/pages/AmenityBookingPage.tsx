@@ -138,7 +138,7 @@ export const AmenityBookingPage: React.FC<AmenityBookingPageProps> = ({
             🏊 {t.amenities}
           </h2>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Book club facilities, sports courts & banquet spaces with instant capacity lock
+            Book club facilities, sports courts & banquet spaces with immediate slot reservation
           </div>
         </div>
 
@@ -489,7 +489,7 @@ export const AmenityBookingPage: React.FC<AmenityBookingPageProps> = ({
               Confirm Amenity Booking
             </h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>
-              Lock slot reservation for your flat.
+              This will reserve the slot for your flat.
             </p>
 
             <div style={{
@@ -506,7 +506,7 @@ export const AmenityBookingPage: React.FC<AmenityBookingPageProps> = ({
               <div><strong>Date:</strong> {selectedDate}</div>
               <div><strong>Time Slot:</strong> {bookingSlot.start_time.slice(0, 5)} - {bookingSlot.end_time.slice(0, 5)}</div>
               <div><strong>Fee Amount:</strong> ₹{selectedAmenity.hourly_fee}</div>
-              <div><strong>Daily Rule:</strong> 1 booking per flat per day enforced</div>
+              <div><strong>Daily Rule:</strong> Max 1 booking per flat per day</div>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>

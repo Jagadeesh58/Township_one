@@ -66,10 +66,16 @@ def list_guard_gates(
     elif "GUARD" in roles:
         assigned = get_guard_assigned_gate_ids(current_user)
         if not assigned:
-            raise HTTPException(status_code=403, detail="No active gate assignment is configured for this guard.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No active gate assignment is configured for this guard.",
+            )
         query = db.query(Gate).filter(Gate.id.in_(assigned))
     else:
-        raise HTTPException(status_code=403, detail="Gate operator access is required.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Gate operator access is required.",
+        )
     return [
         {"id": gate.id, "gate_number": gate.gate_number, "name": gate.name, "description": gate.location_description}
         for gate in query.order_by(Gate.gate_number).all()
@@ -706,14 +712,14 @@ def enroll_gate_device(
         )
         db.add(device)
     elif not device.is_active:
-        raise HTTPException(status_code=403, detail="This gate device has been disabled.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This gate device has been disabled.")
     elif device.generation_id != payload.generation_id:
         raise HTTPException(
-            status_code=409,
-            detail="Device generation differs from its server enrollment. An administrator must re-enroll this device.",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This device registration is outdated. An administrator must re-enrol this device.",
         )
     elif device.gate_id != payload.gate_id:
-        raise HTTPException(status_code=403, detail="This device is enrolled for another gate.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This device is enrolled for another gate.")
     device.last_seen_at = datetime.now(UTC)
     db.commit()
     db.refresh(device)
@@ -760,7 +766,9 @@ def get_time_anchor(
         .first()
     )
     if not device:
-        raise HTTPException(status_code=403, detail="Gate device must be enrolled before obtaining a time anchor.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Gate device must be enrolled before syncing with the server."
+        )
     now = datetime.now(UTC)
     payload = {
         "user_id": current_user.id,
@@ -791,10 +799,16 @@ async def sync_offline_entry_endpoint(
     try:
         item = OfflineSyncItem.model_validate_json(metadata)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail="Offline visitor metadata is invalid.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="The visitor information is incomplete or invalid.",
+        ) from exc
     enforce_guard_gate_scope(current_user, item.gate_id)
     photo_bytes = await photo.read(5 * 1024 * 1024 + 1)
     if len(photo_bytes) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Visitor photograph exceeds 5 MB.")
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Visitor photograph exceeds 5 MB.",
+        )
     result = sync_offline_entry_with_photo(db, current_user.id, item, photo_bytes)
     return OfflineSyncResponse(**result)

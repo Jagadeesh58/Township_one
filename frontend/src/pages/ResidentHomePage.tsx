@@ -55,6 +55,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
   const [createdPass, setCreatedPass] = useState<PreApprovalItem | null>(null);
   const [guestPassError, setGuestPassError] = useState<string | null>(null);
   const [isSubmittingPass, setIsSubmittingPass] = useState(false);
+  const [passCopied, setPassCopied] = useState(false);
 
   const loadBilling = async () => {
     if (!selectedFlatId) return;
@@ -190,13 +191,13 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
       }}>
         <div>
           <div style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Welcome Resident
+            Welcome, Resident
           </div>
           <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: '0.2rem 0' }}>
             {user.name}
           </h2>
           <div style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
-            Flat {summary?.flat_number || 'Loading...'} • Company A Township, Pune
+            Flat {summary?.flat_number || 'Loading...'} • Township One, Pune
           </div>
         </div>
 
@@ -407,7 +408,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
                     CMP-2026-1001: Severe bathroom ceiling water seepage
                   </div>
                   <div style={{ fontSize: '0.75rem', color: '#e11d48', marginTop: '2px' }}>
-                    Category: WATER_SUPPLY • Urgency: HIGH • Assigned to Plumbing Team
+                    Category: Water Supply • Urgency: High • Assigned to Plumbing Team
                   </div>
                 </div>
                 <span style={{
@@ -418,7 +419,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
                   padding: '2px 8px',
                   borderRadius: '10px'
                 }}>
-                  IN_PROGRESS
+                  In Progress
                 </span>
               </div>
             ) : (
@@ -511,7 +512,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
                 📢 {t.notice_board}
               </span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Tower & Township Updates
+                Tower & Community Updates
               </span>
             </div>
 
@@ -659,7 +660,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
               🎟️ {t.generate_pass}
             </h3>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>
-              Create a 6-digit fast-track entry code with offline cryptographic verification.
+              Create a 6-digit fast-track entry code with offline verification.
             </p>
 
             {createdPass ? (
@@ -671,7 +672,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
                 textAlign: 'center',
                 marginBottom: '1rem'
               }}>
-                <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>GUEST PASS CODE</div>
+                <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: 600 }}>Guest Pass Code</div>
                 <div style={{
                   fontSize: '2rem',
                   fontWeight: 900,
@@ -688,7 +689,8 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
                   onClick={() => {
                     if (createdPass.code) {
                       navigator.clipboard?.writeText(createdPass.code);
-                      alert(`Code ${createdPass.code} copied!`);
+                      setPassCopied(true);
+                      setTimeout(() => setPassCopied(false), 2000);
                     }
                   }}
                   style={{
@@ -703,7 +705,7 @@ export const ResidentHomePage: React.FC<ResidentHomePageProps> = ({
                     cursor: 'pointer'
                   }}
                 >
-                  📋 Copy Code to Share
+                  {passCopied ? '✓ Copied!' : '📋 Copy Pass Code'}
                 </button>
               </div>
             ) : (

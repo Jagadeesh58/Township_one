@@ -69,7 +69,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ lang, onLoginSuccess, onLa
       const res = await api.loginWithPassword(cleanPhone, cleanPassword);
       onLoginSuccess(res.user);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Login failed. For demo accounts, use password 123456.');
+      setErrorMsg(err.message || 'Login failed. Please check your credentials and try again.');
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ lang, onLoginSuccess, onLa
       if (res.demo_hint) {
         setSuccessMsg(res.demo_hint);
       } else {
-        setSuccessMsg('OTP code 123456 generated for evaluation.');
+        setSuccessMsg('OTP sent successfully.');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to request OTP');
@@ -115,7 +115,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ lang, onLoginSuccess, onLa
       const res = await api.verifyOtp(phone.trim(), targetOtp);
       onLoginSuccess(res.user);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Invalid OTP code. Please use 123456 or try Password Login.');
+      setErrorMsg(err.message || 'Invalid OTP code. Please try again or use Password Login.');
     } finally {
       setLoading(false);
     }
@@ -335,7 +335,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ lang, onLoginSuccess, onLa
             marginBottom: '0.75rem',
             letterSpacing: '0.05em'
           }}>
-            Select a Role to Sign In (1-Click)
+            Select a Role to Sign In
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>

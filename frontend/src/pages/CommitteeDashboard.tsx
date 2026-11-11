@@ -129,7 +129,7 @@ export const CommitteeDashboard: React.FC<CommitteeDashboardProps> = ({
       }}>
         <div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-            Executive Operations & Auditing
+            Executive Operations & Audit
           </div>
           <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0.2rem 0' }}>
             🏛️ {t.committee_dashboard}
@@ -208,7 +208,7 @@ export const CommitteeDashboard: React.FC<CommitteeDashboardProps> = ({
             fontSize: '0.75rem',
             fontWeight: 700
           }}>
-            ✓ Mathematical Sum Verified
+            ✓ Totals Verified
           </span>
         </div>
 
@@ -313,11 +313,11 @@ export const CommitteeDashboard: React.FC<CommitteeDashboardProps> = ({
             </div>
             <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '6px' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Average Turnaround</div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{complaints.mean_resolution_hours || '4.2'}h</div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{complaints.mean_resolution_hours ? `${complaints.mean_resolution_hours}h` : '—'}</div>
             </div>
             <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '6px' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Median Turnaround</div>
-              <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{complaints.median_resolution_hours || '3.5'}h</div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 700 }}>{complaints.median_resolution_hours ? `${complaints.median_resolution_hours}h` : '—'}</div>
             </div>
             <div style={{ background: '#fef2f2', padding: '0.75rem', borderRadius: '6px' }}>
               <div style={{ fontSize: '0.75rem', color: '#991b1b' }}>SLA Breached</div>

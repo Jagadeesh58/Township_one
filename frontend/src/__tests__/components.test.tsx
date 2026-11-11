@@ -215,6 +215,6 @@ describe('React Components: String/Decimal Runtime Resilience', () => {
     expect(screen.getByText('RCPT-20261106-0001')).toBeInTheDocument();
     expect(screen.getByText('Swati Joshi')).toBeInTheDocument();
     expect(screen.getByText('₹6,370.00')).toBeInTheDocument();
-    expect(screen.getByText('✓ PAID & RECONCILED')).toBeInTheDocument();
+    expect(screen.getByText('✓ PAYMENT CONFIRMED')).toBeInTheDocument();
   });
 });

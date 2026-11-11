@@ -1,5 +1,5 @@
 """
-Township One — Complaint Lifecycle, AI Triage, Duplicates & Help Desk API Endpoints.
+Township One â€” Complaint Lifecycle, AI Triage, Duplicates & Help Desk API Endpoints.
 
 Provides:
 - Resident Complaint submission (with trilingual emergency detection & AI classification)
@@ -176,7 +176,7 @@ async def raise_complaint(
 
     flat = db.query(Flat).filter(Flat.id == flat_id).first()
     if not flat:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flat not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flat not found.")
 
     full_text = f"{title.strip()} {description.strip()}"
     now_utc = datetime.now(UTC)
@@ -442,7 +442,7 @@ def acknowledge_safety_event(
     """Acknowledges or dismisses a safety event with mandatory audit trail."""
     ev = db.query(SafetyEvent).filter(SafetyEvent.id == event_id).first()
     if not ev:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Safety event not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Safety event not found.")
 
     now_utc = datetime.now(UTC)
     old_status = ev.status
@@ -487,7 +487,7 @@ def get_complaint_detail(
     """
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     user_roles = [ra.role_code for ra in current_user.role_assignments if ra.is_active]
     is_staff = any(r in ["HELPDESK", "ADMIN", "MANAGEMENT", "MAINTENANCE", "OPERATIONS"] for r in user_roles)
@@ -496,7 +496,7 @@ def get_complaint_detail(
         # Check flat membership
         has_membership = any(fm.flat_id == complaint.flat_id and fm.is_active for fm in current_user.flat_memberships)
         if not has_membership:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     return to_complaint_response(complaint, db, current_user)
 
@@ -515,7 +515,7 @@ def transition_status(
     """
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     if trans_req.expected_version is not None and complaint.version != trans_req.expected_version:
         raise HTTPException(
@@ -555,7 +555,7 @@ def correct_complaint_classification(
     """
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     user_roles = [ra.role_code for ra in current_user.role_assignments if ra.is_active]
     role = "ADMIN" if "ADMIN" in user_roles else "HELPDESK"
@@ -587,12 +587,12 @@ def rate_complaint(
     """Resident rates complaint resolution (1-5 stars) after status is RESOLVED."""
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     # Flat check
     has_membership = any(fm.flat_id == complaint.flat_id and fm.is_active for fm in current_user.flat_memberships)
     if not has_membership:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: not a resident of this flat")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: not a resident of this flat.")
 
     if complaint.status not in ["RESOLVED", "CLOSED"]:
         raise HTTPException(
@@ -631,11 +631,11 @@ def request_reopen(
     """Resident requests reopening a RESOLVED or CLOSED complaint."""
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     has_membership = any(fm.flat_id == complaint.flat_id and fm.is_active for fm in current_user.flat_memberships)
     if not has_membership:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: not a resident of this flat")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied: not a resident of this flat.")
 
     complaint.reopen_reason = reopen_req.reason
 
@@ -664,7 +664,7 @@ def get_duplicate_candidates(
     """Finds near-duplicate tickets in the same tower using char n-gram TF-IDF cosine similarity."""
     target_comp = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not target_comp:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     # Fetch other open/in-progress complaints from the same tower
     candidates = (
@@ -716,7 +716,7 @@ def link_duplicate(
     c1 = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     c2 = db.query(Complaint).filter(Complaint.id == link_req.target_complaint_id).first()
     if not c1 or not c2:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
 
     now_utc = datetime.now(UTC)
 
@@ -802,7 +802,7 @@ def stream_complaint_photo(
 
     att = db.query(ComplaintAttachment).filter(ComplaintAttachment.storage_key == storage_key).first()
     if not att:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found.")
 
     if not has_valid_signature and current_user:
         user_roles = [ra.role_code for ra in current_user.role_assignments if ra.is_active]
@@ -810,14 +810,14 @@ def stream_complaint_photo(
         if not is_staff:
             c = db.query(Complaint).filter(Complaint.id == att.complaint_id).first()
             if not c:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Complaint not found.")
             has_membership = any(fm.flat_id == c.flat_id and fm.is_active for fm in current_user.flat_memberships)
             if not has_membership:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
 
     content = read_private_object(storage_key)
     if content is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file not found.")
 
     return Response(
         content, media_type=att.content_type or "image/jpeg", headers={"Cache-Control": "private, no-store"}

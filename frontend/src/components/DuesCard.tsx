@@ -82,7 +82,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
             padding: '2px 8px',
             borderRadius: '12px'
           }}>
-            Due 15th
+            Due by the 15th
           </span>
         ) : (
           <span style={{
@@ -108,7 +108,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
         </div>
         {unpaidCount > 1 && (
           <div style={{ fontSize: '0.78rem', color: '#b45309', marginTop: '0.35rem', fontWeight: 600 }}>
-            {unpaidCount} unpaid bills pending
+            {unpaidCount} unpaid {unpaidCount === 1 ? 'bill' : 'bills'}
           </div>
         )}
       </div>
@@ -134,7 +134,7 @@ export const DuesCard: React.FC<DuesCardProps> = ({
                 fontSize: '0.68rem',
                 fontWeight: 700
               }}>
-                Illustrative demo rule
+                Indicative estimate
               </span>
             </div>
             <span>+{formatMoney(summary.estimated_late_fee)}</span>

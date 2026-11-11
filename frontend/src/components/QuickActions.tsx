@@ -19,7 +19,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({ lang, onActionClick 
   return (
     <div>
       <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.6rem', textTransform: 'uppercase' }}>
-        {t.quick_actions} (2-Tap Shortcuts)
+        {t.quick_actions}
       </div>
       <div style={{
         display: 'grid',

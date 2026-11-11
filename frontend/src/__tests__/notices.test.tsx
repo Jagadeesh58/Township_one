@@ -90,9 +90,9 @@ describe('committee notice editor', () => {
     await screen.findByText('Notices');
 
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Tower 12 water work' } });
-    fireEvent.change(screen.getByLabelText('English text'), { target: { value: 'Water supply will pause for maintenance.' } });
-    fireEvent.change(screen.getByLabelText('Hindi text'), { target: { value: 'जल आपूर्ति रखरखाव के लिए रुकेगी।' } });
-    fireEvent.change(screen.getByLabelText('Marathi text'), { target: { value: 'देखभालीसाठी पाणीपुरवठा थांबेल.' } });
+    fireEvent.change(screen.getByLabelText(/English text/i), { target: { value: 'Water supply will pause for maintenance.' } });
+    fireEvent.change(screen.getByLabelText(/Hindi text/i), { target: { value: 'जल आपूर्ति रखरखाव के लिए रुकेगी।' } });
+    fireEvent.change(screen.getByLabelText(/Marathi text/i), { target: { value: 'देखभालीसाठी पाणीपुरवठा थांबेल.' } });
     fireEvent.change(screen.getByLabelText('Audience'), { target: { value: 'TOWER' } });
     fireEvent.change(screen.getByLabelText('Tower ID'), { target: { value: 'tower-12' } });
 

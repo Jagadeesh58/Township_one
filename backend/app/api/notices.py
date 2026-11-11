@@ -137,7 +137,7 @@ def list_managed_notices(
     db: Session = Depends(get_db),
 ):
     if not can_manage_notices(current_user):
-        raise HTTPException(status_code=403, detail="Committee notice access is required.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Committee notice access is required.")
     notices = db.query(Notice).order_by(Notice.id.desc()).all()
     result = []
     for notice in notices:
@@ -183,7 +183,7 @@ def publish_notice_endpoint(
     db: Session = Depends(get_db),
 ):
     if not can_manage_notices(current_user):
-        raise HTTPException(status_code=403, detail="Committee notice access is required.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Committee notice access is required.")
     notice = publish_notice(db, notice_id, current_user.id)
     db.commit()
     return {"id": notice.id, "status": notice.status, "published_at": notice.published_at}
@@ -197,7 +197,7 @@ def get_notice_revisions(
     db: Session = Depends(get_db),
 ):
     if not can_manage_notices(current_user):
-        raise HTTPException(status_code=403, detail="Committee notice access is required.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Committee notice access is required.")
 
     revisions = (
         db.query(NoticeRevision)
@@ -243,7 +243,7 @@ def create_notice_endpoint(
     db: Session = Depends(get_db),
 ):
     if not can_manage_notices(current_user):
-        raise HTTPException(status_code=403, detail="Committee notice access is required.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Committee notice access is required.")
 
     notice = create_notice(db, payload, current_user.id)
     db.commit()
@@ -259,7 +259,7 @@ def update_notice_endpoint(
     db: Session = Depends(get_db),
 ):
     if not can_manage_notices(current_user):
-        raise HTTPException(status_code=403, detail="Committee notice access is required.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Committee notice access is required.")
 
     new_rev = update_notice_create_revision(db, notice_id, payload, current_user.id)
     db.commit()
@@ -274,7 +274,7 @@ def withdraw_notice_endpoint(
     db: Session = Depends(get_db),
 ):
     if not can_manage_notices(current_user):
-        raise HTTPException(status_code=403, detail="Committee notice access is required.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Committee notice access is required.")
 
     notice = withdraw_notice(db, notice_id, current_user.id)
     db.commit()
@@ -289,16 +289,16 @@ def mark_revision_read_endpoint(
 ):
     revision = db.query(NoticeRevision).filter(NoticeRevision.id == revision_id).first()
     if not revision:
-        raise HTTPException(status_code=404, detail="Notice revision not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notice revision not found.")
     notice = db.query(Notice).filter(Notice.id == revision.notice_id).first()
     if not notice or notice.status != "PUBLISHED":
-        raise HTTPException(status_code=404, detail="Notice is not available.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notice is not available.")
     if not can_manage_notices(current_user):
         now = get_effective_now()
         published_at = as_utc(notice.published_at)
         expires_at = as_utc(notice.expires_at)
         if (published_at and published_at > now) or (expires_at and expires_at < now):
-            raise HTTPException(status_code=404, detail="Notice is not available.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notice is not available.")
         memberships = (
             db.query(FlatMembership)
             .join(Flat)
@@ -309,10 +309,12 @@ def mark_revision_read_endpoint(
             .all()
         )
         if not memberships:
-            raise HTTPException(status_code=403, detail="Active flat membership is required.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active flat membership is required.")
         tower_ids = {membership.flat.tower_id for membership in memberships}
         if revision.audience != "ALL" and revision.tower_id not in tower_ids:
-            raise HTTPException(status_code=403, detail="Notice is outside this resident's audience.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Notice is outside this resident's audience."
+            )
     try:
         record_notice_read(db, revision_id, current_user.id)
         db.commit()

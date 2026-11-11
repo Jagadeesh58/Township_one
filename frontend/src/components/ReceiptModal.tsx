@@ -38,7 +38,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ receipt, lang, onClo
         {/* Receipt Header */}
         <div style={{ textAlign: 'center', borderBottom: '2px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            Company A, Pune • Official Maintenance Receipt
+            Township One, Pune • Official Maintenance Receipt
           </div>
           <h2 style={{ fontSize: '1.35rem', fontWeight: 800, marginTop: '0.2rem', color: 'var(--text-main)' }}>
             {t.receipt}
@@ -53,7 +53,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ receipt, lang, onClo
             padding: '2px 10px',
             borderRadius: '12px'
           }}>
-            ✓ PAID & RECONCILED
+            ✓ PAYMENT CONFIRMED
           </div>
         </div>
 

@@ -171,7 +171,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ lang }) => {
           <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
             {loading ? (
               <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Loading...
+                {t.processing}
               </div>
             ) : notifications.length === 0 ? (
               <div style={{ padding: '1.5rem', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>

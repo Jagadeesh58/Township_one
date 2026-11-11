@@ -167,7 +167,7 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
   const handleRecordArrival = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentGate) {
-      setError('No authorized gate is assigned to this guard.');
+      setError('No gate is assigned to your account. Please contact the administrator.');
       return;
     }
     if (!visitorName.trim() || !targetFlatId.trim()) {
@@ -259,7 +259,7 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
     try {
       if (!isOnline) {
         if (verifyCode.includes('.')) {
-          setSuccessMsg('Signed guest credential saved for server verification when this gate reconnects. The visitor remains pending until synchronization.');
+          setSuccessMsg('Guest entry saved for server verification when this gate reconnects. The visitor remains pending until synchronization.');
           return;
         }
         setError('A six-digit guest code requires a connection. The visitor can still be recorded offline, but will remain pending for resident approval.');
@@ -313,7 +313,7 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
           <div>
             <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>🛡️ {t.guard_terminal}</h1>
             <div style={{ fontSize: '0.85rem', color: textMuted }}>
-              Township One Access Control • Operator: {user.name} ({user.phone})
+              Township One Access Control • Guard: {user.name} ({user.phone})
             </div>
           </div>
 
@@ -760,15 +760,15 @@ export const GuardGateTerminal: React.FC<GuardGateTerminalProps> = ({ user, lang
               width: '100%',
               border: `1px solid ${borderColor}`,
             }}>
-              <h3 style={{ marginTop: 0, fontSize: '1.15rem' }}>⚠️ Supervisor Override Admission</h3>
+              <h3 style={{ marginTop: 0, fontSize: '1.15rem' }}>⚠️ Supervisor Override — Admit Visitor</h3>
               <p style={{ fontSize: '0.85rem', color: textMuted }}>
-                Only authorized Help Desk staff and Administrators may grant exceptional admission when resident is unreachable.
+                Only authorized Help Desk staff and Administrators may grant exceptional admission when the resident is unreachable.
                 An explicit audit log reason is strictly required.
               </p>
               <textarea
                 value={overrideReason}
                 onChange={(e) => setOverrideReason(e.target.value)}
-                placeholder="Reason (e.g. Resident verified via intercom telephone)..."
+                placeholder="Reason (e.g. Resident verified via intercom)..."
                 rows={3}
                 style={{
                   width: '100%',

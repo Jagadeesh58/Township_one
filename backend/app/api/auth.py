@@ -204,7 +204,7 @@ def login_with_password(payload: PasswordLoginRequest, response: Response, db: S
         else:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid phone number or password. For demo accounts, use password '123456'.",
+                detail="Invalid phone number or password.",
             )
 
     # Validate password
@@ -212,7 +212,7 @@ def login_with_password(payload: PasswordLoginRequest, response: Response, db: S
     if not password_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid password. For demo accounts, use password '123456'.",
+            detail="Invalid credentials.",
         )
 
     token = create_access_token(data={"sub": user.id, "phone": user.phone})

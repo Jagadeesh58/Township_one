@@ -162,7 +162,7 @@ export const AccountsWorkspace: React.FC<AccountsWorkspaceProps> = ({ user, lang
             {t.accounts_workspace}
           </h1>
           <p style={{ margin: '0.2rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            {t.bank_matching} • Dual-Entry Accounting & Ledger Reconciliation
+            {t.bank_matching} • Double-Entry Accounting & Ledger Reconciliation
           </p>
         </div>
 
@@ -251,7 +251,7 @@ export const AccountsWorkspace: React.FC<AccountsWorkspaceProps> = ({ user, lang
 
             {previewData.duplicate_file && (
               <div style={{ marginBottom: '1rem', padding: '0.6rem 0.8rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', color: '#92400e', fontSize: '0.85rem' }}>
-                ℹ️ <strong>{t.duplicate_file}:</strong> This exact file (SHA-256: {previewData.file_sha256.slice(0, 12)}...) was already imported. Committing will skip all previously committed rows idempotently.
+                ℹ️ <strong>{t.duplicate_file}:</strong> This file has already been imported. Committing will safely skip any duplicate rows.
               </div>
             )}
 
@@ -324,7 +324,7 @@ export const AccountsWorkspace: React.FC<AccountsWorkspaceProps> = ({ user, lang
                 {commitLoading ? 'Committing & Posting...' : `✅ ${t.commit_statement}`}
               </button>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Atomic database commit • Idempotent by (account_no, file_sha256)
+                Safe ledger commit • duplicate transactions skipped
               </span>
             </div>
 
@@ -468,7 +468,7 @@ export const AccountsWorkspace: React.FC<AccountsWorkspaceProps> = ({ user, lang
             {actionType === 'CORRECT_MAPPING' && (
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                  Target Flat ID / UUID:
+                  Target Flat ID:
                 </label>
                 <input
                   type="text"

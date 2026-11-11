@@ -63,7 +63,7 @@ export const ResidentComplaints: React.FC<ResidentComplaintsProps> = ({
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
       if (f.size > 5 * 1024 * 1024) {
-        setFormError('Photo size exceeds 5MB limit');
+        setFormError('Photo size exceeds 5 MB limit.');
         return;
       }
       setPhotoFile(f);
@@ -74,11 +74,11 @@ export const ResidentComplaints: React.FC<ResidentComplaintsProps> = ({
   const handleSubmitComplaint = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
-      setFormError('Title and description are required');
+      setFormError('Title and description are required.');
       return;
     }
     if (!selectedFlatId) {
-      setFormError('Please select a flat');
+      setFormError('Please select a flat.');
       return;
     }
 
@@ -224,7 +224,7 @@ export const ResidentComplaints: React.FC<ResidentComplaintsProps> = ({
               {t.complaint_description} *
             </label>
             <textarea
-              placeholder="Describe the issue in detail (Supports English, मराठी, हिंदी)..."
+              placeholder="Describe the issue in detail (supports English, मराठी, हिंदी)..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
@@ -278,7 +278,7 @@ export const ResidentComplaints: React.FC<ResidentComplaintsProps> = ({
           </div>
         ) : complaints.length === 0 ? (
           <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', background: '#ffffff', borderRadius: '8px', border: '1px solid var(--border)' }}>
-            No complaints raised for your flat.
+            No complaints have been raised for your flat.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
@@ -363,7 +363,7 @@ export const ResidentComplaints: React.FC<ResidentComplaintsProps> = ({
 
                     {c.reopen_requested && (
                       <span style={{ color: '#ea580c', fontWeight: 600, fontSize: '0.72rem' }}>
-                        (Reopen Requested)
+                        Reopen Requested
                       </span>
                     )}
                   </div>

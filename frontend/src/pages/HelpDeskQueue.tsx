@@ -191,7 +191,7 @@ export const HelpDeskQueue: React.FC<HelpDeskQueueProps> = ({ user, lang }) => {
             {t.helpdesk_queue}
           </h1>
           <p style={{ margin: '0.2rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            Resident Complaints Triage • AI Classification • Incident Grouping • SLA Tracking
+            Resident Complaint Triage • AI Classification • Incident Grouping • SLA Tracking
           </p>
         </div>
 
@@ -519,7 +519,7 @@ export const HelpDeskQueue: React.FC<HelpDeskQueueProps> = ({ user, lang }) => {
                   padding: '0.4rem 0.8rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer'
                 }}
               >
-                {correctionSubmitting ? 'Saving...' : 'Apply Correction (Optimistic Lock)'}
+                {correctionSubmitting ? 'Saving...' : 'Apply Correction'}
               </button>
             </div>
 
@@ -544,7 +544,7 @@ export const HelpDeskQueue: React.FC<HelpDeskQueueProps> = ({ user, lang }) => {
                     disabled={transitionSubmitting}
                     style={{ background: '#0284c7', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
                   >
-                    Start Work (IN_PROGRESS)
+                    Start Work
                   </button>
                 )}
                 {selectedTicket.status === 'IN_PROGRESS' && (
@@ -553,7 +553,7 @@ export const HelpDeskQueue: React.FC<HelpDeskQueueProps> = ({ user, lang }) => {
                     disabled={transitionSubmitting}
                     style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600 }}
                   >
-                    Mark RESOLVED
+                    Mark as Resolved
                   </button>
                 )}
                 {selectedTicket.status === 'RESOLVED' && (
