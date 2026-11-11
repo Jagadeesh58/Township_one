@@ -15,6 +15,7 @@ from docx.shared import Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_URL = "https://github.com/Jagadeesh58/Township_one"
+LIVE_APP_URL = "https://township-one-1.onrender.com"
 SUMMARY_PATH = ROOT / "docs" / "reports" / "summary.json"
 OUTPUT_PATH = ROOT / "TDD.docx"
 NAVY = "1E3557"
@@ -195,12 +196,12 @@ def build_document() -> None:
     deployment_note = doc.add_paragraph()
     deployment_note.paragraph_format.space_after = Pt(10)
     note_run = deployment_note.add_run(
-        "Live app URL: not deployed yet. The free-tier deployment is documented in deployment.md; owner-managed provider accounts and secrets are still required."
+        f"Live app URL: {LIVE_APP_URL}  |  API Docs: {LIVE_APP_URL}/docs  |  Repository: {REPOSITORY_URL}"
     )
     note_run.font.name = "Aptos"
     note_run.font.size = Pt(8.5)
-    note_run.font.italic = True
-    note_run.font.color.rgb = RGBColor.from_string(DARK_GREY)
+    note_run.font.bold = True
+    note_run.font.color.rgb = RGBColor.from_string(BLUE)
 
     add_table(
         doc,

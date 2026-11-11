@@ -1,8 +1,16 @@
 # Township One — Deployment and Local Operations
 
 Repository: https://github.com/Jagadeesh58/Township_one
+Live Application: https://township-one-1.onrender.com
 
-This guide covers the local developer setup and a free-tier reviewer deployment. The hosted profile is prepared in source, but no public app URL is claimed until the repository owner creates and configures the external accounts. Use synthetic data only.
+This guide covers the live deployment on Render and local developer setup. The application is hosted as a free Docker web service with PostgreSQL on Neon, authenticated photo storage via Cloudinary, and synthetic demo datasets.
+
+| Metric / Target | Link |
+|---|---|
+| **Live Web App** | <https://township-one-1.onrender.com> |
+| **Interactive API Docs** | <https://township-one-1.onrender.com/docs> |
+| **API Health Check** | <https://township-one-1.onrender.com/health> |
+| **GitHub Source** | <https://github.com/Jagadeesh58/Township_one> |
 
 ## 1. Free hosted architecture
 
@@ -141,7 +149,7 @@ In the GitHub repository settings, add two Actions repository secrets:
 
 | Secret | Value |
 |---|---|
-| `TOWNSHIP_API_URL` | Render base URL, e.g. `https://township-one-demo.onrender.com` (no trailing slash). |
+| `TOWNSHIP_API_URL` | Render base URL: `https://township-one-1.onrender.com` (no trailing slash). |
 | `RETENTION_JOB_TOKEN` | The exact same long random value configured on Render. |
 
 The workflow runs daily at 02:17 UTC (07:47 India time) and can also be started with **Actions → Visitor photo retention → Run workflow**. GitHub scheduled runs can be delayed; monitor the workflow history. The local operator command remains available:
